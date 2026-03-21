@@ -1,0 +1,179 @@
+@page "/templates"
+@inject WorkspaceStore Store
+
+<PageTitle>Labor Templates</PageTitle>
+
+@if (!Store.IsInitialized)
+{
+    <div class="loading-state">
+        <h1>Loading labor templates...</h1>
+        <p>Preparing the install, trim, demo, and test rule library.</p>
+    </div>
+}
+else
+{
+    <section class="workspace-grid">
+        <aside class="directory-panel">
+            <div class="panel-header">
+                <div>
+                    <p class="eyebrow">Estimating standards</p>
+                    <h2>Templates</h2>
+                </div>
+                <button class="button" type="button" @onclick="CreateTemplateAsync">New Template</button>
+            </div>
+
+            <div class="directory-group">
+                <h3>Available</h3>
+                @foreach (var template in Store.Workspace.Templates.OrderBy(template => template.Name))
+                {
+                    <button class="directory-item @(SelectedTemplate?.Id == template.Id ? "selected" : null)" type="button" @onclick="() => SelectTemplate(template.Id)">
+                        <strong>@template.Name</strong>
+                        <span>@(Store.Workspace.Settings.DefaultTemplateId == template.Id ? "Default" : "Template")</span>
+                        <small>@template.Rules.Count rule(s)</small>
+                    </button>
+                }
+            </div>
+        </aside>
+
+        <div class="detail-column">
+            @if (SelectedTemplate is null)
+            {
+                <section class="empty-state panel">
+                    <h2>No template selected</h2>
+                    <p>Create a new labor template to standardize device install times by location and install type.</p>
+                    <button class="button" type="button" @onclick="CreateTemplateAsync">Create Template</button>
+                </section>
+            }
+            else
+            {
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Template editor</p>
+                            <h2>@SelectedTemplate.Name</h2>
+                        </div>
+                        <div class="button-row">
+                            <button class="button button-secondary" type="button" @onclick="SetDefaultTemplateAsync">Set As Default</button>
+                            <button class="button" type="button" @onclick="SaveAsync">Save Template</button>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(StatusMessage))
+                    {
+                        <p class="callout callout-success">@StatusMessage</p>
+                    }
+
+                    <div class="form-grid two-columns">
+                        <label>
+                            <span>Template Name</span>
+                            <input @bind="SelectedTemplate.Name" />
+                        </label>
+                        <label class="checkbox-field">
+                            <span>Archived</span>
+                            <input type="checkbox" @bind="SelectedTemplate.IsArchived" />
+                        </label>
+                    </div>
+
+                    <label class="full-width">
+                        <span>Notes</span>
+                        <textarea rows="3" @bind="SelectedTemplate.Notes"></textarea>
+                    </label>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Rules</p>
+                            <h3>Location + Install Time Matrix</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="AddRule">Add Rule</button>
+                    </div>
+
+                    <table class="data-table wide">
+                        <thead>
+                            <tr>
+                                <th>Location Profile</th>
+                                <th>Install Type</th>
+                                <th>Install</th>
+                                <th>Demo</th>
+                                <th>Trim</th>
+                                <th>Test</th>
+                                <th>Notes</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var rule in SelectedTemplate.Rules)
+                            {
+                                <tr @key="rule.Id">
+                                    <td><input @bind="rule.LocationProfile" /></td>
+                                    <td><input @bind="rule.InstallType" /></td>
+                                    <td><input type="number" step="1" @bind="rule.InstallMinutes" /></td>
+                                    <td><input type="number" step="1" @bind="rule.DemoMinutes" /></td>
+                                    <td><input type="number" step="1" @bind="rule.TrimMinutes" /></td>
+                                    <td><input type="number" step="1" @bind="rule.TestMinutes" /></td>
+                                    <td><input @bind="rule.Notes" /></td>
+                                    <td><button class="text-button danger" type="button" @onclick="() => RemoveRule(rule.Id)">Remove</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </section>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    private Guid? SelectedTemplateId { get; set; }
+    private string StatusMessage { get; set; } = string.Empty;
+
+    private LaborTemplate? SelectedTemplate =>
+        SelectedTemplateId is null
+            ? null
+            : Store.Workspace.Templates.FirstOrDefault(template => template.Id == SelectedTemplateId.Value);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Store.InitializeAsync();
+        SelectedTemplateId = Store.Workspace.Templates.FirstOrDefault()?.Id;
+    }
+
+    private void SelectTemplate(Guid templateId)
+    {
+        SelectedTemplateId = templateId;
+        StatusMessage = string.Empty;
+    }
+
+    private async Task CreateTemplateAsync()
+    {
+        var template = Store.CreateTemplate();
+        SelectedTemplateId = template.Id;
+        StatusMessage = "New template created.";
+        await Store.SaveAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        await Store.SaveAsync();
+        StatusMessage = "Template saved.";
+    }
+
+    private async Task SetDefaultTemplateAsync()
+    {
+        if (SelectedTemplate is null)
+        {
+            return;
+        }
+
+        Store.Workspace.Settings.DefaultTemplateId = SelectedTemplate.Id;
+        await Store.SaveAsync();
+        StatusMessage = "Default template updated.";
+    }
+
+    private void AddRule() =>
+        SelectedTemplate?.Rules.Add(new LaborRule());
+
+    private void RemoveRule(Guid ruleId) =>
+        SelectedTemplate?.Rules.RemoveAll(rule => rule.Id == ruleId);
+}

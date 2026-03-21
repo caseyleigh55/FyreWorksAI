@@ -1,0 +1,629 @@
+@page "/jobs"
+@inject WorkspaceStore Store
+
+<PageTitle>Jobs</PageTitle>
+
+@if (!Store.IsInitialized)
+{
+    <div class="loading-state">
+        <h1>Loading jobs...</h1>
+        <p>Restoring baselines, live costs, commitments, and export settings.</p>
+    </div>
+}
+else
+{
+    var activeJobs = Store.Workspace.Jobs.Where(item => item.IsActive).OrderBy(item => item.ProjectName).ToList();
+    var inactiveJobs = Store.Workspace.Jobs.Where(item => !item.IsActive).OrderByDescending(item => item.CreatedOn).ToList();
+    var currentClient = CurrentClient;
+
+    <section class="workspace-grid">
+        <aside class="directory-panel">
+            <div class="panel-header">
+                <div>
+                    <p class="eyebrow">Project controls</p>
+                    <h2>Jobs</h2>
+                </div>
+                <button class="button" type="button" @onclick="CreateJobAsync">New Job</button>
+            </div>
+
+            <div class="directory-group">
+                <h3>Active</h3>
+                @if (activeJobs.Count == 0)
+                {
+                    <p class="muted">No active jobs yet.</p>
+                }
+                else
+                {
+                    @foreach (var job in activeJobs)
+                    {
+                        <button class="directory-item @(SelectedJob?.Id == job.Id ? "selected" : null)" type="button" @onclick="() => SelectJob(job.Id)">
+                            <strong>@job.JobNumber</strong>
+                            <span>@job.ProjectName</span>
+                            <small>@job.Status</small>
+                        </button>
+                    }
+                }
+            </div>
+
+            <div class="directory-group">
+                <h3>Inactive</h3>
+                @if (inactiveJobs.Count == 0)
+                {
+                    <p class="muted">No inactive jobs.</p>
+                }
+                else
+                {
+                    @foreach (var job in inactiveJobs)
+                    {
+                        <button class="directory-item @(SelectedJob?.Id == job.Id ? "selected" : null)" type="button" @onclick="() => SelectJob(job.Id)">
+                            <strong>@job.JobNumber</strong>
+                            <span>@job.ProjectName</span>
+                            <small>Closed</small>
+                        </button>
+                    }
+                }
+            </div>
+        </aside>
+
+        <div class="detail-column">
+            @if (SelectedJob is null)
+            {
+                <section class="empty-state panel">
+                    <h2>No job selected</h2>
+                    <p>Convert a bid or create a direct-entry job to start cost tracking.</p>
+                    <button class="button" type="button" @onclick="CreateJobAsync">Create Job</button>
+                </section>
+            }
+            else
+            {
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Job editor</p>
+                            <h2>@SelectedJob.ProjectName</h2>
+                        </div>
+                        <div class="button-row">
+                            <button class="button button-secondary" type="button" @onclick="SaveAsync">Save Job</button>
+                            <button class="button" type="button" @onclick="ExportAsync">Export Job Cost</button>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(StatusMessage))
+                    {
+                        <p class="callout callout-success">@StatusMessage</p>
+                    }
+
+                    <div class="form-grid two-columns">
+                        <label>
+                            <span>Job Number</span>
+                            <input @bind="SelectedJob.JobNumber" />
+                        </label>
+                        <label>
+                            <span>Project Name</span>
+                            <input @bind="SelectedJob.ProjectName" />
+                        </label>
+                        <label>
+                            <span>Status</span>
+                            <select @bind="SelectedJob.Status">
+                                <option>Planning</option>
+                                <option>In Progress</option>
+                                <option>Billing</option>
+                                <option>Closeout</option>
+                                <option>Closed</option>
+                            </select>
+                        </label>
+                        <label class="checkbox-field">
+                            <span>Active</span>
+                            <input type="checkbox" @bind="SelectedJob.IsActive" />
+                        </label>
+                        <label>
+                            <span>Created</span>
+                            <input type="date" @bind="SelectedJob.CreatedOn" @bind:format="yyyy-MM-dd" />
+                        </label>
+                        <label>
+                            <span>Client</span>
+                            <select value="@(SelectedJob.ClientId?.ToString() ?? string.Empty)" @onchange="OnClientChanged">
+                                <option value="">Unassigned</option>
+                                @foreach (var client in Store.Workspace.Clients.Where(client => client.IsActive))
+                                {
+                                    <option value="@client.Id">@client.Name</option>
+                                }
+                            </select>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="summary-grid">
+                    <article class="summary-card">
+                        <p class="eyebrow">Contract Revenue</p>
+                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetJobRevenue(SelectedJob))</h3>
+                        <p>Baseline contract plus approved change orders.</p>
+                    </article>
+                    <article class="summary-card">
+                        <p class="eyebrow">Actual Cost</p>
+                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetJobActualCost(SelectedJob))</h3>
+                        <p>Labor, actual materials, billed commitments, and approved change-order cost.</p>
+                    </article>
+                    <article class="summary-card">
+                        <p class="eyebrow">Profit</p>
+                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetJobProfit(SelectedJob))</h3>
+                        <p>@EstimateMath.GetPercent(EstimateMath.GetJobMarginPercent(SelectedJob)) margin to date.</p>
+                    </article>
+                    <article class="summary-card">
+                        <p class="eyebrow">Billed / Paid</p>
+                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetJobBilledRevenue(SelectedJob))</h3>
+                        <p>@EstimateMath.GetCurrency(EstimateMath.GetJobCollectedRevenue(SelectedJob)) collected.</p>
+                    </article>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Client + site</p>
+                            <h3>Project Contacts</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="CreateClientForJob">New Client</button>
+                    </div>
+
+                    @if (currentClient is null)
+                    {
+                        <p class="muted">Assign a client to link the job to a company record.</p>
+                    }
+                    else
+                    {
+                        <div class="form-grid two-columns">
+                            <label>
+                                <span>Client Name</span>
+                                <input @bind="currentClient.Name" />
+                            </label>
+                            <label>
+                                <span>Primary Contact</span>
+                                <input @bind="currentClient.PrimaryContact" />
+                            </label>
+                            <label>
+                                <span>Email</span>
+                                <input @bind="currentClient.Email" />
+                            </label>
+                            <label>
+                                <span>Phone</span>
+                                <input @bind="currentClient.Phone" />
+                            </label>
+                        </div>
+                    }
+
+                    <div class="form-grid two-columns">
+                        <label>
+                            <span>Site Name</span>
+                            <input @bind="SelectedJob.Site.SiteName" />
+                        </label>
+                        <label>
+                            <span>Occupancy</span>
+                            <input @bind="SelectedJob.Site.OccupancyType" />
+                        </label>
+                        <label>
+                            <span>Address Line 1</span>
+                            <input @bind="SelectedJob.Site.AddressLine1" />
+                        </label>
+                        <label>
+                            <span>Address Line 2</span>
+                            <input @bind="SelectedJob.Site.AddressLine2" />
+                        </label>
+                        <label>
+                            <span>City</span>
+                            <input @bind="SelectedJob.Site.City" />
+                        </label>
+                        <label>
+                            <span>State</span>
+                            <input @bind="SelectedJob.Site.State" />
+                        </label>
+                        <label>
+                            <span>Postal Code</span>
+                            <input @bind="SelectedJob.Site.PostalCode" />
+                        </label>
+                        <label class="full-width">
+                            <span>Site Notes</span>
+                            <textarea rows="2" @bind="SelectedJob.Site.Notes"></textarea>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="panel accent">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Original estimate</p>
+                            <h3>Baseline Reference</h3>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(SelectedJob.Baseline.SourceBidNumber))
+                        {
+                            <span class="pill">From @SelectedJob.Baseline.SourceBidNumber</span>
+                        }
+                    </div>
+
+                    <div class="stats-inline">
+                        <span>Revenue @EstimateMath.GetCurrency(SelectedJob.Baseline.OriginalRevenue)</span>
+                        <span>Cost @EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedTotalCost)</span>
+                        <span>Field Hours @SelectedJob.Baseline.EstimatedFieldHours.ToString("N2")</span>
+                        <span>Admin @SelectedJob.Baseline.EstimatedAdminHours.ToString("N2")</span>
+                        <span>Engineering @SelectedJob.Baseline.EstimatedEngineeringHours.ToString("N2")</span>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(SelectedJob.Baseline.ScopeSummary))
+                    {
+                        <p>@SelectedJob.Baseline.ScopeSummary</p>
+                    }
+
+                    @if (SelectedJob.Baseline.Components.Count > 0)
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Component</th>
+                                    <th>Qty</th>
+                                    <th>Location</th>
+                                    <th>Install Type</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var component in SelectedJob.Baseline.Components.Take(8))
+                                {
+                                    <tr>
+                                        <td>@component.Name</td>
+                                        <td>@component.Quantity</td>
+                                        <td>@component.LocationProfile</td>
+                                        <td>@component.InstallType</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Actual labor</p>
+                            <h3>Time Entries</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="AddTimeEntry">Add Time</button>
+                    </div>
+
+                    @if (SelectedJob.TimeEntries.Count == 0)
+                    {
+                        <p class="muted">Track labor hours, crew rates, and notes as the project progresses.</p>
+                    }
+                    else
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Crew Member</th>
+                                    <th>Hours</th>
+                                    <th>Rate</th>
+                                    <th>Cost Code</th>
+                                    <th>Notes</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var entry in SelectedJob.TimeEntries)
+                                {
+                                    <tr @key="entry.Id">
+                                        <td><input type="date" @bind="entry.WorkDate" @bind:format="yyyy-MM-dd" /></td>
+                                        <td><input @bind="entry.CrewMember" /></td>
+                                        <td><input type="number" step="0.25" @bind="entry.Hours" /></td>
+                                        <td><input type="number" step="0.01" @bind="entry.HourlyRate" /></td>
+                                        <td><input @bind="entry.CostCode" /></td>
+                                        <td><input @bind="entry.Notes" /></td>
+                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveTimeEntry(entry.Id)">Remove</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Actual material</p>
+                            <h3>Material Purchases</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="AddMaterialPurchase">Add Purchase</button>
+                    </div>
+
+                    @if (SelectedJob.MaterialPurchases.Count == 0)
+                    {
+                        <p class="muted">Log invoices, vendor buys, and receipt-backed field purchases here.</p>
+                    }
+                    else
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Vendor</th>
+                                    <th>Description</th>
+                                    <th>Cost</th>
+                                    <th>Receipt</th>
+                                    <th>Notes</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var purchase in SelectedJob.MaterialPurchases)
+                                {
+                                    <tr @key="purchase.Id">
+                                        <td><input type="date" @bind="purchase.PurchaseDate" @bind:format="yyyy-MM-dd" /></td>
+                                        <td><input @bind="purchase.Vendor" /></td>
+                                        <td><input @bind="purchase.Description" /></td>
+                                        <td><input type="number" step="0.01" @bind="purchase.ActualCost" /></td>
+                                        <td><input @bind="purchase.ReceiptNumber" /></td>
+                                        <td><input @bind="purchase.Notes" /></td>
+                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveMaterialPurchase(purchase.Id)">Remove</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Revenue adds</p>
+                            <h3>Change Orders</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="AddChangeOrder">Add Change Order</button>
+                    </div>
+
+                    @if (SelectedJob.ChangeOrders.Count == 0)
+                    {
+                        <p class="muted">Add approved or pending scope changes that affect job revenue and projected cost.</p>
+                    }
+                    else
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Title</th>
+                                    <th>Revenue</th>
+                                    <th>Cost Impact</th>
+                                    <th>Approved</th>
+                                    <th>Notes</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var changeOrder in SelectedJob.ChangeOrders)
+                                {
+                                    <tr @key="changeOrder.Id">
+                                        <td><input type="date" @bind="changeOrder.ApprovedOn" @bind:format="yyyy-MM-dd" /></td>
+                                        <td><input @bind="changeOrder.Title" /></td>
+                                        <td><input type="number" step="0.01" @bind="changeOrder.RevenueAmount" /></td>
+                                        <td><input type="number" step="0.01" @bind="changeOrder.EstimatedCostImpact" /></td>
+                                        <td><input type="checkbox" @bind="changeOrder.Approved" /></td>
+                                        <td><input @bind="changeOrder.Notes" /></td>
+                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveChangeOrder(changeOrder.Id)">Remove</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Progress billing</p>
+                            <h3>Schedule Of Values</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="AddScheduleValue">Add Line</button>
+                    </div>
+
+                    @if (SelectedJob.ScheduleOfValues.Count == 0)
+                    {
+                        <p class="muted">Track scheduled value, billed amounts, and collections by billing line.</p>
+                    }
+                    else
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Description</th>
+                                    <th>Scheduled</th>
+                                    <th>Billed</th>
+                                    <th>Paid</th>
+                                    <th>Notes</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in SelectedJob.ScheduleOfValues)
+                                {
+                                    <tr @key="item.Id">
+                                        <td><input @bind="item.Description" /></td>
+                                        <td><input type="number" step="0.01" @bind="item.ScheduledValue" /></td>
+                                        <td><input type="number" step="0.01" @bind="item.BilledToDate" /></td>
+                                        <td><input type="number" step="0.01" @bind="item.PaidToDate" /></td>
+                                        <td><input @bind="item.Notes" /></td>
+                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveScheduleValue(item.Id)">Remove</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Vendor exposure</p>
+                            <h3>Commitments</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="AddCommitment">Add Commitment</button>
+                    </div>
+
+                    @if (SelectedJob.Commitments.Count == 0)
+                    {
+                        <p class="muted">Use commitments to monitor subcontracts, vendor POs, and other amounts billed or paid against the job.</p>
+                    }
+                    else
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Vendor</th>
+                                    <th>Description</th>
+                                    <th>Committed</th>
+                                    <th>Billed</th>
+                                    <th>Paid</th>
+                                    <th>Due</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var commitment in SelectedJob.Commitments)
+                                {
+                                    <tr @key="commitment.Id">
+                                        <td><input @bind="commitment.Vendor" /></td>
+                                        <td><input @bind="commitment.Description" /></td>
+                                        <td><input type="number" step="0.01" @bind="commitment.CommittedAmount" /></td>
+                                        <td><input type="number" step="0.01" @bind="commitment.BilledAmount" /></td>
+                                        <td><input type="number" step="0.01" @bind="commitment.PaidAmount" /></td>
+                                        <td><input type="date" @bind="commitment.DueDate" @bind:format="yyyy-MM-dd" /></td>
+                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveCommitment(commitment.Id)">Remove</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+
+                <AttachmentManager Attachments="SelectedJob.Attachments" Area="jobs" OwnerId="SelectedJob.Id" />
+
+                <section class="panel">
+                    <p class="eyebrow">Project notes</p>
+                    <label class="full-width">
+                        <span>Notes</span>
+                        <textarea rows="4" @bind="SelectedJob.Notes"></textarea>
+                    </label>
+                </section>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    private Guid? SelectedJobId { get; set; }
+    private string StatusMessage { get; set; } = string.Empty;
+
+    private JobRecord? SelectedJob =>
+        SelectedJobId is null
+            ? null
+            : Store.Workspace.Jobs.FirstOrDefault(job => job.Id == SelectedJobId.Value);
+
+    private ClientRecord? CurrentClient =>
+        SelectedJob is null
+            ? null
+            : Store.GetClient(SelectedJob.ClientId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Store.InitializeAsync();
+        SelectedJobId = Store.Workspace.Jobs.FirstOrDefault()?.Id;
+    }
+
+    private void SelectJob(Guid jobId)
+    {
+        SelectedJobId = jobId;
+        StatusMessage = string.Empty;
+    }
+
+    private async Task CreateJobAsync()
+    {
+        var job = Store.CreateBlankJob();
+        SelectedJobId = job.Id;
+        StatusMessage = "New job created.";
+        await Store.SaveAsync();
+    }
+
+    private void CreateClientForJob()
+    {
+        if (SelectedJob is null)
+        {
+            return;
+        }
+
+        var client = Store.CreateClient();
+        SelectedJob.ClientId = client.Id;
+        StatusMessage = "New client linked to the job.";
+    }
+
+    private async Task SaveAsync()
+    {
+        await Store.SaveAsync();
+        StatusMessage = "Job saved.";
+    }
+
+    private async Task ExportAsync()
+    {
+        if (SelectedJob is null)
+        {
+            return;
+        }
+
+        var path = await Store.ExportJobCostReportAsync(SelectedJob);
+        await Store.SaveAsync();
+        StatusMessage = $"Job cost export created at {path}.";
+    }
+
+    private async Task OnClientChanged(ChangeEventArgs args)
+    {
+        if (SelectedJob is null)
+        {
+            return;
+        }
+
+        SelectedJob.ClientId = ParseNullableGuid(args.Value?.ToString());
+        await Task.CompletedTask;
+    }
+
+    private void AddTimeEntry() =>
+        SelectedJob?.TimeEntries.Add(new JobTimeEntry
+        {
+            CrewMember = "Technician",
+            HourlyRate = Store.Workspace.Settings.FieldLaborRate
+        });
+
+    private void RemoveTimeEntry(Guid entryId) =>
+        SelectedJob?.TimeEntries.RemoveAll(entry => entry.Id == entryId);
+
+    private void AddMaterialPurchase() =>
+        SelectedJob?.MaterialPurchases.Add(new JobMaterialPurchase { Vendor = "Vendor" });
+
+    private void RemoveMaterialPurchase(Guid purchaseId) =>
+        SelectedJob?.MaterialPurchases.RemoveAll(purchase => purchase.Id == purchaseId);
+
+    private void AddChangeOrder() =>
+        SelectedJob?.ChangeOrders.Add(new ChangeOrderRecord { Title = "Change Order" });
+
+    private void RemoveChangeOrder(Guid changeOrderId) =>
+        SelectedJob?.ChangeOrders.RemoveAll(changeOrder => changeOrder.Id == changeOrderId);
+
+    private void AddScheduleValue() =>
+        SelectedJob?.ScheduleOfValues.Add(new ScheduleValueItem { Description = "Billing Line" });
+
+    private void RemoveScheduleValue(Guid itemId) =>
+        SelectedJob?.ScheduleOfValues.RemoveAll(item => item.Id == itemId);
+
+    private void AddCommitment() =>
+        SelectedJob?.Commitments.Add(new CommitmentRecord { Vendor = "Vendor" });
+
+    private void RemoveCommitment(Guid commitmentId) =>
+        SelectedJob?.Commitments.RemoveAll(commitment => commitment.Id == commitmentId);
+
+    private static Guid? ParseNullableGuid(string? value) =>
+        Guid.TryParse(value, out var parsed) ? parsed : null;
+}

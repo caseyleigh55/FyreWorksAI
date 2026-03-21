@@ -1,0 +1,586 @@
+@page "/service"
+@inject WorkspaceStore Store
+
+<PageTitle>Service</PageTitle>
+
+@if (!Store.IsInitialized)
+{
+    <div class="loading-state">
+        <h1>Loading service agreements...</h1>
+        <p>Restoring monitoring schedules, inspections, calls, and service quotes.</p>
+    </div>
+}
+else
+{
+    var activeAgreements = Store.Workspace.ServiceAgreements.Where(item => item.IsActive).OrderBy(item => EstimateMath.GetNextBillingDate(item)).ToList();
+    var inactiveAgreements = Store.Workspace.ServiceAgreements.Where(item => !item.IsActive).OrderByDescending(item => item.ContractStart).ToList();
+    var currentClient = CurrentClient;
+
+    <section class="workspace-grid">
+        <aside class="directory-panel">
+            <div class="panel-header">
+                <div>
+                    <p class="eyebrow">Monitoring + service</p>
+                    <h2>Service</h2>
+                </div>
+                <button class="button" type="button" @onclick="CreateAgreementAsync">New Agreement</button>
+            </div>
+
+            <div class="directory-group">
+                <h3>Active</h3>
+                @if (activeAgreements.Count == 0)
+                {
+                    <p class="muted">No active service agreements yet.</p>
+                }
+                else
+                {
+                    @foreach (var agreement in activeAgreements)
+                    {
+                        <button class="directory-item @(SelectedAgreement?.Id == agreement.Id ? "selected" : null)" type="button" @onclick="() => SelectAgreement(agreement.Id)">
+                            <strong>@agreement.AgreementNumber</strong>
+                            <span>@agreement.AgreementName</span>
+                            <small>Bill @EstimateMath.GetNextBillingDate(agreement):d</small>
+                        </button>
+                    }
+                }
+            </div>
+
+            <div class="directory-group">
+                <h3>Inactive</h3>
+                @if (inactiveAgreements.Count == 0)
+                {
+                    <p class="muted">No inactive service agreements.</p>
+                }
+                else
+                {
+                    @foreach (var agreement in inactiveAgreements)
+                    {
+                        <button class="directory-item @(SelectedAgreement?.Id == agreement.Id ? "selected" : null)" type="button" @onclick="() => SelectAgreement(agreement.Id)">
+                            <strong>@agreement.AgreementNumber</strong>
+                            <span>@agreement.AgreementName</span>
+                            <small>Inactive</small>
+                        </button>
+                    }
+                }
+            </div>
+        </aside>
+
+        <div class="detail-column">
+            @if (SelectedAgreement is null)
+            {
+                <section class="empty-state panel">
+                    <h2>No service agreement selected</h2>
+                    <p>Create an agreement to track contract billing, inspections, service calls, and simplified service quotes.</p>
+                    <button class="button" type="button" @onclick="CreateAgreementAsync">Create Agreement</button>
+                </section>
+            }
+            else
+            {
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Agreement editor</p>
+                            <h2>@SelectedAgreement.AgreementName</h2>
+                        </div>
+                        <div class="button-row">
+                            <button class="button button-secondary" type="button" @onclick="RegenerateScheduleAsync">Rebuild Billing Schedule</button>
+                            <button class="button" type="button" @onclick="SaveAsync">Save Agreement</button>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(StatusMessage))
+                    {
+                        <p class="callout callout-success">@StatusMessage</p>
+                    }
+
+                    <div class="form-grid two-columns">
+                        <label>
+                            <span>Agreement Number</span>
+                            <input @bind="SelectedAgreement.AgreementNumber" />
+                        </label>
+                        <label>
+                            <span>Agreement Name</span>
+                            <input @bind="SelectedAgreement.AgreementName" />
+                        </label>
+                        <label class="checkbox-field">
+                            <span>Active</span>
+                            <input type="checkbox" @bind="SelectedAgreement.IsActive" />
+                        </label>
+                        <label>
+                            <span>Client</span>
+                            <select value="@(SelectedAgreement.ClientId?.ToString() ?? string.Empty)" @onchange="OnClientChanged">
+                                <option value="">Unassigned</option>
+                                @foreach (var client in Store.Workspace.Clients.Where(client => client.IsActive))
+                                {
+                                    <option value="@client.Id">@client.Name</option>
+                                }
+                            </select>
+                        </label>
+                        <label>
+                            <span>Contract Start</span>
+                            <input type="date" @bind="SelectedAgreement.ContractStart" @bind:format="yyyy-MM-dd" />
+                        </label>
+                        <label>
+                            <span>Contract Months</span>
+                            <input type="number" step="1" @bind="SelectedAgreement.ContractMonths" />
+                        </label>
+                        <label>
+                            <span>Monthly Monitoring</span>
+                            <input type="number" step="0.01" @bind="SelectedAgreement.MonthlyMonitoringAmount" />
+                        </label>
+                        <label>
+                            <span>Inspection Interval (Months)</span>
+                            <input type="number" step="1" @bind="SelectedAgreement.InspectionIntervalMonths" />
+                        </label>
+                        <label>
+                            <span>Next Inspection</span>
+                            <input type="date" @bind="SelectedAgreement.NextInspectionDate" @bind:format="yyyy-MM-dd" />
+                        </label>
+                    </div>
+                </section>
+
+                <section class="summary-grid">
+                    <article class="summary-card">
+                        <p class="eyebrow">Contract Value</p>
+                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetServiceContractValue(SelectedAgreement))</h3>
+                        <p>@SelectedAgreement.ContractMonths months of monitoring.</p>
+                    </article>
+                    <article class="summary-card">
+                        <p class="eyebrow">Paid</p>
+                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetServicePaid(SelectedAgreement))</h3>
+                        <p>Payments received against the monitoring schedule.</p>
+                    </article>
+                    <article class="summary-card">
+                        <p class="eyebrow">Outstanding</p>
+                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetServiceOutstanding(SelectedAgreement))</h3>
+                        <p>Remaining contract amount not yet received.</p>
+                    </article>
+                    <article class="summary-card">
+                        <p class="eyebrow">Next Bill</p>
+                        <h3>@EstimateMath.GetNextBillingDate(SelectedAgreement).ToString("d")</h3>
+                        <p>Next unpaid monitoring installment.</p>
+                    </article>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Client + site</p>
+                            <h3>Protected Premises</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="CreateClientForAgreement">New Client</button>
+                    </div>
+
+                    @if (currentClient is null)
+                    {
+                        <p class="muted">Assign a service client to connect billing and monitoring history to a reusable customer record.</p>
+                    }
+                    else
+                    {
+                        <div class="form-grid two-columns">
+                            <label>
+                                <span>Client Name</span>
+                                <input @bind="currentClient.Name" />
+                            </label>
+                            <label>
+                                <span>Primary Contact</span>
+                                <input @bind="currentClient.PrimaryContact" />
+                            </label>
+                            <label>
+                                <span>Email</span>
+                                <input @bind="currentClient.Email" />
+                            </label>
+                            <label>
+                                <span>Phone</span>
+                                <input @bind="currentClient.Phone" />
+                            </label>
+                            <label class="full-width">
+                                <span>Billing Address</span>
+                                <textarea rows="2" @bind="currentClient.BillingAddress"></textarea>
+                            </label>
+                        </div>
+                    }
+
+                    <div class="form-grid two-columns">
+                        <label>
+                            <span>Site Name</span>
+                            <input @bind="SelectedAgreement.Site.SiteName" />
+                        </label>
+                        <label>
+                            <span>Occupancy</span>
+                            <input @bind="SelectedAgreement.Site.OccupancyType" />
+                        </label>
+                        <label>
+                            <span>Address Line 1</span>
+                            <input @bind="SelectedAgreement.Site.AddressLine1" />
+                        </label>
+                        <label>
+                            <span>Address Line 2</span>
+                            <input @bind="SelectedAgreement.Site.AddressLine2" />
+                        </label>
+                        <label>
+                            <span>City</span>
+                            <input @bind="SelectedAgreement.Site.City" />
+                        </label>
+                        <label>
+                            <span>State</span>
+                            <input @bind="SelectedAgreement.Site.State" />
+                        </label>
+                        <label>
+                            <span>Postal Code</span>
+                            <input @bind="SelectedAgreement.Site.PostalCode" />
+                        </label>
+                        <label class="full-width">
+                            <span>Site Notes</span>
+                            <textarea rows="2" @bind="SelectedAgreement.Site.Notes"></textarea>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Recurring billing</p>
+                            <h3>Monitoring Payments</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="AddMonitoringPayment">Add Payment Row</button>
+                    </div>
+
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Due</th>
+                                <th>Amount</th>
+                                <th>Paid</th>
+                                <th>Received</th>
+                                <th>Notes</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var payment in SelectedAgreement.MonitoringPayments.OrderBy(payment => payment.DueDate))
+                            {
+                                <tr @key="payment.Id">
+                                    <td><input type="date" @bind="payment.DueDate" @bind:format="yyyy-MM-dd" /></td>
+                                    <td><input type="number" step="0.01" @bind="payment.Amount" /></td>
+                                    <td><input type="checkbox" @bind="payment.IsPaid" /></td>
+                                    <td><input type="date" @bind="payment.ReceivedOn" @bind:format="yyyy-MM-dd" /></td>
+                                    <td><input @bind="payment.Notes" /></td>
+                                    <td><button class="text-button danger" type="button" @onclick="() => RemoveMonitoringPayment(payment.Id)">Remove</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Field support</p>
+                            <h3>Service Calls</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="AddServiceCall">Add Service Call</button>
+                    </div>
+
+                    @if (SelectedAgreement.ServiceCalls.Count == 0)
+                    {
+                        <p class="muted">Track call status, scheduling, technicians, and notes for demand service work.</p>
+                    }
+                    else
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Status</th>
+                                    <th>Opened</th>
+                                    <th>Scheduled</th>
+                                    <th>Completed</th>
+                                    <th>Technician</th>
+                                    <th>Notes</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var serviceCall in SelectedAgreement.ServiceCalls)
+                                {
+                                    <tr @key="serviceCall.Id">
+                                        <td><input @bind="serviceCall.Title" /></td>
+                                        <td>
+                                            <select @bind="serviceCall.Status">
+                                                <option>Open</option>
+                                                <option>Scheduled</option>
+                                                <option>Completed</option>
+                                                <option>Cancelled</option>
+                                            </select>
+                                        </td>
+                                        <td><input type="date" @bind="serviceCall.OpenedOn" @bind:format="yyyy-MM-dd" /></td>
+                                        <td><input type="date" @bind="serviceCall.ScheduledFor" @bind:format="yyyy-MM-dd" /></td>
+                                        <td><input type="date" @bind="serviceCall.CompletedOn" @bind:format="yyyy-MM-dd" /></td>
+                                        <td><input @bind="serviceCall.Technician" /></td>
+                                        <td><input @bind="serviceCall.Description" /></td>
+                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveServiceCall(serviceCall.Id)">Remove</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Simplified quoting</p>
+                            <h3>Service Quotes</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="AddQuote">Add Quote</button>
+                    </div>
+
+                    <div class="quote-layout">
+                        <div class="quote-directory">
+                            @if (SelectedAgreement.Quotes.Count == 0)
+                            {
+                                <p class="muted">No service quotes yet.</p>
+                            }
+                            else
+                            {
+                                @foreach (var quote in SelectedAgreement.Quotes)
+                                {
+                                    <button class="directory-item @(SelectedQuote?.Id == quote.Id ? "selected" : null)" type="button" @onclick="() => SelectQuote(quote.Id)">
+                                        <strong>@quote.Title</strong>
+                                        <span>@quote.Status</span>
+                                        <small>@EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteRevenue(quote))</small>
+                                    </button>
+                                }
+                            }
+                        </div>
+
+                        <div>
+                            @if (SelectedQuote is null)
+                            {
+                                <p class="muted">Select a quote to edit its line items.</p>
+                            }
+                            else
+                            {
+                                <div class="form-grid two-columns">
+                                    <label>
+                                        <span>Quote Title</span>
+                                        <input @bind="SelectedQuote.Title" />
+                                    </label>
+                                    <label>
+                                        <span>Status</span>
+                                        <select @bind="SelectedQuote.Status">
+                                            <option>Draft</option>
+                                            <option>Sent</option>
+                                            <option>Approved</option>
+                                            <option>Rejected</option>
+                                        </select>
+                                    </label>
+                                    <label>
+                                        <span>Created</span>
+                                        <input type="date" @bind="SelectedQuote.CreatedOn" @bind:format="yyyy-MM-dd" />
+                                    </label>
+                                </div>
+
+                                <label class="full-width">
+                                    <span>Quote Notes</span>
+                                    <textarea rows="2" @bind="SelectedQuote.Notes"></textarea>
+                                </label>
+
+                                <div class="panel-header minor">
+                                    <h4>Quoted Items</h4>
+                                    <button class="button button-secondary" type="button" @onclick="AddQuoteItem">Add Line Item</button>
+                                </div>
+
+                                @if (SelectedQuote.Items.Count == 0)
+                                {
+                                    <p class="muted">Add line items for parts, labor, or service corrections.</p>
+                                }
+                                else
+                                {
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Description</th>
+                                                <th>Qty</th>
+                                                <th>Unit Cost</th>
+                                                <th>Unit Price</th>
+                                                <th>Notes</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in SelectedQuote.Items)
+                                            {
+                                                <tr @key="item.Id">
+                                                    <td><input @bind="item.Description" /></td>
+                                                    <td><input type="number" step="1" @bind="item.Quantity" /></td>
+                                                    <td><input type="number" step="0.01" @bind="item.UnitCost" /></td>
+                                                    <td><input type="number" step="0.01" @bind="item.UnitPrice" /></td>
+                                                    <td><input @bind="item.Notes" /></td>
+                                                    <td><button class="text-button danger" type="button" @onclick="() => RemoveQuoteItem(item.Id)">Remove</button></td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+
+                                    <div class="stats-inline">
+                                        <span>Cost @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteCost(SelectedQuote))</span>
+                                        <span>Quote @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteRevenue(SelectedQuote))</span>
+                                        <span>Margin @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteRevenue(SelectedQuote) - EstimateMath.GetServiceQuoteCost(SelectedQuote))</span>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                </section>
+
+                <AttachmentManager Attachments="SelectedAgreement.Attachments" Area="service" OwnerId="SelectedAgreement.Id" />
+
+                <section class="panel">
+                    <p class="eyebrow">Agreement notes</p>
+                    <label class="full-width">
+                        <span>Notes</span>
+                        <textarea rows="4" @bind="SelectedAgreement.Notes"></textarea>
+                    </label>
+                </section>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    private Guid? SelectedAgreementId { get; set; }
+    private Guid? SelectedQuoteId { get; set; }
+    private string StatusMessage { get; set; } = string.Empty;
+
+    private ServiceAgreement? SelectedAgreement =>
+        SelectedAgreementId is null
+            ? null
+            : Store.Workspace.ServiceAgreements.FirstOrDefault(agreement => agreement.Id == SelectedAgreementId.Value);
+
+    private ServiceQuoteRecord? SelectedQuote =>
+        SelectedAgreement is null || SelectedQuoteId is null
+            ? null
+            : SelectedAgreement.Quotes.FirstOrDefault(quote => quote.Id == SelectedQuoteId.Value);
+
+    private ClientRecord? CurrentClient =>
+        SelectedAgreement is null
+            ? null
+            : Store.GetClient(SelectedAgreement.ClientId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Store.InitializeAsync();
+        SelectedAgreementId = Store.Workspace.ServiceAgreements.FirstOrDefault()?.Id;
+        SelectedQuoteId = SelectedAgreement?.Quotes.FirstOrDefault()?.Id;
+    }
+
+    private void SelectAgreement(Guid agreementId)
+    {
+        SelectedAgreementId = agreementId;
+        SelectedQuoteId = SelectedAgreement?.Quotes.FirstOrDefault()?.Id;
+        StatusMessage = string.Empty;
+    }
+
+    private async Task CreateAgreementAsync()
+    {
+        var agreement = Store.CreateServiceAgreement();
+        SelectedAgreementId = agreement.Id;
+        SelectedQuoteId = agreement.Quotes.FirstOrDefault()?.Id;
+        StatusMessage = "New service agreement created.";
+        await Store.SaveAsync();
+    }
+
+    private void CreateClientForAgreement()
+    {
+        if (SelectedAgreement is null)
+        {
+            return;
+        }
+
+        var client = Store.CreateClient();
+        SelectedAgreement.ClientId = client.Id;
+        StatusMessage = "New client linked to the agreement.";
+    }
+
+    private async Task SaveAsync()
+    {
+        await Store.SaveAsync();
+        StatusMessage = "Service agreement saved.";
+    }
+
+    private async Task RegenerateScheduleAsync()
+    {
+        if (SelectedAgreement is null)
+        {
+            return;
+        }
+
+        Store.RegenerateMonitoringSchedule(SelectedAgreement);
+        await Store.SaveAsync();
+        StatusMessage = "Monitoring schedule rebuilt from the current contract settings.";
+    }
+
+    private async Task OnClientChanged(ChangeEventArgs args)
+    {
+        if (SelectedAgreement is null)
+        {
+            return;
+        }
+
+        SelectedAgreement.ClientId = ParseNullableGuid(args.Value?.ToString());
+        await Task.CompletedTask;
+    }
+
+    private void AddMonitoringPayment() =>
+        SelectedAgreement?.MonitoringPayments.Add(new MonitoringPayment
+        {
+            DueDate = EstimateMath.GetNextBillingDate(SelectedAgreement),
+            Amount = SelectedAgreement.MonthlyMonitoringAmount
+        });
+
+    private void RemoveMonitoringPayment(Guid paymentId) =>
+        SelectedAgreement?.MonitoringPayments.RemoveAll(payment => payment.Id == paymentId);
+
+    private void AddServiceCall() =>
+        SelectedAgreement?.ServiceCalls.Add(new ServiceCallRecord
+        {
+            Title = "Service Call",
+            Status = "Open"
+        });
+
+    private void RemoveServiceCall(Guid serviceCallId) =>
+        SelectedAgreement?.ServiceCalls.RemoveAll(serviceCall => serviceCall.Id == serviceCallId);
+
+    private void AddQuote()
+    {
+        if (SelectedAgreement is null)
+        {
+            return;
+        }
+
+        var quote = new ServiceQuoteRecord
+        {
+            Title = $"Quote {SelectedAgreement.Quotes.Count + 1}"
+        };
+
+        SelectedAgreement.Quotes.Add(quote);
+        SelectedQuoteId = quote.Id;
+    }
+
+    private void SelectQuote(Guid quoteId)
+    {
+        SelectedQuoteId = quoteId;
+        StatusMessage = string.Empty;
+    }
+
+    private void AddQuoteItem() =>
+        SelectedQuote?.Items.Add(new ServiceQuoteItem { Description = "Quoted Item" });
+
+    private void RemoveQuoteItem(Guid itemId) =>
+        SelectedQuote?.Items.RemoveAll(item => item.Id == itemId);
+
+    private static Guid? ParseNullableGuid(string? value) =>
+        Guid.TryParse(value, out var parsed) ? parsed : null;
+}

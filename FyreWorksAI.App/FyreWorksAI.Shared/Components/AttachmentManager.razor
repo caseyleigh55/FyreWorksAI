@@ -1,0 +1,83 @@
+@inject WorkspaceStore Store
+
+<section class="panel">
+    <div class="panel-header">
+        <div>
+            <p class="eyebrow">Documents</p>
+            <h3>Attachments</h3>
+        </div>
+        <button class="button button-secondary" type="button" @onclick="UploadAsync" disabled="@(!Store.CanPickAttachments)">Upload Files</button>
+    </div>
+
+    @if (!Store.CanPickAttachments)
+    {
+        <p class="muted">Attachment picking is enabled in the Windows MAUI shell. The optional web host compiles with a read-only attachment stub.</p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(StatusMessage))
+    {
+        <p class="callout callout-success">@StatusMessage</p>
+    }
+
+    @if (Attachments.Count == 0)
+    {
+        <p class="muted">No attachments saved yet.</p>
+    }
+    else
+    {
+        <div class="list-stack compact">
+            @foreach (var attachment in Attachments.OrderByDescending(item => item.UploadedOn))
+            {
+                <div class="list-row attachment-row" @key="attachment.Id">
+                    <div>
+                        <strong>@attachment.OriginalFileName</strong>
+                        <p class="muted small">@attachment.UploadedOn:g</p>
+                    </div>
+                    <div class="list-actions">
+                        <button class="text-button" type="button" @onclick="() => OpenAsync(attachment)" disabled="@(!Store.CanOpenAttachments)">Open</button>
+                        <button class="text-button danger" type="button" @onclick="() => RemoveAsync(attachment)">Remove</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public required List<AttachmentRecord> Attachments { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Area { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Guid OwnerId { get; set; }
+
+    private string StatusMessage { get; set; } = string.Empty;
+
+    private async Task UploadAsync()
+    {
+        var addedCount = await Store.AddAttachmentsAsync(Attachments, Area, OwnerId);
+        StatusMessage = addedCount > 0
+            ? $"{addedCount} attachment(s) added."
+            : "No files were added.";
+
+        if (addedCount > 0)
+        {
+            await Store.SaveAsync();
+        }
+    }
+
+    private async Task OpenAsync(AttachmentRecord attachment)
+    {
+        StatusMessage = string.Empty;
+        await Store.OpenAttachmentAsync(attachment);
+    }
+
+    private async Task RemoveAsync(AttachmentRecord attachment)
+    {
+        Store.RemoveAttachment(Attachments, attachment);
+        await Store.SaveAsync();
+        StatusMessage = "Attachment removed.";
+    }
+}

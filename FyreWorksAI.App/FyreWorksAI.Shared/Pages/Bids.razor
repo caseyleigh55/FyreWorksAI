@@ -1,0 +1,645 @@
+@page "/bids"
+@inject WorkspaceStore Store
+@inject NavigationManager NavigationManager
+
+<PageTitle>Bids</PageTitle>
+
+@if (!Store.IsInitialized)
+{
+    <div class="loading-state">
+        <h1>Loading bids...</h1>
+        <p>Restoring estimating templates, clients, and saved bid records.</p>
+    </div>
+}
+else
+{
+    var activeBids = Store.Workspace.Bids.Where(item => item.IsActive).OrderBy(item => item.DueDate).ToList();
+    var inactiveBids = Store.Workspace.Bids.Where(item => !item.IsActive).OrderByDescending(item => item.CreatedOn).ToList();
+    var selectedTemplate = SelectedBid is null ? null : Store.GetTemplate(SelectedBid.TemplateId);
+    var currentClient = CurrentClient;
+
+    <section class="workspace-grid">
+        <aside class="directory-panel">
+            <div class="panel-header">
+                <div>
+                    <p class="eyebrow">Estimating</p>
+                    <h2>Bids</h2>
+                </div>
+                <button class="button" type="button" @onclick="CreateBidAsync">New Bid</button>
+            </div>
+
+            <div class="directory-group">
+                <h3>Active</h3>
+                @if (activeBids.Count == 0)
+                {
+                    <p class="muted">No active bids yet.</p>
+                }
+                else
+                {
+                    @foreach (var bid in activeBids)
+                    {
+                        <button class="directory-item @(SelectedBid?.Id == bid.Id ? "selected" : null)" type="button" @onclick="() => SelectBid(bid.Id)">
+                            <strong>@bid.BidNumber</strong>
+                            <span>@bid.ProjectName</span>
+                            <small>@bid.DueDate:d</small>
+                        </button>
+                    }
+                }
+            </div>
+
+            <div class="directory-group">
+                <h3>Inactive</h3>
+                @if (inactiveBids.Count == 0)
+                {
+                    <p class="muted">No inactive bids.</p>
+                }
+                else
+                {
+                    @foreach (var bid in inactiveBids)
+                    {
+                        <button class="directory-item @(SelectedBid?.Id == bid.Id ? "selected" : null)" type="button" @onclick="() => SelectBid(bid.Id)">
+                            <strong>@bid.BidNumber</strong>
+                            <span>@bid.ProjectName</span>
+                            <small>@bid.Status</small>
+                        </button>
+                    }
+                }
+            </div>
+        </aside>
+
+        <div class="detail-column">
+            @if (SelectedBid is null)
+            {
+                <section class="empty-state panel">
+                    <h2>No bid selected</h2>
+                    <p>Create a new bid to start estimating labor, material, site scope, and supporting office tasks.</p>
+                    <button class="button" type="button" @onclick="CreateBidAsync">Create Bid</button>
+                </section>
+            }
+            else
+            {
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Bid editor</p>
+                            <h2>@SelectedBid.ProjectName</h2>
+                        </div>
+                        <div class="button-row">
+                            <button class="button button-secondary" type="button" @onclick="ApplyTemplateAsync">Apply Template</button>
+                            <button class="button button-secondary" type="button" @onclick="SaveAsync">Save Bid</button>
+                            <button class="button" type="button" @onclick="ConvertToJobAsync">Convert To Job</button>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(StatusMessage))
+                    {
+                        <p class="callout callout-success">@StatusMessage</p>
+                    }
+
+                    <div class="form-grid two-columns">
+                        <label>
+                            <span>Bid Number</span>
+                            <input @bind="SelectedBid.BidNumber" />
+                        </label>
+                        <label>
+                            <span>Project Name</span>
+                            <input @bind="SelectedBid.ProjectName" />
+                        </label>
+                        <label>
+                            <span>Status</span>
+                            <select @bind="SelectedBid.Status">
+                                <option>Draft</option>
+                                <option>Submitted</option>
+                                <option>Awarded</option>
+                                <option>Lost</option>
+                            </select>
+                        </label>
+                        <label class="checkbox-field">
+                            <span>Active</span>
+                            <input type="checkbox" @bind="SelectedBid.IsActive" />
+                        </label>
+                        <label>
+                            <span>Created</span>
+                            <input type="date" @bind="SelectedBid.CreatedOn" @bind:format="yyyy-MM-dd" />
+                        </label>
+                        <label>
+                            <span>Due Date</span>
+                            <input type="date" @bind="SelectedBid.DueDate" @bind:format="yyyy-MM-dd" />
+                        </label>
+                        <label>
+                            <span>Labor Template</span>
+                            <select value="@(SelectedBid.TemplateId?.ToString() ?? string.Empty)" @onchange="OnTemplateChanged">
+                                <option value="">No template</option>
+                                @foreach (var template in Store.Workspace.Templates.Where(template => !template.IsArchived))
+                                {
+                                    <option value="@template.Id">@template.Name</option>
+                                }
+                            </select>
+                        </label>
+                        <label>
+                            <span>Client</span>
+                            <select value="@(SelectedBid.ClientId?.ToString() ?? string.Empty)" @onchange="OnClientChanged">
+                                <option value="">Unassigned</option>
+                                @foreach (var client in Store.Workspace.Clients.Where(client => client.IsActive))
+                                {
+                                    <option value="@client.Id">@client.Name</option>
+                                }
+                            </select>
+                        </label>
+                        <label>
+                            <span>Field Rate</span>
+                            <input type="number" step="0.01" @bind="SelectedBid.FieldLaborRate" />
+                        </label>
+                        <label>
+                            <span>Admin Rate</span>
+                            <input type="number" step="0.01" @bind="SelectedBid.AdminLaborRate" />
+                        </label>
+                        <label>
+                            <span>Engineering Rate</span>
+                            <input type="number" step="0.01" @bind="SelectedBid.EngineeringLaborRate" />
+                        </label>
+                        <label>
+                            <span>Markup %</span>
+                            <input type="number" step="0.01" @bind="SelectedBid.MarkupPercent" />
+                        </label>
+                        <label>
+                            <span>Proposed Revenue</span>
+                            <input type="number" step="0.01" @bind="SelectedBid.ProposedRevenue" />
+                        </label>
+                    </div>
+
+                    <label class="full-width">
+                        <span>Scope Summary</span>
+                        <textarea rows="3" @bind="SelectedBid.ScopeSummary"></textarea>
+                    </label>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Client + site</p>
+                            <h3>Project Contacts</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="CreateClientForBid">New Client</button>
+                    </div>
+
+                    @if (currentClient is null)
+                    {
+                        <p class="muted">Select an existing client or create a new client record for this bid.</p>
+                    }
+                    else
+                    {
+                        <div class="form-grid two-columns">
+                            <label>
+                                <span>Client Name</span>
+                                <input @bind="currentClient.Name" />
+                            </label>
+                            <label>
+                                <span>Primary Contact</span>
+                                <input @bind="currentClient.PrimaryContact" />
+                            </label>
+                            <label>
+                                <span>Email</span>
+                                <input @bind="currentClient.Email" />
+                            </label>
+                            <label>
+                                <span>Phone</span>
+                                <input @bind="currentClient.Phone" />
+                            </label>
+                            <label class="full-width">
+                                <span>Billing Address</span>
+                                <textarea rows="2" @bind="currentClient.BillingAddress"></textarea>
+                            </label>
+                        </div>
+                    }
+
+                    <div class="form-grid two-columns">
+                        <label>
+                            <span>Site Name</span>
+                            <input @bind="SelectedBid.Site.SiteName" />
+                        </label>
+                        <label>
+                            <span>Occupancy</span>
+                            <input @bind="SelectedBid.Site.OccupancyType" />
+                        </label>
+                        <label>
+                            <span>Address Line 1</span>
+                            <input @bind="SelectedBid.Site.AddressLine1" />
+                        </label>
+                        <label>
+                            <span>Address Line 2</span>
+                            <input @bind="SelectedBid.Site.AddressLine2" />
+                        </label>
+                        <label>
+                            <span>City</span>
+                            <input @bind="SelectedBid.Site.City" />
+                        </label>
+                        <label>
+                            <span>State</span>
+                            <input @bind="SelectedBid.Site.State" />
+                        </label>
+                        <label>
+                            <span>Postal Code</span>
+                            <input @bind="SelectedBid.Site.PostalCode" />
+                        </label>
+                        <label class="full-width">
+                            <span>Site Notes</span>
+                            <textarea rows="2" @bind="SelectedBid.Site.Notes"></textarea>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Office scope</p>
+                            <h3>Administrative Tasks</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="AddAdministrativeTask">Add Task</button>
+                    </div>
+
+                    @if (SelectedBid.AdministrativeTasks.Count == 0)
+                    {
+                        <p class="muted">Use this area for permits, purchasing, submittals, billing prep, closeout packets, and other office effort.</p>
+                    }
+                    else
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Task</th>
+                                    <th>Hours</th>
+                                    <th>Done</th>
+                                    <th>Notes</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var task in SelectedBid.AdministrativeTasks)
+                                {
+                                    <tr @key="task.Id">
+                                        <td><input @bind="task.Title" /></td>
+                                        <td><input type="number" step="0.25" @bind="task.EstimatedHours" /></td>
+                                        <td><input type="checkbox" @bind="task.Complete" /></td>
+                                        <td><input @bind="task.Notes" /></td>
+                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveAdministrativeTask(task.Id)">Remove</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Engineering scope</p>
+                            <h3>Engineering Tasks</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="AddEngineeringTask">Add Task</button>
+                    </div>
+
+                    @if (SelectedBid.EngineeringTasks.Count == 0)
+                    {
+                        <p class="muted">Track design revisions, battery calculations, as-built drafting, code analysis, and permit responses here.</p>
+                    }
+                    else
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Task</th>
+                                    <th>Hours</th>
+                                    <th>Done</th>
+                                    <th>Notes</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var task in SelectedBid.EngineeringTasks)
+                                {
+                                    <tr @key="task.Id">
+                                        <td><input @bind="task.Title" /></td>
+                                        <td><input type="number" step="0.25" @bind="task.EstimatedHours" /></td>
+                                        <td><input type="checkbox" @bind="task.Complete" /></td>
+                                        <td><input @bind="task.Notes" /></td>
+                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveEngineeringTask(task.Id)">Remove</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Field buildout</p>
+                            <h3>Components</h3>
+                        </div>
+                        <div class="button-row">
+                            <button class="button button-secondary" type="button" @onclick="AddComponent">Add Component</button>
+                            <button class="button button-secondary" type="button" @onclick="ApplyTemplateAsync">Refresh All From Template</button>
+                        </div>
+                    </div>
+
+                    <datalist id="location-profiles">
+                        @if (selectedTemplate is not null)
+                        {
+                            @foreach (var location in selectedTemplate.Rules.Select(rule => rule.LocationProfile).Distinct(StringComparer.OrdinalIgnoreCase))
+                            {
+                                <option value="@location"></option>
+                            }
+                        }
+                    </datalist>
+                    <datalist id="install-types">
+                        @if (selectedTemplate is not null)
+                        {
+                            @foreach (var installType in selectedTemplate.Rules.Select(rule => rule.InstallType).Distinct(StringComparer.OrdinalIgnoreCase))
+                            {
+                                <option value="@installType"></option>
+                            }
+                        }
+                    </datalist>
+
+                    @if (SelectedBid.Components.Count == 0)
+                    {
+                        <p class="muted">Add devices, wire, and field items. Template rules can auto-populate install, demo, trim, and test time based on location and install type.</p>
+                    }
+                    else
+                    {
+                        <table class="data-table wide">
+                            <thead>
+                                <tr>
+                                    <th>Component</th>
+                                    <th>Qty</th>
+                                    <th>Location</th>
+                                    <th>Install Type</th>
+                                    <th>Matl Ea</th>
+                                    <th>Install</th>
+                                    <th>Demo</th>
+                                    <th>Trim</th>
+                                    <th>Test</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var component in SelectedBid.Components)
+                                {
+                                    <tr @key="component.Id">
+                                        <td>
+                                            <input @bind="component.Name" />
+                                            <input class="sub-input" @bind="component.Notes" placeholder="Notes" />
+                                        </td>
+                                        <td><input type="number" step="1" @bind="component.Quantity" /></td>
+                                        <td><input list="location-profiles" @bind="component.LocationProfile" /></td>
+                                        <td><input list="install-types" @bind="component.InstallType" /></td>
+                                        <td><input type="number" step="0.01" @bind="component.MaterialCostEach" /></td>
+                                        <td><input type="number" step="1" @bind="component.InstallMinutes" /></td>
+                                        <td><input type="number" step="1" @bind="component.DemoMinutes" /></td>
+                                        <td><input type="number" step="1" @bind="component.TrimMinutes" /></td>
+                                        <td><input type="number" step="1" @bind="component.TestMinutes" /></td>
+                                        <td>
+                                            <button class="text-button" type="button" @onclick="() => MatchComponent(component)">Match</button>
+                                            <button class="text-button danger" type="button" @onclick="() => RemoveComponent(component.Id)">Remove</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Material</p>
+                            <h3>Wire + Material Items</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick="AddMaterial">Add Material</button>
+                    </div>
+
+                    @if (SelectedBid.Materials.Count == 0)
+                    {
+                        <p class="muted">Add wire, hardware, backboxes, conduit, batteries, panels, and other direct material costs.</p>
+                    }
+                    else
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Category</th>
+                                    <th>Description</th>
+                                    <th>Qty</th>
+                                    <th>Unit Cost</th>
+                                    <th>Notes</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var material in SelectedBid.Materials)
+                                {
+                                    <tr @key="material.Id">
+                                        <td><input @bind="material.Category" /></td>
+                                        <td><input @bind="material.Description" /></td>
+                                        <td><input type="number" step="1" @bind="material.Quantity" /></td>
+                                        <td><input type="number" step="0.01" @bind="material.UnitCost" /></td>
+                                        <td><input @bind="material.Notes" /></td>
+                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveMaterial(material.Id)">Remove</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+
+                <section class="summary-grid">
+                    <article class="summary-card">
+                        <p class="eyebrow">Field Hours</p>
+                        <h3>@EstimateMath.GetBidFieldHours(SelectedBid).ToString("N2")</h3>
+                        <p>Install, demo, trim, and test totals from current component rules.</p>
+                    </article>
+                    <article class="summary-card">
+                        <p class="eyebrow">Estimated Cost</p>
+                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetBidEstimatedCost(SelectedBid))</h3>
+                        <p>Labor plus direct material.</p>
+                    </article>
+                    <article class="summary-card">
+                        <p class="eyebrow">Suggested Sell</p>
+                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetBidSuggestedRevenue(SelectedBid))</h3>
+                        <p>@SelectedBid.MarkupPercent.ToString("N1")% markup based on estimate.</p>
+                    </article>
+                    <article class="summary-card">
+                        <p class="eyebrow">Margin</p>
+                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetBidMargin(SelectedBid))</h3>
+                        <p>@EstimateMath.GetPercent(EstimateMath.GetBidMarginPercent(SelectedBid)) based on proposed revenue.</p>
+                    </article>
+                </section>
+
+                <AttachmentManager Attachments="SelectedBid.Attachments" Area="bids" OwnerId="SelectedBid.Id" />
+
+                <section class="panel">
+                    <p class="eyebrow">Estimator notes</p>
+                    <label class="full-width">
+                        <span>Notes</span>
+                        <textarea rows="4" @bind="SelectedBid.Notes"></textarea>
+                    </label>
+                </section>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    private Guid? SelectedBidId { get; set; }
+    private string StatusMessage { get; set; } = string.Empty;
+
+    private BidRecord? SelectedBid =>
+        SelectedBidId is null
+            ? null
+            : Store.Workspace.Bids.FirstOrDefault(bid => bid.Id == SelectedBidId.Value);
+
+    private ClientRecord? CurrentClient =>
+        SelectedBid is null
+            ? null
+            : Store.GetClient(SelectedBid.ClientId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Store.InitializeAsync();
+        SelectedBidId = Store.Workspace.Bids.FirstOrDefault()?.Id;
+    }
+
+    private void SelectBid(Guid bidId)
+    {
+        SelectedBidId = bidId;
+        StatusMessage = string.Empty;
+    }
+
+    private async Task CreateBidAsync()
+    {
+        var bid = Store.CreateBid();
+        SelectedBidId = bid.Id;
+        StatusMessage = "New bid created.";
+        await Store.SaveAsync();
+    }
+
+    private void CreateClientForBid()
+    {
+        if (SelectedBid is null)
+        {
+            return;
+        }
+
+        var client = Store.CreateClient();
+        SelectedBid.ClientId = client.Id;
+        StatusMessage = "New client linked to the bid.";
+    }
+
+    private async Task SaveAsync()
+    {
+        await Store.SaveAsync();
+        StatusMessage = "Bid saved.";
+    }
+
+    private async Task ApplyTemplateAsync()
+    {
+        if (SelectedBid is null)
+        {
+            return;
+        }
+
+        Store.ApplyTemplateToBid(SelectedBid);
+        await Store.SaveAsync();
+        StatusMessage = "Template values applied to all components.";
+    }
+
+    private async Task ConvertToJobAsync()
+    {
+        if (SelectedBid is null)
+        {
+            return;
+        }
+
+        var job = Store.ConvertBidToJob(SelectedBid);
+        await Store.SaveAsync();
+        StatusMessage = $"Job {job.JobNumber} is ready.";
+        NavigationManager.NavigateTo("/jobs");
+    }
+
+    private async Task OnTemplateChanged(ChangeEventArgs args)
+    {
+        if (SelectedBid is null)
+        {
+            return;
+        }
+
+        SelectedBid.TemplateId = ParseNullableGuid(args.Value?.ToString());
+        await Task.CompletedTask;
+    }
+
+    private async Task OnClientChanged(ChangeEventArgs args)
+    {
+        if (SelectedBid is null)
+        {
+            return;
+        }
+
+        SelectedBid.ClientId = ParseNullableGuid(args.Value?.ToString());
+        await Task.CompletedTask;
+    }
+
+    private void AddAdministrativeTask() =>
+        SelectedBid?.AdministrativeTasks.Add(new WorkTask { Title = "Administrative Task" });
+
+    private void RemoveAdministrativeTask(Guid taskId) =>
+        SelectedBid?.AdministrativeTasks.RemoveAll(task => task.Id == taskId);
+
+    private void AddEngineeringTask() =>
+        SelectedBid?.EngineeringTasks.Add(new WorkTask { Title = "Engineering Task" });
+
+    private void RemoveEngineeringTask(Guid taskId) =>
+        SelectedBid?.EngineeringTasks.RemoveAll(task => task.Id == taskId);
+
+    private void AddComponent()
+    {
+        if (SelectedBid is null)
+        {
+            return;
+        }
+
+        var component = new BidComponent
+        {
+            Name = "Device",
+            Quantity = 1m
+        };
+
+        if (!Store.ApplyTemplateToComponent(component, Store.GetTemplate(SelectedBid.TemplateId)))
+        {
+            component.LocationProfile = "Normal Area";
+            component.InstallType = "No Pipe";
+        }
+
+        SelectedBid.Components.Add(component);
+    }
+
+    private void MatchComponent(BidComponent component)
+    {
+        var matched = Store.ApplyTemplateToComponent(component, Store.GetTemplate(SelectedBid?.TemplateId));
+        StatusMessage = matched
+            ? "Component labor matched from the selected template."
+            : "No matching template rule was found for that location/install combination.";
+    }
+
+    private void RemoveComponent(Guid componentId) =>
+        SelectedBid?.Components.RemoveAll(component => component.Id == componentId);
+
+    private void AddMaterial() =>
+        SelectedBid?.Materials.Add(new BidMaterialItem { Description = "Material Item" });
+
+    private void RemoveMaterial(Guid materialId) =>
+        SelectedBid?.Materials.RemoveAll(material => material.Id == materialId);
+
+    private static Guid? ParseNullableGuid(string? value) =>
+        Guid.TryParse(value, out var parsed) ? parsed : null;
+}
