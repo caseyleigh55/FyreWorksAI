@@ -1,0 +1,149 @@
+{
+  "Settings": {
+    "StorageMode": 0,
+    "StorageNotes": "Text-file storage is active today. The repository contracts are ready for future SQLite or SQL Server adapters when you want to expand beyond flat files.",
+    "DefaultTemplateId": "91738e66-21d7-4142-a721-6ae4c12eee60",
+    "FieldLaborRate": 115,
+    "AdminLaborRate": 68,
+    "EngineeringLaborRate": 96,
+    "DefaultMarkupPercent": 22,
+    "DefaultServiceContractMonths": 24,
+    "DefaultInspectionIntervalMonths": 12,
+    "DefaultMonthlyMonitoringAmount": 165
+  },
+  "Clients": [],
+  "Templates": [
+    {
+      "Id": "91738e66-21d7-4142-a721-6ae4c12eee60",
+      "Name": "Standard Device Labor",
+      "Notes": "Starter template matching the estimating rules described in the project brief.",
+      "IsArchived": false,
+      "Rules": [
+        {
+          "Id": "44d2bc79-9913-41ab-9e98-0992021c1aa0",
+          "LocationProfile": "Normal Area",
+          "InstallType": "No Pipe",
+          "InstallMinutes": 15,
+          "DemoMinutes": 0,
+          "TrimMinutes": 10,
+          "TestMinutes": 5,
+          "Notes": "Typical ceiling or wall mounted device in a standard environment."
+        },
+        {
+          "Id": "2c244b64-d015-4657-a6b1-6043e70a7534",
+          "LocationProfile": "Warehouse",
+          "InstallType": "Lift Required",
+          "InstallMinutes": 60,
+          "DemoMinutes": 10,
+          "TrimMinutes": 30,
+          "TestMinutes": 15,
+          "Notes": "Use when lift staging or elevated access is required."
+        },
+        {
+          "Id": "9e7509cb-56c3-4d6d-92b4-28bad4343dec",
+          "LocationProfile": "Finished Office",
+          "InstallType": "Surface Raceway",
+          "InstallMinutes": 35,
+          "DemoMinutes": 5,
+          "TrimMinutes": 20,
+          "TestMinutes": 8,
+          "Notes": "Finished spaces with added coordination and cleanup."
+        }
+      ]
+    }
+  ],
+  "Bids": [
+    {
+      "Id": "cbc6d42d-31a8-4b8a-aca9-a7eeec83a412",
+      "BidNumber": "BID-20260320-001",
+      "ProjectName": "Bid 1",
+      "ClientId": null,
+      "Site": {
+        "SiteName": "New Project Site",
+        "AddressLine1": "",
+        "AddressLine2": "",
+        "City": "",
+        "State": "",
+        "PostalCode": "",
+        "OccupancyType": "",
+        "Notes": ""
+      },
+      "Status": "Draft",
+      "IsActive": true,
+      "CreatedOn": "2026-03-20T00:00:00-07:00",
+      "DueDate": "2026-04-03T00:00:00-07:00",
+      "TemplateId": "91738e66-21d7-4142-a721-6ae4c12eee60",
+      "FieldLaborRate": 115,
+      "AdminLaborRate": 68,
+      "EngineeringLaborRate": 96,
+      "MarkupPercent": 22,
+      "ProposedRevenue": 0,
+      "ScopeSummary": "",
+      "Notes": "",
+      "AdministrativeTasks": [],
+      "EngineeringTasks": [],
+      "Components": [
+        {
+          "Id": "fcdc96ca-dd37-4a91-8f22-2c508e238697",
+          "Name": "Device",
+          "Quantity": 1,
+          "LocationProfile": "Normal Area",
+          "InstallType": "No Pipe",
+          "MaterialCostEach": 0,
+          "InstallMinutes": 15,
+          "DemoMinutes": 0,
+          "TrimMinutes": 10,
+          "TestMinutes": 5,
+          "Notes": ""
+        }
+      ],
+      "Materials": [],
+      "Attachments": []
+    }
+  ],
+  "Jobs": [
+    {
+      "Id": "6c7cdd09-97a1-40f3-8816-ecf11fac670b",
+      "JobNumber": "JOB-20260320-001",
+      "ProjectName": "Job 1",
+      "ClientId": null,
+      "SourceBidId": null,
+      "Site": {
+        "SiteName": "",
+        "AddressLine1": "",
+        "AddressLine2": "",
+        "City": "",
+        "State": "",
+        "PostalCode": "",
+        "OccupancyType": "",
+        "Notes": ""
+      },
+      "Status": "Planning",
+      "IsActive": true,
+      "CreatedOn": "2026-03-20T00:00:00-07:00",
+      "Baseline": {
+        "SourceBidNumber": "",
+        "ScopeSummary": "Direct job entry without a converted bid.",
+        "OriginalRevenue": 0,
+        "EstimatedLaborCost": 0,
+        "EstimatedMaterialCost": 0,
+        "EstimatedTotalCost": 0,
+        "EstimatedFieldHours": 0,
+        "EstimatedAdminHours": 0,
+        "EstimatedEngineeringHours": 0,
+        "AdministrativeTasks": [],
+        "EngineeringTasks": [],
+        "Components": [],
+        "Materials": []
+      },
+      "TimeEntries": [],
+      "MaterialPurchases": [],
+      "ChangeOrders": [],
+      "ScheduleOfValues": [],
+      "Commitments": [],
+      "Attachments": [],
+      "Notes": ""
+    }
+  ],
+  "ServiceAgreements": []
+}

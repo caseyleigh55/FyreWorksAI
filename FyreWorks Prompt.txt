@@ -1,0 +1,19 @@
+You are a senior application developer hired by a commercial fire alarm contractor to develop an app that will manage all of the workflows for the office. this application will handle creating bids, converting bids to jobs / creating jobs without bids, managing jobs, create service tickets and scheduling, it shall have the capability to upload documents like receipts and images or pdf's word or excel documents etc.
+
+design:
+
+this app will have a home page that directs to the bids, jobs and service pages. each page will show a list of active jobs/bids/service and a list of inactive as well. each item should be able to be selected for editing or adding information. 
+
+bids:
+
+creating a bid involves the creation of new clients and adding them to the bid, site information, an area to add administrative tasks, an area for engineering tasks, a section for creating/adding items specific to each potential job (component, wire and material). each component shall have an installation location and installation type attributed and those parameters will be the basis for the time it takes to install, demo, trim, and test. for instance a normal location without pipe would be 15 minutes to install and 10 minutes to trim. a device in a warehouse where a lift would be required is 60 minutes to install and 30 minutes to trim. that kind of thing. all times and locations can be set per device added and all values for time per location and install types shall be editable and templates that can be saved and loaded when creating new bids. default template can be chosen for new bids as well. there needs to be a convert to job button that creates a job using all of the information from the bid. and also a save bid and edit bid capability for adjustments.
+
+Jobs:
+
+the job created from the bid is essentially the "Cost" portion as a baseline for what we specified for the job. i want to be able to have the original costs available as reference but i want to be able to log times and real life material costs, change orders which add revenue to the job and overall manages all aspects of the project including schedule of values and billes/paid commitments to ensure we know whats been billed thus far etc. this is saveable and editable and should have some way of inactivating the job once its completed. i want to be able to job cost and export job cost data like profit and loss during different stages of the project and once the project is closed out.
+
+Service:
+
+this section is for clients that are in service agreements for monitoring. the ability to pre schedule dates for upcoming inspections and have those closest to an inspection date or billing date be shown in the active list on the main service page. there has to be a way of itemizing monthly monitoring payments to see whats been paid per 2 year contract and keep track of the payments the clients make. this section should also be able to create service clients. it needs to keep track of service calls and log quotes and have uploadable capabilities like bids and jobs do. perhaps for quotes it can be a simplified bid? that could work.
+
+this should save data via txt files but also be able to use other databases like sql server or sql lite depending on what is chosen. i want it in c# and it can be a windows app for now with capabilities for mobile use later. use yourbest judgement on this portion for easiest use case for expandability to something like azure and blob storage in the future with the ability to either be web/mobile or windows.
