@@ -1,0 +1,76 @@
+@if (Items.Count == 0)
+{
+    <p class="muted">No @Label.ToLowerInvariant() items added yet.</p>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th>Description</th>
+                <th>Qty</th>
+                <th>Unit Cost</th>
+                <th>Unit Sale</th>
+                <th>Notes</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Items)
+            {
+                <tr @key="item.Id">
+                    <td><input @bind="item.Category" /></td>
+                    <td><input @bind="item.Description" /></td>
+                    <td><input type="number" step="1" @bind="item.Quantity" @bind:event="oninput" @bind:after="NotifyChanged" /></td>
+                    <td>
+                        <div class="input-shell money-input-shell">
+                            <span class="input-prefix">$</span>
+                            <input class="shell-input" type="number" step="0.01" @bind="item.UnitCost" @bind:event="oninput" @bind:after="() => NormalizeCostAndNotify(item)" />
+                        </div>
+                    </td>
+                    <td>
+                        <div class="input-shell money-input-shell">
+                            <span class="input-prefix">$</span>
+                            <input class="shell-input" type="number" step="0.01" @bind="item.UnitSale" @bind:event="oninput" @bind:after="() => NormalizeSaleAndNotify(item)" />
+                        </div>
+                    </td>
+                    <td><input @bind="item.Notes" /></td>
+                    <td><button class="text-button danger" type="button" @onclick="() => OnRemove.InvokeAsync(item.Id)">Remove</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public List<BidMaterialItem> Items { get; set; } = [];
+
+    [Parameter]
+    public decimal MarkupPercent { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnRemove { get; set; }
+
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private async Task NormalizeCostAndNotify(BidMaterialItem item)
+    {
+        item.UnitCost = EstimateMath.RoundCurrency(item.UnitCost);
+        item.UnitSale = EstimateMath.GetDefaultSaleFromMarkup(item.UnitCost, MarkupPercent);
+        await NotifyChanged();
+    }
+
+    private async Task NormalizeSaleAndNotify(BidMaterialItem item)
+    {
+        item.UnitSale = EstimateMath.RoundCurrency(item.UnitSale);
+        await NotifyChanged();
+    }
+
+    private Task NotifyChanged() => OnChanged.InvokeAsync();
+}

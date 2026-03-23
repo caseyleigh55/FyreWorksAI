@@ -127,22 +127,23 @@ public sealed class WorkspaceStore(
 
     public BidRecord CreateBid()
     {
+        var template = GetTemplate(Workspace.Settings.DefaultTemplateId) ?? Workspace.Templates.First(template => !template.IsArchived);
         var bid = new BidRecord
         {
-            BidNumber = GenerateNumber("BID", Workspace.Bids.Count + 1),
             ProjectName = $"Bid {Workspace.Bids.Count + 1}",
             CreatedOn = DateTime.Today,
             DueDate = DateTime.Today.AddDays(14),
-            TemplateId = Workspace.Settings.DefaultTemplateId,
-            FieldLaborRate = Workspace.Settings.FieldLaborRate,
-            AdminLaborRate = Workspace.Settings.AdminLaborRate,
-            EngineeringLaborRate = Workspace.Settings.EngineeringLaborRate,
-            MarkupPercent = Workspace.Settings.DefaultMarkupPercent,
+            TemplateId = template.Id,
             Site =
             {
                 SiteName = "New Project Site"
             }
         };
+
+        ApplyTemplateValuesToBid(bid, template);
+        bid.BidNumber = GenerateBidNumber(template, bid.CreatedOn);
+        EnsureLaborDistributionRows(bid);
+        RebalanceLaborDistributionToCalculatedHours(bid);
 
         Workspace.Bids.Insert(0, bid);
         return bid;
@@ -194,6 +195,37 @@ public sealed class WorkspaceStore(
         return template;
     }
 
+    public LaborTemplate CreateTemplateFromBid(BidRecord bid, string? templateName = null)
+    {
+        var sourceTemplate = GetTemplate(bid.TemplateId) ?? GetTemplate(Workspace.Settings.DefaultTemplateId);
+        var template = sourceTemplate is null
+            ? CreateStarterTemplate(string.Empty)
+            : Clone(sourceTemplate);
+
+        template.Id = Guid.NewGuid();
+        template.Name = string.IsNullOrWhiteSpace(templateName)
+            ? $"{bid.ProjectName} Profile"
+            : templateName.Trim();
+        template.IsArchived = false;
+        template.DefaultMarkupPercent = bid.MarkupPercent;
+        template.JourneymanRegularDirectRate = bid.JourneymanRegularDirectRate;
+        template.JourneymanRegularBilledRate = bid.JourneymanRegularBilledRate;
+        template.JourneymanOvernightDirectRate = bid.JourneymanOvernightDirectRate;
+        template.JourneymanOvernightBilledRate = bid.JourneymanOvernightBilledRate;
+        template.ApprenticeRegularDirectRate = bid.ApprenticeRegularDirectRate;
+        template.ApprenticeRegularBilledRate = bid.ApprenticeRegularBilledRate;
+        template.ApprenticeOvernightDirectRate = bid.ApprenticeOvernightDirectRate;
+        template.ApprenticeOvernightBilledRate = bid.ApprenticeOvernightBilledRate;
+        template.AdminDirectRate = bid.AdminDirectRate;
+        template.AdminBilledRate = bid.AdminBilledRate;
+        template.EngineeringDirectRate = bid.EngineeringDirectRate;
+        template.EngineeringBilledRate = bid.EngineeringBilledRate;
+
+        Workspace.Templates.Insert(0, template);
+        bid.TemplateId = template.Id;
+        return template;
+    }
+
     public JobRecord ConvertBidToJob(BidRecord bid)
     {
         var existingJob = Workspace.Jobs.FirstOrDefault(job => job.SourceBidId == bid.Id);
@@ -205,17 +237,18 @@ public sealed class WorkspaceStore(
         var baseline = new BaselineEstimate
         {
             SourceBidNumber = bid.BidNumber,
-            ScopeSummary = bid.ScopeSummary,
-            OriginalRevenue = EstimateMath.GetBidRevenue(bid),
+            ScopeSummary = !string.IsNullOrWhiteSpace(bid.Site.ScopeOfWork) ? bid.Site.ScopeOfWork : bid.ScopeSummary,
+            OriginalRevenue = EstimateMath.GetBidAdjustedRevenue(bid),
             EstimatedLaborCost = EstimateMath.GetBidLaborCost(bid),
             EstimatedMaterialCost = EstimateMath.GetBidMaterialCost(bid),
             EstimatedTotalCost = EstimateMath.GetBidEstimatedCost(bid),
-            EstimatedFieldHours = EstimateMath.GetBidFieldHours(bid),
+            EstimatedFieldHours = EstimateMath.GetBidAllocatedFieldHours(bid),
             EstimatedAdminHours = EstimateMath.GetBidAdminHours(bid),
             EstimatedEngineeringHours = EstimateMath.GetBidEngineeringHours(bid),
             AdministrativeTasks = Clone(bid.AdministrativeTasks),
             EngineeringTasks = Clone(bid.EngineeringTasks),
             Components = Clone(bid.Components),
+            DemoItems = Clone(bid.DemoItems),
             Materials = Clone(bid.Materials)
         };
 
@@ -246,22 +279,39 @@ public sealed class WorkspaceStore(
             return;
         }
 
+        ApplyTemplateValuesToBid(bid, template);
+
         foreach (var component in bid.Components)
         {
             ApplyTemplateToComponent(component, template);
+            if (component.UnitSale <= 0m)
+            {
+                component.UnitSale = EstimateMath.GetDefaultSaleFromMarkup(component.UnitCost, bid.MarkupPercent);
+            }
         }
+
+        foreach (var demoItem in bid.DemoItems)
+        {
+            ApplyTemplateToDemoItem(demoItem, template);
+        }
+
+        foreach (var material in bid.Materials)
+        {
+            if (material.UnitSale <= 0m)
+            {
+                material.UnitSale = EstimateMath.GetDefaultSaleFromMarkup(material.UnitCost, bid.MarkupPercent);
+            }
+        }
+
+        RebalanceLaborDistributionToCalculatedHours(bid);
     }
+
+    public void RebalanceBidLaborDistribution(BidRecord bid) =>
+        RebalanceLaborDistributionToCalculatedHours(bid);
 
     public bool ApplyTemplateToComponent(BidComponent component, LaborTemplate? template)
     {
-        if (template is null)
-        {
-            return false;
-        }
-
-        var rule = template.Rules.FirstOrDefault(candidate =>
-            string.Equals(candidate.LocationProfile.Trim(), component.LocationProfile.Trim(), StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(candidate.InstallType.Trim(), component.InstallType.Trim(), StringComparison.OrdinalIgnoreCase));
+        var rule = FindRule(template, component.LocationProfile, component.InstallType);
 
         if (rule is null)
         {
@@ -272,6 +322,19 @@ public sealed class WorkspaceStore(
         component.DemoMinutes = rule.DemoMinutes;
         component.TrimMinutes = rule.TrimMinutes;
         component.TestMinutes = rule.TestMinutes;
+        return true;
+    }
+
+    public bool ApplyTemplateToDemoItem(BidDemoItem demoItem, LaborTemplate? template)
+    {
+        var rule = FindRule(template, demoItem.LocationProfile, demoItem.InstallType);
+
+        if (rule is null)
+        {
+            return false;
+        }
+
+        demoItem.DemoHoursEach = rule.DemoMinutes / 60m;
         return true;
     }
 
@@ -393,6 +456,73 @@ public sealed class WorkspaceStore(
         return backupPath;
     }
 
+    private void ApplyTemplateValuesToBid(BidRecord bid, LaborTemplate template)
+    {
+        bid.TemplateId = template.Id;
+        bid.MarkupPercent = template.DefaultMarkupPercent;
+        bid.JourneymanRegularDirectRate = template.JourneymanRegularDirectRate;
+        bid.JourneymanRegularBilledRate = template.JourneymanRegularBilledRate;
+        bid.JourneymanOvernightDirectRate = template.JourneymanOvernightDirectRate;
+        bid.JourneymanOvernightBilledRate = template.JourneymanOvernightBilledRate;
+        bid.ApprenticeRegularDirectRate = template.ApprenticeRegularDirectRate;
+        bid.ApprenticeRegularBilledRate = template.ApprenticeRegularBilledRate;
+        bid.ApprenticeOvernightDirectRate = template.ApprenticeOvernightDirectRate;
+        bid.ApprenticeOvernightBilledRate = template.ApprenticeOvernightBilledRate;
+        bid.AdminDirectRate = template.AdminDirectRate;
+        bid.AdminBilledRate = template.AdminBilledRate;
+        bid.EngineeringDirectRate = template.EngineeringDirectRate;
+        bid.EngineeringBilledRate = template.EngineeringBilledRate;
+        bid.FieldLaborRate = template.JourneymanRegularDirectRate;
+        bid.AdminLaborRate = template.AdminDirectRate;
+        bid.EngineeringLaborRate = template.EngineeringDirectRate;
+    }
+
+    private int GetNextBidSequence(int year)
+    {
+        Workspace.Settings.BidNumberCounters ??= [];
+        var counter = Workspace.Settings.BidNumberCounters.FirstOrDefault(item => item.Year == year);
+        if (counter is null)
+        {
+            counter = new YearSequenceCounter { Year = year };
+            Workspace.Settings.BidNumberCounters.Add(counter);
+        }
+
+        var minimumSequence = Workspace.Bids.Count(bid => bid.CreatedOn.Year == year) + 1;
+        counter.NextSequence = Math.Max(counter.NextSequence, minimumSequence);
+
+        var current = counter.NextSequence;
+        counter.NextSequence++;
+        return current;
+    }
+
+    private string GenerateBidNumber(LaborTemplate template, DateTime createdOn)
+    {
+        var year = createdOn.Year;
+        var sequence = GetNextBidSequence(year);
+        var format = string.IsNullOrWhiteSpace(template.BidNumberFormat) ? "BID-YY-NNNN" : template.BidNumberFormat.Trim();
+        var result = format
+            .Replace("YYYY", year.ToString("0000", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("YY", (year % 100).ToString("00", CultureInfo.InvariantCulture), StringComparison.Ordinal);
+
+        var firstN = result.IndexOf('N');
+        if (firstN >= 0)
+        {
+            var count = 0;
+            for (var index = firstN; index < result.Length && result[index] == 'N'; index++)
+            {
+                count++;
+            }
+
+            result = result.Replace(new string('N', count), sequence.ToString(new string('0', count), CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        }
+        else
+        {
+            result = $"{result}-{sequence:0000}";
+        }
+
+        return result;
+    }
+
     private static string BuildJobCostReport(JobRecord job)
     {
         var builder = new StringBuilder();
@@ -455,6 +585,7 @@ public sealed class WorkspaceStore(
     private static void EnsureDefaults(FyreWorksWorkspace workspace)
     {
         workspace.Settings ??= new AppSettings();
+        workspace.Settings.BidNumberCounters ??= [];
         workspace.Clients ??= [];
         workspace.Templates ??= [];
         workspace.Bids ??= [];
@@ -468,42 +599,235 @@ public sealed class WorkspaceStore(
             workspace.Settings.DefaultTemplateId = starterTemplate.Id;
         }
 
+        foreach (var template in workspace.Templates)
+        {
+            template.Rules ??= [];
+            if (string.IsNullOrWhiteSpace(template.BidNumberFormat))
+            {
+                template.BidNumberFormat = "BID-YY-NNNN";
+            }
+
+            if (template.DefaultMarkupPercent <= 0m)
+            {
+                template.DefaultMarkupPercent = workspace.Settings.DefaultMarkupPercent;
+            }
+
+            if (template.JourneymanRegularDirectRate <= 0m)
+            {
+                template.JourneymanRegularDirectRate = workspace.Settings.FieldLaborRate;
+            }
+
+            if (template.JourneymanRegularBilledRate <= 0m)
+            {
+                template.JourneymanRegularBilledRate = template.JourneymanRegularDirectRate;
+            }
+
+            if (template.JourneymanOvernightDirectRate <= 0m)
+            {
+                template.JourneymanOvernightDirectRate = template.JourneymanRegularDirectRate * 1.5m;
+            }
+
+            if (template.JourneymanOvernightBilledRate <= 0m)
+            {
+                template.JourneymanOvernightBilledRate = template.JourneymanRegularBilledRate * 1.5m;
+            }
+
+            if (template.ApprenticeRegularDirectRate <= 0m)
+            {
+                template.ApprenticeRegularDirectRate = Math.Max(1m, template.JourneymanRegularDirectRate * 0.7m);
+            }
+
+            if (template.ApprenticeRegularBilledRate <= 0m)
+            {
+                template.ApprenticeRegularBilledRate = Math.Max(1m, template.JourneymanRegularBilledRate * 0.72m);
+            }
+
+            if (template.ApprenticeOvernightDirectRate <= 0m)
+            {
+                template.ApprenticeOvernightDirectRate = template.ApprenticeRegularDirectRate * 1.5m;
+            }
+
+            if (template.ApprenticeOvernightBilledRate <= 0m)
+            {
+                template.ApprenticeOvernightBilledRate = template.ApprenticeRegularBilledRate * 1.5m;
+            }
+
+            if (template.AdminDirectRate <= 0m)
+            {
+                template.AdminDirectRate = workspace.Settings.AdminLaborRate;
+            }
+
+            if (template.AdminBilledRate <= 0m)
+            {
+                template.AdminBilledRate = template.AdminDirectRate;
+            }
+
+            if (template.EngineeringDirectRate <= 0m)
+            {
+                template.EngineeringDirectRate = workspace.Settings.EngineeringLaborRate;
+            }
+
+            if (template.EngineeringBilledRate <= 0m)
+            {
+                template.EngineeringBilledRate = template.EngineeringDirectRate;
+            }
+        }
+
         if (workspace.Settings.DefaultTemplateId is null || workspace.Templates.All(template => template.Id != workspace.Settings.DefaultTemplateId))
         {
             workspace.Settings.DefaultTemplateId = workspace.Templates.FirstOrDefault(template => !template.IsArchived)?.Id ?? workspace.Templates.First().Id;
         }
 
+        var defaultTemplate = workspace.Templates.First(template => template.Id == workspace.Settings.DefaultTemplateId);
+
         foreach (var bid in workspace.Bids)
         {
             bid.Site ??= new SiteInformation();
+            bid.LaborDistribution ??= [];
             bid.AdministrativeTasks ??= [];
             bid.EngineeringTasks ??= [];
             bid.Components ??= [];
+            bid.DemoItems ??= [];
             bid.Materials ??= [];
             bid.Attachments ??= [];
-            if (bid.FieldLaborRate <= 0m)
+
+            if (string.IsNullOrWhiteSpace(bid.Site.ScopeOfWork) && !string.IsNullOrWhiteSpace(bid.ScopeSummary))
             {
-                bid.FieldLaborRate = workspace.Settings.FieldLaborRate;
+                bid.Site.ScopeOfWork = bid.ScopeSummary;
             }
 
-            if (bid.AdminLaborRate <= 0m)
+            if (string.IsNullOrWhiteSpace(bid.Site.OccupancyGroup) && !string.IsNullOrWhiteSpace(bid.Site.OccupancyType))
             {
-                bid.AdminLaborRate = workspace.Settings.AdminLaborRate;
+                bid.Site.OccupancyGroup = bid.Site.OccupancyType;
             }
 
-            if (bid.EngineeringLaborRate <= 0m)
+            if (!string.IsNullOrWhiteSpace(bid.Site.Notes))
             {
-                bid.EngineeringLaborRate = workspace.Settings.EngineeringLaborRate;
+                bid.Notes = string.IsNullOrWhiteSpace(bid.Notes)
+                    ? bid.Site.Notes
+                    : $"{bid.Notes}{Environment.NewLine}{Environment.NewLine}Site notes: {bid.Site.Notes}";
+                bid.Site.Notes = string.Empty;
             }
+
+            if (bid.TemplateId is null || workspace.Templates.All(template => template.Id != bid.TemplateId))
+            {
+                bid.TemplateId = workspace.Settings.DefaultTemplateId;
+            }
+
+            var template = workspace.Templates.First(template => template.Id == bid.TemplateId);
 
             if (bid.MarkupPercent <= 0m)
             {
-                bid.MarkupPercent = workspace.Settings.DefaultMarkupPercent;
+                bid.MarkupPercent = template.DefaultMarkupPercent > 0m ? template.DefaultMarkupPercent : defaultTemplate.DefaultMarkupPercent;
             }
 
-            if (bid.TemplateId is null)
+            if (bid.JourneymanRegularDirectRate <= 0m)
             {
-                bid.TemplateId = workspace.Settings.DefaultTemplateId;
+                bid.JourneymanRegularDirectRate = bid.FieldLaborRate > 0m ? bid.FieldLaborRate : template.JourneymanRegularDirectRate;
+            }
+
+            if (bid.JourneymanRegularBilledRate <= 0m)
+            {
+                bid.JourneymanRegularBilledRate = bid.FieldLaborRate > 0m ? bid.FieldLaborRate : template.JourneymanRegularBilledRate;
+            }
+
+            if (bid.JourneymanOvernightDirectRate <= 0m)
+            {
+                bid.JourneymanOvernightDirectRate = template.JourneymanOvernightDirectRate;
+            }
+
+            if (bid.JourneymanOvernightBilledRate <= 0m)
+            {
+                bid.JourneymanOvernightBilledRate = template.JourneymanOvernightBilledRate;
+            }
+
+            if (bid.ApprenticeRegularDirectRate <= 0m)
+            {
+                bid.ApprenticeRegularDirectRate = template.ApprenticeRegularDirectRate;
+            }
+
+            if (bid.ApprenticeRegularBilledRate <= 0m)
+            {
+                bid.ApprenticeRegularBilledRate = template.ApprenticeRegularBilledRate;
+            }
+
+            if (bid.ApprenticeOvernightDirectRate <= 0m)
+            {
+                bid.ApprenticeOvernightDirectRate = template.ApprenticeOvernightDirectRate;
+            }
+
+            if (bid.ApprenticeOvernightBilledRate <= 0m)
+            {
+                bid.ApprenticeOvernightBilledRate = template.ApprenticeOvernightBilledRate;
+            }
+
+            if (bid.AdminDirectRate <= 0m)
+            {
+                bid.AdminDirectRate = bid.AdminLaborRate > 0m ? bid.AdminLaborRate : template.AdminDirectRate;
+            }
+
+            if (bid.AdminBilledRate <= 0m)
+            {
+                bid.AdminBilledRate = bid.AdminLaborRate > 0m ? bid.AdminLaborRate : template.AdminBilledRate;
+            }
+
+            if (bid.EngineeringDirectRate <= 0m)
+            {
+                bid.EngineeringDirectRate = bid.EngineeringLaborRate > 0m ? bid.EngineeringLaborRate : template.EngineeringDirectRate;
+            }
+
+            if (bid.EngineeringBilledRate <= 0m)
+            {
+                bid.EngineeringBilledRate = bid.EngineeringLaborRate > 0m ? bid.EngineeringLaborRate : template.EngineeringBilledRate;
+            }
+
+            bid.FieldLaborRate = bid.JourneymanRegularDirectRate;
+            bid.AdminLaborRate = bid.AdminDirectRate;
+            bid.EngineeringLaborRate = bid.EngineeringDirectRate;
+
+            foreach (var task in bid.AdministrativeTasks.Concat(bid.EngineeringTasks))
+            {
+                if (task.PricingMode == TaskPricingMode.Fixed && task.SalePrice <= 0m && task.CostPrice > 0m)
+                {
+                    task.SalePrice = EstimateMath.GetDefaultSaleFromMarkup(task.CostPrice, bid.MarkupPercent);
+                }
+            }
+
+            foreach (var component in bid.Components)
+            {
+                if (component.UnitSale <= 0m && component.UnitCost > 0m)
+                {
+                    component.UnitSale = EstimateMath.GetDefaultSaleFromMarkup(component.UnitCost, bid.MarkupPercent);
+                }
+            }
+
+            foreach (var demoItem in bid.DemoItems)
+            {
+                if (string.IsNullOrWhiteSpace(demoItem.Name))
+                {
+                    demoItem.Name = "Demo Item";
+                }
+            }
+
+            foreach (var material in bid.Materials)
+            {
+                if (material.Kind == BidMaterialKind.Unknown)
+                {
+                    material.Kind = string.Equals(material.Category, "Wire", StringComparison.OrdinalIgnoreCase)
+                        ? BidMaterialKind.Wire
+                        : BidMaterialKind.Material;
+                }
+
+                if (material.UnitSale <= 0m && material.UnitCost > 0m)
+                {
+                    material.UnitSale = EstimateMath.GetDefaultSaleFromMarkup(material.UnitCost, bid.MarkupPercent);
+                }
+            }
+
+            EnsureLaborDistributionRows(bid);
+            if (EstimateMath.GetBidAllocatedFieldHours(bid) <= 0m && EstimateMath.GetBidCalculatedFieldHours(bid) > 0m)
+            {
+                RebalanceLaborDistributionToCalculatedHours(bid);
             }
         }
 
@@ -514,6 +838,7 @@ public sealed class WorkspaceStore(
             job.Baseline.AdministrativeTasks ??= [];
             job.Baseline.EngineeringTasks ??= [];
             job.Baseline.Components ??= [];
+            job.Baseline.DemoItems ??= [];
             job.Baseline.Materials ??= [];
             job.TimeEntries ??= [];
             job.MaterialPurchases ??= [];
@@ -553,17 +878,154 @@ public sealed class WorkspaceStore(
         }
     }
 
+    private static void EnsureLaborDistributionRows(BidRecord bid)
+    {
+        var requiredRows = new[]
+        {
+            (PersonnelType.Journeyman, HourType.Regular),
+            (PersonnelType.Journeyman, HourType.Overnight),
+            (PersonnelType.Apprentice, HourType.Regular),
+            (PersonnelType.Apprentice, HourType.Overnight)
+        };
+
+        foreach (var (personnelType, hourType) in requiredRows)
+        {
+            if (bid.LaborDistribution.All(line => line.PersonnelType != personnelType || line.HourType != hourType))
+            {
+                bid.LaborDistribution.Add(new BidLaborDistributionLine
+                {
+                    PersonnelType = personnelType,
+                    HourType = hourType
+                });
+            }
+        }
+
+        bid.LaborDistribution = bid.LaborDistribution
+            .OrderBy(line => line.PersonnelType)
+            .ThenBy(line => line.HourType)
+            .ToList();
+    }
+
+    private static void RebalanceLaborDistributionToCalculatedHours(BidRecord bid)
+    {
+        EnsureLaborDistributionRows(bid);
+        RebalanceDistributionColumn(bid.LaborDistribution, line => line.InstallHours, (line, value) => line.InstallHours = value, EstimateMath.GetBidInstallHours(bid));
+        RebalanceDistributionColumn(bid.LaborDistribution, line => line.DemoHours, (line, value) => line.DemoHours = value, EstimateMath.GetBidDemoHours(bid));
+        RebalanceDistributionColumn(bid.LaborDistribution, line => line.TrimHours, (line, value) => line.TrimHours = value, EstimateMath.GetBidTrimHours(bid));
+        RebalanceDistributionColumn(bid.LaborDistribution, line => line.TestHours, (line, value) => line.TestHours = value, EstimateMath.GetBidTestHours(bid));
+    }
+
+    private static void RebalanceDistributionColumn(
+        List<BidLaborDistributionLine> lines,
+        Func<BidLaborDistributionLine, decimal> selector,
+        Action<BidLaborDistributionLine, decimal> assign,
+        decimal targetTotal)
+    {
+        targetTotal = EstimateMath.RoundHours(targetTotal);
+        var defaultLine = lines.First(line => line.PersonnelType == PersonnelType.Journeyman && line.HourType == HourType.Regular);
+
+        if (targetTotal <= 0m)
+        {
+            foreach (var line in lines)
+            {
+                assign(line, 0m);
+            }
+
+            return;
+        }
+
+        var currentTotal = lines.Sum(selector);
+        if (currentTotal <= 0m)
+        {
+            foreach (var line in lines)
+            {
+                assign(line, 0m);
+            }
+
+            assign(defaultLine, targetTotal);
+            return;
+        }
+
+        var scale = targetTotal / currentTotal;
+        foreach (var line in lines)
+        {
+            assign(line, EstimateMath.RoundHours(selector(line) * scale));
+        }
+
+        var delta = targetTotal - lines.Sum(selector);
+        if (delta > 0m)
+        {
+            assign(defaultLine, EstimateMath.RoundHours(selector(defaultLine) + delta));
+        }
+        else if (delta < 0m)
+        {
+            var remaining = Math.Abs(delta);
+            foreach (var line in lines.OrderByDescending(selector))
+            {
+                if (remaining <= 0m)
+                {
+                    break;
+                }
+
+                var currentValue = selector(line);
+                if (currentValue <= 0m)
+                {
+                    continue;
+                }
+
+                var reduction = Math.Min(currentValue, remaining);
+                reduction = EstimateMath.RoundHours(reduction);
+                if (reduction <= 0m)
+                {
+                    continue;
+                }
+
+                assign(line, currentValue - reduction);
+                remaining = EstimateMath.RoundHours(remaining - reduction);
+            }
+        }
+    }
+
+    private static LaborRule? FindRule(LaborTemplate? template, string? locationProfile, string? installType)
+    {
+        if (template is null)
+        {
+            return null;
+        }
+
+        var normalizedLocation = string.IsNullOrWhiteSpace(locationProfile) ? string.Empty : locationProfile.Trim();
+        var normalizedInstallType = string.IsNullOrWhiteSpace(installType) ? string.Empty : installType.Trim();
+
+        return template.Rules.FirstOrDefault(candidate =>
+            string.Equals(candidate.LocationProfile.Trim(), normalizedLocation, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(candidate.InstallType.Trim(), normalizedInstallType, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static LaborTemplate CreateStarterTemplate(string name) =>
         new()
         {
-            Name = name,
-            Notes = "Starter template matching the estimating rules described in the project brief.",
+            Name = string.IsNullOrWhiteSpace(name) ? "Standard Device Labor" : name,
+            Notes = "Starter bid profile with numbering, labor rates, markup defaults, and the install time matrix.",
+            BidNumberFormat = "BID-YY-NNNN",
+            DefaultMarkupPercent = 22m,
+            JourneymanRegularDirectRate = 65m,
+            JourneymanRegularBilledRate = 90m,
+            JourneymanOvernightDirectRate = 97.5m,
+            JourneymanOvernightBilledRate = 135m,
+            ApprenticeRegularDirectRate = 45m,
+            ApprenticeRegularBilledRate = 65m,
+            ApprenticeOvernightDirectRate = 67.5m,
+            ApprenticeOvernightBilledRate = 97.5m,
+            AdminDirectRate = 68m,
+            AdminBilledRate = 95m,
+            EngineeringDirectRate = 96m,
+            EngineeringBilledRate = 130m,
             Rules =
             [
                 new LaborRule
                 {
                     LocationProfile = "Normal Area",
-                    InstallType = "No Pipe",
+                    InstallType = "Normal",
                     InstallMinutes = 15m,
                     DemoMinutes = 0m,
                     TrimMinutes = 10m,
@@ -573,7 +1035,7 @@ public sealed class WorkspaceStore(
                 new LaborRule
                 {
                     LocationProfile = "Warehouse",
-                    InstallType = "Lift Required",
+                    InstallType = "Lift",
                     InstallMinutes = 60m,
                     DemoMinutes = 10m,
                     TrimMinutes = 30m,
@@ -582,8 +1044,18 @@ public sealed class WorkspaceStore(
                 },
                 new LaborRule
                 {
+                    LocationProfile = "Control Room",
+                    InstallType = "Panel",
+                    InstallMinutes = 45m,
+                    DemoMinutes = 10m,
+                    TrimMinutes = 25m,
+                    TestMinutes = 12m,
+                    Notes = "Panel work, terminations, and coordination time."
+                },
+                new LaborRule
+                {
                     LocationProfile = "Finished Office",
-                    InstallType = "Surface Raceway",
+                    InstallType = "Pipe",
                     InstallMinutes = 35m,
                     DemoMinutes = 5m,
                     TrimMinutes = 20m,
@@ -616,44 +1088,144 @@ public sealed class WorkspaceStore(
 
 public static class EstimateMath
 {
-    public static decimal GetBidFieldHours(BidRecord bid) =>
-        bid.Components.Sum(component => component.TotalMinutes) / 60m;
+    public static decimal RoundCurrency(decimal value) =>
+        Math.Round(value, 2, MidpointRounding.AwayFromZero);
+
+    public static decimal RoundHours(decimal value) =>
+        Math.Round(value * 4m, 0, MidpointRounding.AwayFromZero) / 4m;
+
+    public static decimal GetBidInstallHours(BidRecord bid) =>
+        RoundHours(bid.Components.Sum(component => component.InstallHours));
+
+    public static decimal GetBidDemoHours(BidRecord bid) =>
+        RoundHours(bid.DemoItems.Sum(item => item.TotalHours));
+
+    public static decimal GetBidTrimHours(BidRecord bid) =>
+        RoundHours(bid.Components.Sum(component => component.TrimHours));
+
+    public static decimal GetBidTestHours(BidRecord bid) =>
+        RoundHours(bid.Components.Sum(component => component.TestHours));
+
+    public static decimal GetBidCalculatedFieldHours(BidRecord bid) =>
+        RoundHours(GetBidInstallHours(bid) + GetBidDemoHours(bid) + GetBidTrimHours(bid) + GetBidTestHours(bid));
+
+    public static decimal GetBidAllocatedFieldHours(BidRecord bid) =>
+        RoundHours(bid.LaborDistribution.Sum(line => line.TotalHours));
+
+    public static decimal GetBidAllocatedHours(BidRecord bid, PersonnelType personnelType, HourType hourType) =>
+        RoundHours(bid.LaborDistribution
+            .Where(line => line.PersonnelType == personnelType && line.HourType == hourType)
+            .Sum(line => line.TotalHours));
 
     public static decimal GetBidAdminHours(BidRecord bid) =>
-        bid.AdministrativeTasks.Sum(task => task.EstimatedHours);
+        RoundHours(bid.AdministrativeTasks.Where(task => task.PricingMode == TaskPricingMode.Hourly).Sum(task => task.EstimatedHours));
 
     public static decimal GetBidEngineeringHours(BidRecord bid) =>
-        bid.EngineeringTasks.Sum(task => task.EstimatedHours);
+        RoundHours(bid.EngineeringTasks.Where(task => task.PricingMode == TaskPricingMode.Hourly).Sum(task => task.EstimatedHours));
 
-    public static decimal GetBidLaborCost(BidRecord bid)
+    public static decimal GetDefaultSaleFromMarkup(decimal cost, decimal markupPercent) =>
+        RoundCurrency(cost * (1m + (Math.Max(0m, markupPercent) / 100m)));
+
+    public static decimal GetWorkTaskCost(WorkTask task, decimal directRate) =>
+        task.PricingMode == TaskPricingMode.Hourly
+            ? RoundCurrency(RoundHours(task.EstimatedHours) * directRate)
+            : RoundCurrency(task.CostPrice);
+
+    public static decimal GetWorkTaskSale(WorkTask task, decimal directRate, decimal billedRate, decimal markupPercent)
     {
-        var fieldLaborCost = GetBidFieldHours(bid) * bid.FieldLaborRate;
-        var adminLaborCost = GetBidAdminHours(bid) * bid.AdminLaborRate;
-        var engineeringLaborCost = GetBidEngineeringHours(bid) * bid.EngineeringLaborRate;
-        return fieldLaborCost + adminLaborCost + engineeringLaborCost;
+        if (task.PricingMode == TaskPricingMode.Hourly)
+        {
+            return RoundCurrency(RoundHours(task.EstimatedHours) * billedRate);
+        }
+
+        return RoundCurrency(task.SalePrice > 0m
+            ? task.SalePrice
+            : GetDefaultSaleFromMarkup(task.CostPrice, markupPercent));
     }
+
+    public static decimal GetBidAdministrativeTaskCost(BidRecord bid) =>
+        RoundCurrency(bid.AdministrativeTasks.Sum(task => GetWorkTaskCost(task, bid.AdminDirectRate)));
+
+    public static decimal GetBidAdministrativeTaskSale(BidRecord bid) =>
+        RoundCurrency(bid.AdministrativeTasks.Sum(task => GetWorkTaskSale(task, bid.AdminDirectRate, bid.AdminBilledRate, bid.MarkupPercent)));
+
+    public static decimal GetBidEngineeringTaskCost(BidRecord bid) =>
+        RoundCurrency(bid.EngineeringTasks.Sum(task => GetWorkTaskCost(task, bid.EngineeringDirectRate)));
+
+    public static decimal GetBidEngineeringTaskSale(BidRecord bid) =>
+        RoundCurrency(bid.EngineeringTasks.Sum(task => GetWorkTaskSale(task, bid.EngineeringDirectRate, bid.EngineeringBilledRate, bid.MarkupPercent)));
+
+    public static decimal GetBidFieldLaborCost(BidRecord bid) =>
+        RoundCurrency(bid.LaborDistribution.Sum(line => GetDistributionCost(bid, line)));
+
+    public static decimal GetBidFieldLaborSale(BidRecord bid) =>
+        RoundCurrency(bid.LaborDistribution.Sum(line => GetDistributionSale(bid, line)));
+
+    public static decimal GetBidComponentCost(BidRecord bid) =>
+        RoundCurrency(bid.Components.Sum(component => component.TotalMaterialCost));
+
+    public static decimal GetBidComponentSale(BidRecord bid) =>
+        RoundCurrency(bid.Components.Sum(component => component.UnitSale > 0m ? component.TotalMaterialSale : GetDefaultSaleFromMarkup(component.TotalMaterialCost, bid.MarkupPercent)));
+
+    public static decimal GetBidWireCost(BidRecord bid) =>
+        RoundCurrency(bid.Materials.Where(item => item.Kind == BidMaterialKind.Wire).Sum(item => item.ExtendedCost));
+
+    public static decimal GetBidWireSale(BidRecord bid) =>
+        RoundCurrency(bid.Materials.Where(item => item.Kind == BidMaterialKind.Wire).Sum(item => item.UnitSale > 0m ? item.ExtendedSale : GetDefaultSaleFromMarkup(item.ExtendedCost, bid.MarkupPercent)));
+
+    public static decimal GetBidMaterialOnlyCost(BidRecord bid) =>
+        RoundCurrency(bid.Materials.Where(item => item.Kind == BidMaterialKind.Material).Sum(item => item.ExtendedCost));
+
+    public static decimal GetBidMaterialOnlySale(BidRecord bid) =>
+        RoundCurrency(bid.Materials.Where(item => item.Kind == BidMaterialKind.Material).Sum(item => item.UnitSale > 0m ? item.ExtendedSale : GetDefaultSaleFromMarkup(item.ExtendedCost, bid.MarkupPercent)));
+
+    public static decimal GetBidLaborCost(BidRecord bid) =>
+        RoundCurrency(GetBidFieldLaborCost(bid) + GetBidAdministrativeTaskCost(bid) + GetBidEngineeringTaskCost(bid));
+
+    public static decimal GetBidLaborSale(BidRecord bid) =>
+        RoundCurrency(GetBidFieldLaborSale(bid) + GetBidAdministrativeTaskSale(bid) + GetBidEngineeringTaskSale(bid));
 
     public static decimal GetBidMaterialCost(BidRecord bid) =>
-        bid.Components.Sum(component => component.TotalMaterialCost) +
-        bid.Materials.Sum(material => material.ExtendedCost);
+        RoundCurrency(GetBidComponentCost(bid) + GetBidWireCost(bid) + GetBidMaterialOnlyCost(bid));
+
+    public static decimal GetBidMaterialSale(BidRecord bid) =>
+        RoundCurrency(GetBidComponentSale(bid) + GetBidWireSale(bid) + GetBidMaterialOnlySale(bid));
 
     public static decimal GetBidEstimatedCost(BidRecord bid) =>
-        GetBidLaborCost(bid) + GetBidMaterialCost(bid);
+        RoundCurrency(GetBidLaborCost(bid) + GetBidMaterialCost(bid));
 
-    public static decimal GetBidSuggestedRevenue(BidRecord bid) =>
-        GetBidEstimatedCost(bid) * (1m + (Math.Max(0m, bid.MarkupPercent) / 100m));
+    public static decimal GetBidCalculatedSale(BidRecord bid) =>
+        RoundCurrency(GetBidLaborSale(bid) + GetBidMaterialSale(bid));
+
+    public static decimal GetBidAdjustedRevenue(BidRecord bid) =>
+        RoundCurrency(bid.AcceptedSalePrice > 0m ? bid.AcceptedSalePrice : GetBidCalculatedSale(bid));
+
+    public static decimal GetBidCalculatedProfit(BidRecord bid) =>
+        RoundCurrency(GetBidCalculatedSale(bid) - GetBidEstimatedCost(bid));
+
+    public static decimal GetBidCalculatedMarginPercent(BidRecord bid)
+    {
+        var sale = GetBidCalculatedSale(bid);
+        return sale <= 0m ? 0m : GetBidCalculatedProfit(bid) / sale;
+    }
+
+    public static decimal GetBidAdjustedProfit(BidRecord bid) =>
+        RoundCurrency(GetBidAdjustedRevenue(bid) - GetBidEstimatedCost(bid));
+
+    public static decimal GetBidAdjustedMarginPercent(BidRecord bid)
+    {
+        var sale = GetBidAdjustedRevenue(bid);
+        return sale <= 0m ? 0m : GetBidAdjustedProfit(bid) / sale;
+    }
 
     public static decimal GetBidRevenue(BidRecord bid) =>
-        bid.ProposedRevenue > 0m ? bid.ProposedRevenue : GetBidSuggestedRevenue(bid);
+        GetBidAdjustedRevenue(bid);
 
     public static decimal GetBidMargin(BidRecord bid) =>
-        GetBidRevenue(bid) - GetBidEstimatedCost(bid);
+        GetBidAdjustedProfit(bid);
 
-    public static decimal GetBidMarginPercent(BidRecord bid)
-    {
-        var revenue = GetBidRevenue(bid);
-        return revenue <= 0m ? 0m : GetBidMargin(bid) / revenue;
-    }
+    public static decimal GetBidMarginPercent(BidRecord bid) =>
+        GetBidAdjustedMarginPercent(bid);
 
     public static decimal GetJobActualLaborHours(JobRecord job) =>
         job.TimeEntries.Sum(entry => entry.Hours);
@@ -723,14 +1295,43 @@ public static class EstimateMath
     }
 
     public static decimal GetServiceQuoteRevenue(ServiceQuoteRecord quote) =>
-        quote.Items.Sum(item => item.TotalPrice);
+        RoundCurrency(quote.Items.Sum(item => item.TotalPrice));
 
     public static decimal GetServiceQuoteCost(ServiceQuoteRecord quote) =>
-        quote.Items.Sum(item => item.TotalCost);
+        RoundCurrency(quote.Items.Sum(item => item.TotalCost));
 
     public static string GetCurrency(decimal value) =>
-        value.ToString("C", CultureInfo.CurrentCulture);
+        RoundCurrency(value).ToString("C2", CultureInfo.CurrentCulture);
+
+    public static string GetHours(decimal value) =>
+        RoundHours(value).ToString("N2", CultureInfo.CurrentCulture);
 
     public static string GetPercent(decimal value) =>
         value.ToString("P1", CultureInfo.CurrentCulture);
+
+    private static decimal GetDistributionCost(BidRecord bid, BidLaborDistributionLine line)
+    {
+        var directRate = ResolveFieldRate(bid, line.PersonnelType, line.HourType, useBilledRate: false);
+        return RoundCurrency(RoundHours(line.TotalHours) * directRate);
+    }
+
+    private static decimal GetDistributionSale(BidRecord bid, BidLaborDistributionLine line)
+    {
+        var billedRate = ResolveFieldRate(bid, line.PersonnelType, line.HourType, useBilledRate: true);
+        return RoundCurrency(RoundHours(line.TotalHours) * billedRate);
+    }
+
+    private static decimal ResolveFieldRate(BidRecord bid, PersonnelType personnelType, HourType hourType, bool useBilledRate) =>
+        (personnelType, hourType, useBilledRate) switch
+        {
+            (PersonnelType.Journeyman, HourType.Regular, false) => bid.JourneymanRegularDirectRate,
+            (PersonnelType.Journeyman, HourType.Regular, true) => bid.JourneymanRegularBilledRate,
+            (PersonnelType.Journeyman, HourType.Overnight, false) => bid.JourneymanOvernightDirectRate,
+            (PersonnelType.Journeyman, HourType.Overnight, true) => bid.JourneymanOvernightBilledRate,
+            (PersonnelType.Apprentice, HourType.Regular, false) => bid.ApprenticeRegularDirectRate,
+            (PersonnelType.Apprentice, HourType.Regular, true) => bid.ApprenticeRegularBilledRate,
+            (PersonnelType.Apprentice, HourType.Overnight, false) => bid.ApprenticeOvernightDirectRate,
+            (PersonnelType.Apprentice, HourType.Overnight, true) => bid.ApprenticeOvernightBilledRate,
+            _ => 0m
+        };
 }

@@ -516,6 +516,9 @@ else
 }
 
 @code {
+    [SupplyParameterFromQuery(Name = "selected")]
+    public Guid? RequestedJobId { get; set; }
+
     private Guid? SelectedJobId { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
 
@@ -532,7 +535,27 @@ else
     protected override async Task OnInitializedAsync()
     {
         await Store.InitializeAsync();
-        SelectedJobId = Store.Workspace.Jobs.FirstOrDefault()?.Id;
+        ApplySelection();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Store.IsInitialized)
+        {
+            ApplySelection();
+        }
+    }
+
+    private void ApplySelection()
+    {
+        if (RequestedJobId is not null && Store.Workspace.Jobs.Any(job => job.Id == RequestedJobId.Value))
+        {
+            SelectedJobId = RequestedJobId;
+        }
+        else if (SelectedJobId is null || Store.Workspace.Jobs.All(job => job.Id != SelectedJobId.Value))
+        {
+            SelectedJobId = Store.Workspace.Jobs.FirstOrDefault()?.Id;
+        }
     }
 
     private void SelectJob(Guid jobId)

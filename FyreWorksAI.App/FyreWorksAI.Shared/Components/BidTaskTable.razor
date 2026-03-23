@@ -1,0 +1,134 @@
+@if (Tasks.Count == 0)
+{
+    <p class="muted">Use hourly or fixed lines to price this scope cleanly.</p>
+}
+else
+{
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Task</th>
+                <th>Mode</th>
+                <th>Hours</th>
+                <th>Cost</th>
+                <th>Sale</th>
+                <th>Done</th>
+                <th>Notes</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var task in Tasks)
+            {
+                <tr @key="task.Id">
+                    <td><input @bind="task.Title" /></td>
+                    <td>
+                        <select @bind="task.PricingMode" @bind:after="() => SyncTaskSaleAndNotify(task)">
+                            <option value="@TaskPricingMode.Hourly">Hourly</option>
+                            <option value="@TaskPricingMode.Fixed">Fixed</option>
+                        </select>
+                    </td>
+                    <td>
+                        @if (task.PricingMode == TaskPricingMode.Hourly)
+                        {
+                            <div class="input-shell">
+                                <input class="shell-input" type="number" step="0.25" @bind="task.EstimatedHours" @bind:event="oninput" @bind:after="() => NormalizeHoursAndNotify(task)" />
+                                <span class="input-suffix">hrs</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="muted">Fixed</span>
+                        }
+                    </td>
+                    <td>
+                        @if (task.PricingMode == TaskPricingMode.Hourly)
+                        {
+                            <span>@EstimateMath.GetCurrency(GetCost(task))</span>
+                        }
+                        else
+                        {
+                            <div class="input-shell money-input-shell">
+                                <span class="input-prefix">$</span>
+                                <input class="shell-input" type="number" step="0.01" @bind="task.CostPrice" @bind:event="oninput" @bind:after="() => NormalizeCostAndNotify(task)" />
+                            </div>
+                        }
+                    </td>
+                    <td>
+                        @if (task.PricingMode == TaskPricingMode.Hourly)
+                        {
+                            <span>@EstimateMath.GetCurrency(GetSale(task))</span>
+                        }
+                        else
+                        {
+                            <div class="input-shell money-input-shell">
+                                <span class="input-prefix">$</span>
+                                <input class="shell-input" type="number" step="0.01" @bind="task.SalePrice" @bind:event="oninput" @bind:after="() => NormalizeSaleAndNotify(task)" />
+                            </div>
+                        }
+                    </td>
+                    <td><input type="checkbox" @bind="task.Complete" /></td>
+                    <td><input @bind="task.Notes" /></td>
+                    <td><button class="text-button danger" type="button" @onclick="() => OnRemove.InvokeAsync(task.Id)">Remove</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public BidRecord Bid { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public List<WorkTask> Tasks { get; set; } = [];
+
+    [Parameter]
+    public bool Administrative { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnRemove { get; set; }
+
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private decimal GetCost(WorkTask task) =>
+        Administrative
+            ? EstimateMath.GetWorkTaskCost(task, Bid.AdminDirectRate)
+            : EstimateMath.GetWorkTaskCost(task, Bid.EngineeringDirectRate);
+
+    private decimal GetSale(WorkTask task) =>
+        Administrative
+            ? EstimateMath.GetWorkTaskSale(task, Bid.AdminDirectRate, Bid.AdminBilledRate, Bid.MarkupPercent)
+            : EstimateMath.GetWorkTaskSale(task, Bid.EngineeringDirectRate, Bid.EngineeringBilledRate, Bid.MarkupPercent);
+
+    private async Task NormalizeHoursAndNotify(WorkTask task)
+    {
+        task.EstimatedHours = EstimateMath.RoundHours(task.EstimatedHours);
+        await NotifyChanged();
+    }
+
+    private async Task NormalizeCostAndNotify(WorkTask task)
+    {
+        task.CostPrice = EstimateMath.RoundCurrency(task.CostPrice);
+        await SyncTaskSaleAndNotify(task);
+    }
+
+    private async Task NormalizeSaleAndNotify(WorkTask task)
+    {
+        task.SalePrice = EstimateMath.RoundCurrency(task.SalePrice);
+        await NotifyChanged();
+    }
+
+    private async Task SyncTaskSaleAndNotify(WorkTask task)
+    {
+        if (task.PricingMode == TaskPricingMode.Fixed)
+        {
+            task.SalePrice = EstimateMath.GetDefaultSaleFromMarkup(task.CostPrice, Bid.MarkupPercent);
+        }
+
+        await NotifyChanged();
+    }
+
+    private Task NotifyChanged() => OnChanged.InvokeAsync();
+}

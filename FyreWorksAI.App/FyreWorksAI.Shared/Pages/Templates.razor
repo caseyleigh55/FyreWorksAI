@@ -1,13 +1,13 @@
 @page "/templates"
 @inject WorkspaceStore Store
 
-<PageTitle>Labor Templates</PageTitle>
+<PageTitle>Bid Templates</PageTitle>
 
 @if (!Store.IsInitialized)
 {
     <div class="loading-state">
-        <h1>Loading labor templates...</h1>
-        <p>Preparing the install, trim, demo, and test rule library.</p>
+        <h1>Loading templates...</h1>
+        <p>Preparing bid profiles, numbering rules, rates, and the install matrix.</p>
     </div>
 }
 else
@@ -28,8 +28,8 @@ else
                 {
                     <button class="directory-item @(SelectedTemplate?.Id == template.Id ? "selected" : null)" type="button" @onclick="() => SelectTemplate(template.Id)">
                         <strong>@template.Name</strong>
-                        <span>@(Store.Workspace.Settings.DefaultTemplateId == template.Id ? "Default" : "Template")</span>
-                        <small>@template.Rules.Count rule(s)</small>
+                        <span>@(Store.Workspace.Settings.DefaultTemplateId == template.Id ? "Default Profile" : "Bid Profile")</span>
+                        <small>@template.BidNumberFormat</small>
                     </button>
                 }
             </div>
@@ -40,7 +40,7 @@ else
             {
                 <section class="empty-state panel">
                     <h2>No template selected</h2>
-                    <p>Create a new labor template to standardize device install times by location and install type.</p>
+                    <p>Create a bid profile to control numbering, rates, markup, and the location/install matrix.</p>
                     <button class="button" type="button" @onclick="CreateTemplateAsync">Create Template</button>
                 </section>
             }
@@ -64,14 +64,10 @@ else
                     }
 
                     <div class="form-grid two-columns">
-                        <label>
-                            <span>Template Name</span>
-                            <input @bind="SelectedTemplate.Name" />
-                        </label>
-                        <label class="checkbox-field">
-                            <span>Archived</span>
-                            <input type="checkbox" @bind="SelectedTemplate.IsArchived" />
-                        </label>
+                        <label><span>Template Name</span><input @bind="SelectedTemplate.Name" /></label>
+                        <label class="checkbox-field"><span>Archived</span><input type="checkbox" @bind="SelectedTemplate.IsArchived" /></label>
+                        <label><span>Bid Number Format</span><input @bind="SelectedTemplate.BidNumberFormat" /></label>
+                        <label><span>Default Markup %</span><input type="number" step="0.01" @bind="SelectedTemplate.DefaultMarkupPercent" /></label>
                     </div>
 
                     <label class="full-width">
@@ -82,25 +78,31 @@ else
 
                 <section class="panel">
                     <div class="panel-header">
-                        <div>
-                            <p class="eyebrow">Rules</p>
-                            <h3>Location + Install Time Matrix</h3>
-                        </div>
+                        <div><p class="eyebrow">Rates</p><h3>Direct + Billed Labor</h3></div>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr><th>Type</th><th>Hours</th><th>Direct Rate</th><th>Billed Rate</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Journeyman</td><td>Regular</td><td><input type="number" step="0.01" @bind="SelectedTemplate.JourneymanRegularDirectRate" /></td><td><input type="number" step="0.01" @bind="SelectedTemplate.JourneymanRegularBilledRate" /></td></tr>
+                            <tr><td>Journeyman</td><td>Overnight</td><td><input type="number" step="0.01" @bind="SelectedTemplate.JourneymanOvernightDirectRate" /></td><td><input type="number" step="0.01" @bind="SelectedTemplate.JourneymanOvernightBilledRate" /></td></tr>
+                            <tr><td>Apprentice</td><td>Regular</td><td><input type="number" step="0.01" @bind="SelectedTemplate.ApprenticeRegularDirectRate" /></td><td><input type="number" step="0.01" @bind="SelectedTemplate.ApprenticeRegularBilledRate" /></td></tr>
+                            <tr><td>Apprentice</td><td>Overnight</td><td><input type="number" step="0.01" @bind="SelectedTemplate.ApprenticeOvernightDirectRate" /></td><td><input type="number" step="0.01" @bind="SelectedTemplate.ApprenticeOvernightBilledRate" /></td></tr>
+                            <tr><td>Administrative</td><td>Office</td><td><input type="number" step="0.01" @bind="SelectedTemplate.AdminDirectRate" /></td><td><input type="number" step="0.01" @bind="SelectedTemplate.AdminBilledRate" /></td></tr>
+                            <tr><td>Engineering</td><td>Office</td><td><input type="number" step="0.01" @bind="SelectedTemplate.EngineeringDirectRate" /></td><td><input type="number" step="0.01" @bind="SelectedTemplate.EngineeringBilledRate" /></td></tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div><p class="eyebrow">Rules</p><h3>Location + Install Time Matrix</h3></div>
                         <button class="button button-secondary" type="button" @onclick="AddRule">Add Rule</button>
                     </div>
-
                     <table class="data-table wide">
                         <thead>
-                            <tr>
-                                <th>Location Profile</th>
-                                <th>Install Type</th>
-                                <th>Install</th>
-                                <th>Demo</th>
-                                <th>Trim</th>
-                                <th>Test</th>
-                                <th>Notes</th>
-                                <th></th>
-                            </tr>
+                            <tr><th class="group-end">Location Profile</th><th class="group-end">Condition</th><th>Install</th><th>Demo</th><th>Trim</th><th class="group-end">Test</th><th>Notes</th><th></th></tr>
                         </thead>
                         <tbody>
                             @foreach (var rule in SelectedTemplate.Rules)
@@ -161,19 +163,12 @@ else
 
     private async Task SetDefaultTemplateAsync()
     {
-        if (SelectedTemplate is null)
-        {
-            return;
-        }
-
+        if (SelectedTemplate is null) return;
         Store.Workspace.Settings.DefaultTemplateId = SelectedTemplate.Id;
         await Store.SaveAsync();
         StatusMessage = "Default template updated.";
     }
 
-    private void AddRule() =>
-        SelectedTemplate?.Rules.Add(new LaborRule());
-
-    private void RemoveRule(Guid ruleId) =>
-        SelectedTemplate?.Rules.RemoveAll(rule => rule.Id == ruleId);
+    private void AddRule() => SelectedTemplate?.Rules.Add(new LaborRule());
+    private void RemoveRule(Guid ruleId) => SelectedTemplate?.Rules.RemoveAll(rule => rule.Id == ruleId);
 }
