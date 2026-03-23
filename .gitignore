@@ -2,7 +2,9 @@ bin/
 obj/
 .vs/
 .appdata/
+.dotnet/
 .dotnet_home/
 .nuget/
+.tmp-*.log
 *.user
 *.suo
