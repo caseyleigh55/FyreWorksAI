@@ -450,6 +450,9 @@ else
 }
 
 @code {
+    [SupplyParameterFromQuery(Name = "selected")]
+    public Guid? RequestedAgreementId { get; set; }
+
     private Guid? SelectedAgreementId { get; set; }
     private Guid? SelectedQuoteId { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
@@ -472,8 +475,29 @@ else
     protected override async Task OnInitializedAsync()
     {
         await Store.InitializeAsync();
-        SelectedAgreementId = Store.Workspace.ServiceAgreements.FirstOrDefault()?.Id;
+        ApplySelection();
         SelectedQuoteId = SelectedAgreement?.Quotes.FirstOrDefault()?.Id;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Store.IsInitialized)
+        {
+            ApplySelection();
+            SelectedQuoteId ??= SelectedAgreement?.Quotes.FirstOrDefault()?.Id;
+        }
+    }
+
+    private void ApplySelection()
+    {
+        if (RequestedAgreementId is not null && Store.Workspace.ServiceAgreements.Any(agreement => agreement.Id == RequestedAgreementId.Value))
+        {
+            SelectedAgreementId = RequestedAgreementId;
+        }
+        else if (SelectedAgreementId is null || Store.Workspace.ServiceAgreements.All(agreement => agreement.Id != SelectedAgreementId.Value))
+        {
+            SelectedAgreementId = Store.Workspace.ServiceAgreements.FirstOrDefault()?.Id;
+        }
     }
 
     private void SelectAgreement(Guid agreementId)

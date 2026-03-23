@@ -8,7 +8,7 @@
 {
     <div class="loading-state">
         <h1>Loading bids...</h1>
-        <p>Restoring estimating templates, clients, and saved bid records.</p>
+        <p>Restoring templates, clients, and saved bid records.</p>
     </div>
 }
 else
@@ -16,7 +16,10 @@ else
     var activeBids = Store.Workspace.Bids.Where(item => item.IsActive).OrderBy(item => item.DueDate).ToList();
     var inactiveBids = Store.Workspace.Bids.Where(item => !item.IsActive).OrderByDescending(item => item.CreatedOn).ToList();
     var selectedTemplate = SelectedBid is null ? null : Store.GetTemplate(SelectedBid.TemplateId);
+    var hasDemoScope = SelectedBid?.DemoItems.Count > 0;
     var currentClient = CurrentClient;
+    var wireItems = SelectedBid?.Materials.Where(item => item.Kind == BidMaterialKind.Wire).ToList() ?? [];
+    var materialItems = SelectedBid?.Materials.Where(item => item.Kind == BidMaterialKind.Material).ToList() ?? [];
 
     <section class="workspace-grid">
         <aside class="directory-panel">
@@ -30,39 +33,33 @@ else
 
             <div class="directory-group">
                 <h3>Active</h3>
+                @foreach (var bid in activeBids)
+                {
+                    <button class="directory-item @(SelectedBid?.Id == bid.Id ? "selected" : null)" type="button" @onclick="() => SelectBid(bid.Id)">
+                        <strong>@bid.BidNumber</strong>
+                        <span>@bid.ProjectName</span>
+                        <small>@bid.DueDate:MM/dd/yyyy</small>
+                    </button>
+                }
                 @if (activeBids.Count == 0)
                 {
                     <p class="muted">No active bids yet.</p>
-                }
-                else
-                {
-                    @foreach (var bid in activeBids)
-                    {
-                        <button class="directory-item @(SelectedBid?.Id == bid.Id ? "selected" : null)" type="button" @onclick="() => SelectBid(bid.Id)">
-                            <strong>@bid.BidNumber</strong>
-                            <span>@bid.ProjectName</span>
-                            <small>@bid.DueDate:d</small>
-                        </button>
-                    }
                 }
             </div>
 
             <div class="directory-group">
                 <h3>Inactive</h3>
+                @foreach (var bid in inactiveBids)
+                {
+                    <button class="directory-item @(SelectedBid?.Id == bid.Id ? "selected" : null)" type="button" @onclick="() => SelectBid(bid.Id)">
+                        <strong>@bid.BidNumber</strong>
+                        <span>@bid.ProjectName</span>
+                        <small>@bid.DueDate:MM/dd/yyyy</small>
+                    </button>
+                }
                 @if (inactiveBids.Count == 0)
                 {
                     <p class="muted">No inactive bids.</p>
-                }
-                else
-                {
-                    @foreach (var bid in inactiveBids)
-                    {
-                        <button class="directory-item @(SelectedBid?.Id == bid.Id ? "selected" : null)" type="button" @onclick="() => SelectBid(bid.Id)">
-                            <strong>@bid.BidNumber</strong>
-                            <span>@bid.ProjectName</span>
-                            <small>@bid.Status</small>
-                        </button>
-                    }
                 }
             </div>
         </aside>
@@ -72,7 +69,7 @@ else
             {
                 <section class="empty-state panel">
                     <h2>No bid selected</h2>
-                    <p>Create a new bid to start estimating labor, material, site scope, and supporting office tasks.</p>
+                    <p>Create a new bid to start estimating labor, material, and scope.</p>
                     <button class="button" type="button" @onclick="CreateBidAsync">Create Bid</button>
                 </section>
             }
@@ -85,405 +82,448 @@ else
                             <h2>@SelectedBid.ProjectName</h2>
                         </div>
                         <div class="button-row">
-                            <button class="button button-secondary" type="button" @onclick="ApplyTemplateAsync">Apply Template</button>
                             <button class="button button-secondary" type="button" @onclick="SaveAsync">Save Bid</button>
                             <button class="button" type="button" @onclick="ConvertToJobAsync">Convert To Job</button>
                         </div>
                     </div>
-
                     @if (!string.IsNullOrWhiteSpace(StatusMessage))
                     {
                         <p class="callout callout-success">@StatusMessage</p>
                     }
 
+                    <div class="panel-header minor">
+                        <div>
+                            <p class="eyebrow">Bid Info</p>
+                        </div>
+                    </div>
                     <div class="form-grid two-columns">
-                        <label>
-                            <span>Bid Number</span>
-                            <input @bind="SelectedBid.BidNumber" />
-                        </label>
-                        <label>
-                            <span>Project Name</span>
-                            <input @bind="SelectedBid.ProjectName" />
-                        </label>
+                        <label><span>Bid Number</span><input @bind="SelectedBid.BidNumber" /></label>
+                        <label><span>Project Name</span><input @bind="SelectedBid.ProjectName" /></label>
                         <label>
                             <span>Status</span>
                             <select @bind="SelectedBid.Status">
-                                <option>Draft</option>
-                                <option>Submitted</option>
-                                <option>Awarded</option>
-                                <option>Lost</option>
+                                <option>Draft</option><option>Submitted</option><option>Awarded</option><option>Lost</option>
                             </select>
                         </label>
-                        <label class="checkbox-field">
-                            <span>Active</span>
-                            <input type="checkbox" @bind="SelectedBid.IsActive" />
-                        </label>
-                        <label>
-                            <span>Created</span>
-                            <input type="date" @bind="SelectedBid.CreatedOn" @bind:format="yyyy-MM-dd" />
-                        </label>
-                        <label>
-                            <span>Due Date</span>
-                            <input type="date" @bind="SelectedBid.DueDate" @bind:format="yyyy-MM-dd" />
-                        </label>
-                        <label>
-                            <span>Labor Template</span>
+                        <label class="checkbox-field"><span>Active</span><input type="checkbox" @bind="SelectedBid.IsActive" /></label>
+                        <label><span>Created</span><input type="date" @bind="SelectedBid.CreatedOn" @bind:format="yyyy-MM-dd" /></label>
+                        <label><span>Due Date</span><input type="date" @bind="SelectedBid.DueDate" @bind:format="yyyy-MM-dd" /></label>
+                        <label class="full-width">
+                            <span>Bid Template</span>
                             <select value="@(SelectedBid.TemplateId?.ToString() ?? string.Empty)" @onchange="OnTemplateChanged">
                                 <option value="">No template</option>
-                                @foreach (var template in Store.Workspace.Templates.Where(template => !template.IsArchived))
+                                @foreach (var template in Store.Workspace.Templates.Where(template => !template.IsArchived).OrderBy(template => template.Name))
                                 {
                                     <option value="@template.Id">@template.Name</option>
                                 }
                             </select>
                         </label>
-                        <label>
+                        <label class="full-width">
+                            <span>Global Markup %</span>
+                            <div class="input-shell money-input-shell">
+                                <input class="shell-input" type="number" step="0.01" @bind="SelectedBid.MarkupPercent" @bind:event="oninput" @bind:after="SyncAllCalculatedSales" />
+                                <span class="input-suffix">%</span>
+                            </div>
+                        </label>
+                        <label class="full-width">
                             <span>Client</span>
-                            <select value="@(SelectedBid.ClientId?.ToString() ?? string.Empty)" @onchange="OnClientChanged">
-                                <option value="">Unassigned</option>
-                                @foreach (var client in Store.Workspace.Clients.Where(client => client.IsActive))
-                                {
-                                    <option value="@client.Id">@client.Name</option>
-                                }
-                            </select>
-                        </label>
-                        <label>
-                            <span>Field Rate</span>
-                            <input type="number" step="0.01" @bind="SelectedBid.FieldLaborRate" />
-                        </label>
-                        <label>
-                            <span>Admin Rate</span>
-                            <input type="number" step="0.01" @bind="SelectedBid.AdminLaborRate" />
-                        </label>
-                        <label>
-                            <span>Engineering Rate</span>
-                            <input type="number" step="0.01" @bind="SelectedBid.EngineeringLaborRate" />
-                        </label>
-                        <label>
-                            <span>Markup %</span>
-                            <input type="number" step="0.01" @bind="SelectedBid.MarkupPercent" />
-                        </label>
-                        <label>
-                            <span>Proposed Revenue</span>
-                            <input type="number" step="0.01" @bind="SelectedBid.ProposedRevenue" />
+                            <div class="inline-select-row">
+                                <select value="@(SelectedBid.ClientId?.ToString() ?? string.Empty)" @onchange="OnClientChanged">
+                                    <option value="">Unassigned</option>
+                                    @foreach (var client in Store.Workspace.Clients.Where(client => client.IsActive))
+                                    {
+                                        <option value="@client.Id">@client.Name</option>
+                                    }
+                                </select>
+                                <button class="button button-secondary" type="button" @onclick="CreateClientForBid">New Client</button>
+                            </div>
                         </label>
                     </div>
-
-                    <label class="full-width">
-                        <span>Scope Summary</span>
-                        <textarea rows="3" @bind="SelectedBid.ScopeSummary"></textarea>
-                    </label>
                 </section>
 
                 <section class="panel">
                     <div class="panel-header">
-                        <div>
-                            <p class="eyebrow">Client + site</p>
-                            <h3>Project Contacts</h3>
-                        </div>
-                        <button class="button button-secondary" type="button" @onclick="CreateClientForBid">New Client</button>
+                        <div><p class="eyebrow">Client Details</p><h3>Contact + Billing</h3></div>
+                        @if (selectedTemplate is not null)
+                        {
+                            <span class="pill">@selectedTemplate.Name</span>
+                        }
                     </div>
-
                     @if (currentClient is null)
                     {
-                        <p class="muted">Select an existing client or create a new client record for this bid.</p>
+                        <p class="muted">Select or create a client in Bid Info to edit the client record here.</p>
                     }
                     else
                     {
                         <div class="form-grid two-columns">
-                            <label>
-                                <span>Client Name</span>
-                                <input @bind="currentClient.Name" />
-                            </label>
-                            <label>
-                                <span>Primary Contact</span>
-                                <input @bind="currentClient.PrimaryContact" />
-                            </label>
-                            <label>
-                                <span>Email</span>
-                                <input @bind="currentClient.Email" />
-                            </label>
-                            <label>
-                                <span>Phone</span>
-                                <input @bind="currentClient.Phone" />
-                            </label>
-                            <label class="full-width">
-                                <span>Billing Address</span>
-                                <textarea rows="2" @bind="currentClient.BillingAddress"></textarea>
-                            </label>
+                            <label><span>Client Name</span><input @bind="currentClient.Name" /></label>
+                            <label><span>Primary Contact</span><input @bind="currentClient.PrimaryContact" /></label>
+                            <label><span>Email</span><input @bind="currentClient.Email" /></label>
+                            <label><span>Phone</span><input @bind="currentClient.Phone" /></label>
+                            <label class="full-width"><span>Billing Address</span><textarea rows="2" @bind="currentClient.BillingAddress"></textarea></label>
                         </div>
                     }
+                </section>
 
+                <section class="panel">
+                    <div class="panel-header">
+                        <div><p class="eyebrow">Totals Overview</p><h3>Calculated and Accepted Pricing</h3></div>
+                    </div>
+                    <div class="totals-grid">
+                        <article class="summary-card">
+                            <p class="eyebrow">Calculated Totals</p>
+                            <div class="metric-list">
+                                <div><span>Total Cost</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetBidEstimatedCost(SelectedBid))</strong></div>
+                                <div><span>Total Sale</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetBidCalculatedSale(SelectedBid))</strong></div>
+                                <div><span>Profit</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetBidCalculatedProfit(SelectedBid))</strong></div>
+                                <div><span>Margin</span><strong>@EstimateMath.GetPercent(EstimateMath.GetBidCalculatedMarginPercent(SelectedBid))</strong></div>
+                            </div>
+                        </article>
+                        <article class="summary-card">
+                            <p class="eyebrow">Adjusted Totals</p>
+                            <div class="metric-list">
+                                <label class="metric-input">
+                                    <span>Accepted Sale</span>
+                                    <div class="input-shell money-input-shell">
+                                        <span class="input-prefix">$</span>
+                                        <input class="shell-input" type="number" step="0.01" @bind="SelectedBid.AcceptedSalePrice" @bind:event="oninput" @bind:after="RoundAcceptedSale" />
+                                    </div>
+                                </label>
+                                <div><span>Profit</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetBidAdjustedProfit(SelectedBid))</strong></div>
+                                <div><span>Margin</span><strong>@EstimateMath.GetPercent(EstimateMath.GetBidAdjustedMarginPercent(SelectedBid))</strong></div>
+                            </div>
+                        </article>
+                    </div>
+                    <table class="data-table compact-table">
+                        <thead><tr><th>Personnel</th><th>Regular Hours</th><th>Overnight Hours</th></tr></thead>
+                        <tbody>
+                            <tr><td>Journeyman</td><td>@EstimateMath.GetHours(EstimateMath.GetBidAllocatedHours(SelectedBid, PersonnelType.Journeyman, HourType.Regular))</td><td>@EstimateMath.GetHours(EstimateMath.GetBidAllocatedHours(SelectedBid, PersonnelType.Journeyman, HourType.Overnight))</td></tr>
+                            <tr><td>Apprentice</td><td>@EstimateMath.GetHours(EstimateMath.GetBidAllocatedHours(SelectedBid, PersonnelType.Apprentice, HourType.Regular))</td><td>@EstimateMath.GetHours(EstimateMath.GetBidAllocatedHours(SelectedBid, PersonnelType.Apprentice, HourType.Overnight))</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div><p class="eyebrow">Site Info</p><h3>Project Scope + Code Data</h3></div>
+                    </div>
                     <div class="form-grid two-columns">
-                        <label>
-                            <span>Site Name</span>
-                            <input @bind="SelectedBid.Site.SiteName" />
-                        </label>
-                        <label>
-                            <span>Occupancy</span>
-                            <input @bind="SelectedBid.Site.OccupancyType" />
-                        </label>
-                        <label>
-                            <span>Address Line 1</span>
-                            <input @bind="SelectedBid.Site.AddressLine1" />
-                        </label>
-                        <label>
-                            <span>Address Line 2</span>
-                            <input @bind="SelectedBid.Site.AddressLine2" />
-                        </label>
-                        <label>
-                            <span>City</span>
-                            <input @bind="SelectedBid.Site.City" />
-                        </label>
-                        <label>
-                            <span>State</span>
-                            <input @bind="SelectedBid.Site.State" />
-                        </label>
-                        <label>
-                            <span>Postal Code</span>
-                            <input @bind="SelectedBid.Site.PostalCode" />
-                        </label>
-                        <label class="full-width">
-                            <span>Site Notes</span>
-                            <textarea rows="2" @bind="SelectedBid.Site.Notes"></textarea>
-                        </label>
+                        <label class="full-width"><span>Scope Of Work</span><textarea rows="3" @bind="SelectedBid.Site.ScopeOfWork"></textarea></label>
+                        <label class="full-width"><span>Address</span><textarea rows="2" @bind="SelectedBid.Site.AddressLine1"></textarea></label>
+                        <label><span>Parcel Number</span><input @bind="SelectedBid.Site.ParcelNumber" /></label>
+                        <label><span>Jurisdiction</span><input @bind="SelectedBid.Site.Jurisdiction" /></label>
+                        <label><span>Building Area</span><input @bind="SelectedBid.Site.BuildingArea" /></label>
+                        <label><span>Number Of Stories</span><input @bind="SelectedBid.Site.NumberOfStories" /></label>
+                        <label><span>Occupancy Group</span><input @bind="SelectedBid.Site.OccupancyGroup" /></label>
+                        <label><span>Occupant Load</span><input @bind="SelectedBid.Site.OccupantLoad" /></label>
+                        <label><span>Construction Type</span><input @bind="SelectedBid.Site.ConstructionType" /></label>
+                        <label class="checkbox-field"><span>Sprinklered</span><input type="checkbox" @bind="SelectedBid.Site.IsSprinklered" /></label>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header"><div><p class="eyebrow">Field Labor Allocation</p><h3>Device Hours + Manual Mix</h3></div></div>
+                    <div class="summary-grid compact-summary-grid">
+                        <article class="summary-card"><p class="eyebrow">Install</p><h3>@EstimateMath.GetHours(EstimateMath.GetBidInstallHours(SelectedBid))</h3></article>
+                        @if (hasDemoScope)
+                        {
+                            <article class="summary-card"><p class="eyebrow">Demo</p><h3>@EstimateMath.GetHours(EstimateMath.GetBidDemoHours(SelectedBid))</h3></article>
+                        }
+                        <article class="summary-card"><p class="eyebrow">Trim</p><h3>@EstimateMath.GetHours(EstimateMath.GetBidTrimHours(SelectedBid))</h3></article>
+                        <article class="summary-card"><p class="eyebrow">Test</p><h3>@EstimateMath.GetHours(EstimateMath.GetBidTestHours(SelectedBid))</h3></article>
+                    </div>
+                    <table class="data-table wide">
+                        <thead>
+                            <tr>
+                                <th>Personnel</th>
+                                <th>Hour Type</th>
+                                <th>Install</th>
+                                @if (hasDemoScope)
+                                {
+                                    <th>Demo</th>
+                                }
+                                <th>Trim</th>
+                                <th>Test</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var line in SelectedBid.LaborDistribution.OrderBy(line => line.PersonnelType).ThenBy(line => line.HourType))
+                            {
+                                <tr @key="line.Id">
+                                    <td>@line.PersonnelType</td>
+                                    <td>@line.HourType</td>
+                                    <td><div class="input-shell"><input class="shell-input" type="number" step="0.25" @bind="line.InstallHours" @bind:event="oninput" @bind:after="() => NormalizeLaborLine(line)" /><span class="input-suffix">hrs</span></div></td>
+                                    @if (hasDemoScope)
+                                    {
+                                        <td><div class="input-shell"><input class="shell-input" type="number" step="0.25" @bind="line.DemoHours" @bind:event="oninput" @bind:after="() => NormalizeLaborLine(line)" /><span class="input-suffix">hrs</span></div></td>
+                                    }
+                                    <td><div class="input-shell"><input class="shell-input" type="number" step="0.25" @bind="line.TrimHours" @bind:event="oninput" @bind:after="() => NormalizeLaborLine(line)" /><span class="input-suffix">hrs</span></div></td>
+                                    <td><div class="input-shell"><input class="shell-input" type="number" step="0.25" @bind="line.TestHours" @bind:event="oninput" @bind:after="() => NormalizeLaborLine(line)" /><span class="input-suffix">hrs</span></div></td>
+                                    <td>@EstimateMath.GetHours(line.TotalHours)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <div class="stats-inline">
+                        <span>Calculated scope hours @EstimateMath.GetHours(EstimateMath.GetBidCalculatedFieldHours(SelectedBid))</span>
+                        <span>Allocated field hours @EstimateMath.GetHours(EstimateMath.GetBidAllocatedFieldHours(SelectedBid))</span>
+                        <span>Field cost @EstimateMath.GetCurrency(EstimateMath.GetBidFieldLaborCost(SelectedBid))</span>
+                        <span>Field sale @EstimateMath.GetCurrency(EstimateMath.GetBidFieldLaborSale(SelectedBid))</span>
                     </div>
                 </section>
 
                 <section class="panel">
                     <div class="panel-header">
-                        <div>
-                            <p class="eyebrow">Office scope</p>
-                            <h3>Administrative Tasks</h3>
-                        </div>
+                        <div><p class="eyebrow">Administrative Tasks</p><h3>Office Scope</h3></div>
                         <button class="button button-secondary" type="button" @onclick="AddAdministrativeTask">Add Task</button>
                     </div>
-
-                    @if (SelectedBid.AdministrativeTasks.Count == 0)
-                    {
-                        <p class="muted">Use this area for permits, purchasing, submittals, billing prep, closeout packets, and other office effort.</p>
-                    }
-                    else
-                    {
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Task</th>
-                                    <th>Hours</th>
-                                    <th>Done</th>
-                                    <th>Notes</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var task in SelectedBid.AdministrativeTasks)
-                                {
-                                    <tr @key="task.Id">
-                                        <td><input @bind="task.Title" /></td>
-                                        <td><input type="number" step="0.25" @bind="task.EstimatedHours" /></td>
-                                        <td><input type="checkbox" @bind="task.Complete" /></td>
-                                        <td><input @bind="task.Notes" /></td>
-                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveAdministrativeTask(task.Id)">Remove</button></td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    }
+                    <BidTaskTable Bid="SelectedBid" Tasks="SelectedBid.AdministrativeTasks" Administrative="true" OnRemove="RemoveAdministrativeTask" OnChanged="RefreshBidView" />
+                    <div class="stats-inline">
+                        <span>Cost @EstimateMath.GetCurrency(EstimateMath.GetBidAdministrativeTaskCost(SelectedBid))</span>
+                        <span>Sale @EstimateMath.GetCurrency(EstimateMath.GetBidAdministrativeTaskSale(SelectedBid))</span>
+                    </div>
                 </section>
 
                 <section class="panel">
                     <div class="panel-header">
-                        <div>
-                            <p class="eyebrow">Engineering scope</p>
-                            <h3>Engineering Tasks</h3>
-                        </div>
+                        <div><p class="eyebrow">Engineering Tasks</p><h3>Engineering Scope</h3></div>
                         <button class="button button-secondary" type="button" @onclick="AddEngineeringTask">Add Task</button>
                     </div>
+                    <BidTaskTable Bid="SelectedBid" Tasks="SelectedBid.EngineeringTasks" OnRemove="RemoveEngineeringTask" OnChanged="RefreshBidView" />
+                    <div class="stats-inline">
+                        <span>Cost @EstimateMath.GetCurrency(EstimateMath.GetBidEngineeringTaskCost(SelectedBid))</span>
+                        <span>Sale @EstimateMath.GetCurrency(EstimateMath.GetBidEngineeringTaskSale(SelectedBid))</span>
+                    </div>
+                </section>
 
-                    @if (SelectedBid.EngineeringTasks.Count == 0)
+                <datalist id="location-profiles">
+                    @if (selectedTemplate is not null)
                     {
-                        <p class="muted">Track design revisions, battery calculations, as-built drafting, code analysis, and permit responses here.</p>
+                        @foreach (var location in selectedTemplate.Rules.Select(rule => rule.LocationProfile).Distinct(StringComparer.OrdinalIgnoreCase))
+                        {
+                            <option value="@location"></option>
+                        }
+                    }
+                </datalist>
+                <datalist id="install-types">
+                    @if (selectedTemplate is not null)
+                    {
+                        @foreach (var installType in selectedTemplate.Rules.Select(rule => rule.InstallType).Distinct(StringComparer.OrdinalIgnoreCase))
+                        {
+                            <option value="@installType"></option>
+                        }
+                    }
+                </datalist>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div><p class="eyebrow">Field Demo</p><h3>Demo Scope</h3></div>
+                        <button class="button button-secondary" type="button" @onclick="AddDemoItem">Add Demo Line</button>
+                    </div>
+                    @if (SelectedBid.DemoItems.Count == 0)
+                    {
+                        <p class="muted">Add labor-only demo lines when removal work should be tracked apart from install components.</p>
                     }
                     else
                     {
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Task</th>
-                                    <th>Hours</th>
-                                    <th>Done</th>
-                                    <th>Notes</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var task in SelectedBid.EngineeringTasks)
-                                {
-                                    <tr @key="task.Id">
-                                        <td><input @bind="task.Title" /></td>
-                                        <td><input type="number" step="0.25" @bind="task.EstimatedHours" /></td>
-                                        <td><input type="checkbox" @bind="task.Complete" /></td>
-                                        <td><input @bind="task.Notes" /></td>
-                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveEngineeringTask(task.Id)">Remove</button></td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+                        <div class="field-card-list">
+                            @foreach (var demoItem in SelectedBid.DemoItems)
+                            {
+                                <article class="field-card" @key="demoItem.Id">
+                                    <div class="field-card-header">
+                                        <div>
+                                            <p class="eyebrow">Demo line</p>
+                                            <h4>@demoItem.Name</h4>
+                                        </div>
+                                        <button class="text-button danger" type="button" @onclick="() => RemoveDemoItem(demoItem.Id)">Remove</button>
+                                    </div>
+
+                                    <div class="field-card-grid field-card-grid-four">
+                                        <label>
+                                            <span>Demo Item</span>
+                                            <input @bind="demoItem.Name" />
+                                        </label>
+                                        <label>
+                                            <span>Qty</span>
+                                            <input type="number" step="1" @bind="demoItem.Quantity" @bind:event="oninput" @bind:after="RefreshFieldLaborMix" />
+                                        </label>
+                                        <label>
+                                            <span>Template Location</span>
+                                            <input list="location-profiles" @bind="demoItem.LocationProfile" @bind:event="oninput" @bind:after="() => MatchDemoItemAndRefresh(demoItem)" />
+                                        </label>
+                                        <label>
+                                            <span>Template Condition</span>
+                                            <input list="install-types" @bind="demoItem.InstallType" @bind:event="oninput" @bind:after="() => MatchDemoItemAndRefresh(demoItem)" />
+                                        </label>
+                                    </div>
+
+                                    <div class="field-card-grid field-card-grid-three">
+                                        <label>
+                                            <span>Demo Hours Each</span>
+                                            <div class="input-shell">
+                                                <input class="shell-input" type="number" step="0.25" @bind="demoItem.DemoHoursEach" @bind:event="oninput" @bind:after="() => NormalizeDemoHours(demoItem)" />
+                                                <span class="input-suffix">hrs</span>
+                                            </div>
+                                        </label>
+                                        <label>
+                                            <span>Total Demo Hours</span>
+                                            <div class="pill value-pill">@EstimateMath.GetHours(demoItem.TotalHours) hrs</div>
+                                        </label>
+                                        <label>
+                                            <span>Notes</span>
+                                            <input @bind="demoItem.Notes" />
+                                        </label>
+                                    </div>
+                                </article>
+                            }
+                        </div>
                     }
+                    <div class="stats-inline">
+                        <span>Demo hours @EstimateMath.GetHours(SelectedBid.DemoItems.Sum(item => item.TotalHours))</span>
+                        <span>Calculated demo scope rolls into the hour summaries above</span>
+                    </div>
                 </section>
 
                 <section class="panel">
                     <div class="panel-header">
-                        <div>
-                            <p class="eyebrow">Field buildout</p>
-                            <h3>Components</h3>
-                        </div>
-                        <div class="button-row">
-                            <button class="button button-secondary" type="button" @onclick="AddComponent">Add Component</button>
-                            <button class="button button-secondary" type="button" @onclick="ApplyTemplateAsync">Refresh All From Template</button>
-                        </div>
+                        <div><p class="eyebrow">Field Buildout</p><h3>Components</h3></div>
+                        <button class="button button-secondary" type="button" @onclick="AddComponent">Add Component</button>
                     </div>
-
-                    <datalist id="location-profiles">
-                        @if (selectedTemplate is not null)
-                        {
-                            @foreach (var location in selectedTemplate.Rules.Select(rule => rule.LocationProfile).Distinct(StringComparer.OrdinalIgnoreCase))
-                            {
-                                <option value="@location"></option>
-                            }
-                        }
-                    </datalist>
-                    <datalist id="install-types">
-                        @if (selectedTemplate is not null)
-                        {
-                            @foreach (var installType in selectedTemplate.Rules.Select(rule => rule.InstallType).Distinct(StringComparer.OrdinalIgnoreCase))
-                            {
-                                <option value="@installType"></option>
-                            }
-                        }
-                    </datalist>
-
                     @if (SelectedBid.Components.Count == 0)
                     {
-                        <p class="muted">Add devices, wire, and field items. Template rules can auto-populate install, demo, trim, and test time based on location and install type.</p>
+                        <p class="muted">Add devices, panels, and field items.</p>
                     }
                     else
                     {
-                        <table class="data-table wide">
-                            <thead>
-                                <tr>
-                                    <th>Component</th>
-                                    <th>Qty</th>
-                                    <th>Location</th>
-                                    <th>Install Type</th>
-                                    <th>Matl Ea</th>
-                                    <th>Install</th>
-                                    <th>Demo</th>
-                                    <th>Trim</th>
-                                    <th>Test</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var component in SelectedBid.Components)
-                                {
-                                    <tr @key="component.Id">
-                                        <td>
-                                            <input @bind="component.Name" />
-                                            <input class="sub-input" @bind="component.Notes" placeholder="Notes" />
-                                        </td>
-                                        <td><input type="number" step="1" @bind="component.Quantity" /></td>
-                                        <td><input list="location-profiles" @bind="component.LocationProfile" /></td>
-                                        <td><input list="install-types" @bind="component.InstallType" /></td>
-                                        <td><input type="number" step="0.01" @bind="component.MaterialCostEach" /></td>
-                                        <td><input type="number" step="1" @bind="component.InstallMinutes" /></td>
-                                        <td><input type="number" step="1" @bind="component.DemoMinutes" /></td>
-                                        <td><input type="number" step="1" @bind="component.TrimMinutes" /></td>
-                                        <td><input type="number" step="1" @bind="component.TestMinutes" /></td>
-                                        <td>
-                                            <button class="text-button" type="button" @onclick="() => MatchComponent(component)">Match</button>
+                        <p class="eyebrow list-caption">Component Lines</p>
+                        <div class="field-card-list">
+                            @foreach (var component in SelectedBid.Components)
+                            {
+                                var isExpanded = IsComponentExpanded(component.Id);
+
+                                <article class="field-card @(isExpanded ? "field-card-expanded" : "field-card-collapsed")" @key="component.Id">
+                                    <div class="field-card-summary-row">
+                                        <button class="field-card-summary-button" type="button" @onclick="() => ToggleComponentExpanded(component.Id)">
+                                            <strong>@GetComponentDisplayName(component)</strong>
+                                            <span>Qty @FormatCompactNumber(component.Quantity)</span>
+                                            <span>Unit Cost @EstimateMath.GetCurrency(component.UnitCost)</span>
+                                            <span>Unit Sale @EstimateMath.GetCurrency(component.UnitSale)</span>
+                                        </button>
+                                        <div class="field-card-summary-actions">
+                                            <span class="pill">@((isExpanded ? "Expanded" : "Collapsed"))</span>
                                             <button class="text-button danger" type="button" @onclick="() => RemoveComponent(component.Id)">Remove</button>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+                                        </div>
+                                    </div>
+
+                                    @if (isExpanded)
+                                    {
+                                        <div class="field-card-grid field-card-grid-four">
+                                            <label>
+                                                <span>Component</span>
+                                                <input @bind="component.Name" />
+                                            </label>
+                                            <label>
+                                                <span>Qty</span>
+                                                <input type="number" step="1" @bind="component.Quantity" @bind:event="oninput" @bind:after="RefreshFieldLaborMix" />
+                                            </label>
+                                            <label>
+                                                <span>Unit Cost</span>
+                                                <div class="input-shell money-input-shell">
+                                                    <span class="input-prefix">$</span>
+                                                    <input class="shell-input" type="number" step="0.01" @bind="component.UnitCost" @bind:event="oninput" @bind:after="() => NormalizeComponentCost(component)" />
+                                                </div>
+                                            </label>
+                                            <label>
+                                                <span>Unit Sale</span>
+                                                <div class="input-shell money-input-shell">
+                                                    <span class="input-prefix">$</span>
+                                                    <input class="shell-input" type="number" step="0.01" @bind="component.UnitSale" @bind:event="oninput" @bind:after="() => NormalizeComponentSale(component)" />
+                                                </div>
+                                            </label>
+                                        </div>
+
+                                        <div class="field-card-grid field-card-grid-three">
+                                            <label>
+                                                <span>Template Location</span>
+                                                <input list="location-profiles" @bind="component.LocationProfile" @bind:event="oninput" @bind:after="() => MatchComponentAndRefresh(component)" />
+                                            </label>
+                                            <label>
+                                                <span>Template Condition</span>
+                                                <input list="install-types" @bind="component.InstallType" @bind:event="oninput" @bind:after="() => MatchComponentAndRefresh(component)" />
+                                            </label>
+                                            <label>
+                                                <span>Notes</span>
+                                                <input @bind="component.Notes" />
+                                            </label>
+                                        </div>
+
+                                        <div class="field-card-grid field-card-grid-three">
+                                            <label>
+                                                <div class="field-toggle-label">
+                                                    <span>Install Time</span>
+                                                    <input type="checkbox" @bind="component.IncludeInstall" @bind:after="RefreshFieldLaborMix" />
+                                                </div>
+                                                <div class="input-shell @(component.IncludeInstall ? null : "input-shell-disabled")">
+                                                    <input class="shell-input" type="number" step="1" @bind="component.InstallMinutes" @bind:event="oninput" @bind:after="RefreshFieldLaborMix" />
+                                                    <span class="input-suffix">min</span>
+                                                </div>
+                                            </label>
+                                            <label>
+                                                <div class="field-toggle-label">
+                                                    <span>Trim Time</span>
+                                                    <input type="checkbox" @bind="component.IncludeTrim" @bind:after="RefreshFieldLaborMix" />
+                                                </div>
+                                                <div class="input-shell @(component.IncludeTrim ? null : "input-shell-disabled")">
+                                                    <input class="shell-input" type="number" step="1" @bind="component.TrimMinutes" @bind:event="oninput" @bind:after="RefreshFieldLaborMix" />
+                                                    <span class="input-suffix">min</span>
+                                                </div>
+                                            </label>
+                                            <label>
+                                                <div class="field-toggle-label">
+                                                    <span>Test Time</span>
+                                                    <input type="checkbox" @bind="component.IncludeTest" @bind:after="RefreshFieldLaborMix" />
+                                                </div>
+                                                <div class="input-shell @(component.IncludeTest ? null : "input-shell-disabled")">
+                                                    <input class="shell-input" type="number" step="1" @bind="component.TestMinutes" @bind:event="oninput" @bind:after="RefreshFieldLaborMix" />
+                                                    <span class="input-suffix">min</span>
+                                                </div>
+                                            </label>
+                                        </div>
+
+                                        <div class="stats-inline">
+                                            <span>Material cost @EstimateMath.GetCurrency(component.TotalMaterialCost)</span>
+                                            <span>Material sale @EstimateMath.GetCurrency(component.TotalMaterialSale)</span>
+                                            <span>Total labor time @EstimateMath.GetHours(component.TotalMinutes / 60m) hrs</span>
+                                        </div>
+                                    }
+                                </article>
+                            }
+                        </div>
                     }
+                    <div class="stats-inline">
+                        <span>Cost @EstimateMath.GetCurrency(EstimateMath.GetBidComponentCost(SelectedBid))</span>
+                        <span>Sale @EstimateMath.GetCurrency(EstimateMath.GetBidComponentSale(SelectedBid))</span>
+                    </div>
                 </section>
 
                 <section class="panel">
-                    <div class="panel-header">
-                        <div>
-                            <p class="eyebrow">Material</p>
-                            <h3>Wire + Material Items</h3>
-                        </div>
-                        <button class="button button-secondary" type="button" @onclick="AddMaterial">Add Material</button>
-                    </div>
-
-                    @if (SelectedBid.Materials.Count == 0)
-                    {
-                        <p class="muted">Add wire, hardware, backboxes, conduit, batteries, panels, and other direct material costs.</p>
-                    }
-                    else
-                    {
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Category</th>
-                                    <th>Description</th>
-                                    <th>Qty</th>
-                                    <th>Unit Cost</th>
-                                    <th>Notes</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var material in SelectedBid.Materials)
-                                {
-                                    <tr @key="material.Id">
-                                        <td><input @bind="material.Category" /></td>
-                                        <td><input @bind="material.Description" /></td>
-                                        <td><input type="number" step="1" @bind="material.Quantity" /></td>
-                                        <td><input type="number" step="0.01" @bind="material.UnitCost" /></td>
-                                        <td><input @bind="material.Notes" /></td>
-                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveMaterial(material.Id)">Remove</button></td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    }
+                    <div class="panel-header"><div><p class="eyebrow">Wire</p><h3>Wire Items</h3></div><button class="button button-secondary" type="button" @onclick="AddWire">Add Wire</button></div>
+                    <BidMaterialTable Label="Wire" Items="wireItems" MarkupPercent="SelectedBid.MarkupPercent" OnRemove="RemoveMaterial" OnChanged="RefreshBidView" />
+                    <div class="stats-inline"><span>Cost @EstimateMath.GetCurrency(EstimateMath.GetBidWireCost(SelectedBid))</span><span>Sale @EstimateMath.GetCurrency(EstimateMath.GetBidWireSale(SelectedBid))</span></div>
                 </section>
 
-                <section class="summary-grid">
-                    <article class="summary-card">
-                        <p class="eyebrow">Field Hours</p>
-                        <h3>@EstimateMath.GetBidFieldHours(SelectedBid).ToString("N2")</h3>
-                        <p>Install, demo, trim, and test totals from current component rules.</p>
-                    </article>
-                    <article class="summary-card">
-                        <p class="eyebrow">Estimated Cost</p>
-                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetBidEstimatedCost(SelectedBid))</h3>
-                        <p>Labor plus direct material.</p>
-                    </article>
-                    <article class="summary-card">
-                        <p class="eyebrow">Suggested Sell</p>
-                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetBidSuggestedRevenue(SelectedBid))</h3>
-                        <p>@SelectedBid.MarkupPercent.ToString("N1")% markup based on estimate.</p>
-                    </article>
-                    <article class="summary-card">
-                        <p class="eyebrow">Margin</p>
-                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetBidMargin(SelectedBid))</h3>
-                        <p>@EstimateMath.GetPercent(EstimateMath.GetBidMarginPercent(SelectedBid)) based on proposed revenue.</p>
-                    </article>
+                <section class="panel">
+                    <div class="panel-header"><div><p class="eyebrow">Material</p><h3>Material Items</h3></div><button class="button button-secondary" type="button" @onclick="AddMaterial">Add Material</button></div>
+                    <BidMaterialTable Label="Material" Items="materialItems" MarkupPercent="SelectedBid.MarkupPercent" OnRemove="RemoveMaterial" OnChanged="RefreshBidView" />
+                    <div class="stats-inline"><span>Cost @EstimateMath.GetCurrency(EstimateMath.GetBidMaterialOnlyCost(SelectedBid))</span><span>Sale @EstimateMath.GetCurrency(EstimateMath.GetBidMaterialOnlySale(SelectedBid))</span></div>
                 </section>
 
                 <AttachmentManager Attachments="SelectedBid.Attachments" Area="bids" OwnerId="SelectedBid.Id" />
 
                 <section class="panel">
-                    <p class="eyebrow">Estimator notes</p>
-                    <label class="full-width">
-                        <span>Notes</span>
-                        <textarea rows="4" @bind="SelectedBid.Notes"></textarea>
-                    </label>
+                    <p class="eyebrow">Notes</p>
+                    <label class="full-width"><span>Combined Notes</span><textarea rows="5" @bind="SelectedBid.Notes"></textarea></label>
                 </section>
             }
         </div>
@@ -491,29 +531,47 @@ else
 }
 
 @code {
+    [SupplyParameterFromQuery(Name = "selected")]
+    public Guid? RequestedBidId { get; set; }
+
     private Guid? SelectedBidId { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
+    private HashSet<Guid> ExpandedComponentIds { get; } = [];
 
-    private BidRecord? SelectedBid =>
-        SelectedBidId is null
-            ? null
-            : Store.Workspace.Bids.FirstOrDefault(bid => bid.Id == SelectedBidId.Value);
-
-    private ClientRecord? CurrentClient =>
-        SelectedBid is null
-            ? null
-            : Store.GetClient(SelectedBid.ClientId);
+    private BidRecord? SelectedBid => SelectedBidId is null ? null : Store.Workspace.Bids.FirstOrDefault(bid => bid.Id == SelectedBidId.Value);
+    private ClientRecord? CurrentClient => SelectedBid is null ? null : Store.GetClient(SelectedBid.ClientId);
 
     protected override async Task OnInitializedAsync()
     {
         await Store.InitializeAsync();
-        SelectedBidId = Store.Workspace.Bids.FirstOrDefault()?.Id;
+        ApplySelection();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Store.IsInitialized)
+        {
+            ApplySelection();
+        }
+    }
+
+    private void ApplySelection()
+    {
+        if (RequestedBidId is not null && Store.Workspace.Bids.Any(bid => bid.Id == RequestedBidId.Value))
+        {
+            SelectedBidId = RequestedBidId;
+        }
+        else if (SelectedBidId is null || Store.Workspace.Bids.All(bid => bid.Id != SelectedBidId.Value))
+        {
+            SelectedBidId = Store.Workspace.Bids.FirstOrDefault()?.Id;
+        }
     }
 
     private void SelectBid(Guid bidId)
     {
         SelectedBidId = bidId;
         StatusMessage = string.Empty;
+        NavigationManager.NavigateTo($"/bids?selected={bidId}", replace: true);
     }
 
     private async Task CreateBidAsync()
@@ -522,15 +580,12 @@ else
         SelectedBidId = bid.Id;
         StatusMessage = "New bid created.";
         await Store.SaveAsync();
+        NavigationManager.NavigateTo($"/bids?selected={bid.Id}", replace: true);
     }
 
     private void CreateClientForBid()
     {
-        if (SelectedBid is null)
-        {
-            return;
-        }
-
+        if (SelectedBid is null) return;
         var client = Store.CreateClient();
         SelectedBid.ClientId = client.Id;
         StatusMessage = "New client linked to the bid.";
@@ -544,102 +599,225 @@ else
 
     private async Task ApplyTemplateAsync()
     {
-        if (SelectedBid is null)
-        {
-            return;
-        }
-
+        if (SelectedBid is null) return;
         Store.ApplyTemplateToBid(SelectedBid);
+        SyncAllCalculatedSales();
         await Store.SaveAsync();
-        StatusMessage = "Template values applied to all components.";
+        StatusMessage = "Template values applied to the bid.";
+    }
+
+    private async Task SaveCurrentTemplateAsync()
+    {
+        if (SelectedBid is null) return;
+        var template = Store.CreateTemplateFromBid(SelectedBid);
+        await Store.SaveAsync();
+        StatusMessage = $"Saved pricing profile {template.Name}.";
     }
 
     private async Task ConvertToJobAsync()
     {
-        if (SelectedBid is null)
-        {
-            return;
-        }
-
+        if (SelectedBid is null) return;
         var job = Store.ConvertBidToJob(SelectedBid);
         await Store.SaveAsync();
-        StatusMessage = $"Job {job.JobNumber} is ready.";
-        NavigationManager.NavigateTo("/jobs");
+        NavigationManager.NavigateTo($"/jobs?selected={job.Id}");
     }
 
-    private async Task OnTemplateChanged(ChangeEventArgs args)
+    private Task OnTemplateChanged(ChangeEventArgs args)
     {
-        if (SelectedBid is null)
-        {
-            return;
-        }
-
+        if (SelectedBid is null) return Task.CompletedTask;
         SelectedBid.TemplateId = ParseNullableGuid(args.Value?.ToString());
-        await Task.CompletedTask;
+        Store.ApplyTemplateToBid(SelectedBid);
+        SyncAllCalculatedSales();
+        return Task.CompletedTask;
     }
 
-    private async Task OnClientChanged(ChangeEventArgs args)
+    private Task OnClientChanged(ChangeEventArgs args)
     {
-        if (SelectedBid is null)
-        {
-            return;
-        }
-
+        if (SelectedBid is null) return Task.CompletedTask;
         SelectedBid.ClientId = ParseNullableGuid(args.Value?.ToString());
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
-    private void AddAdministrativeTask() =>
-        SelectedBid?.AdministrativeTasks.Add(new WorkTask { Title = "Administrative Task" });
-
-    private void RemoveAdministrativeTask(Guid taskId) =>
-        SelectedBid?.AdministrativeTasks.RemoveAll(task => task.Id == taskId);
-
-    private void AddEngineeringTask() =>
-        SelectedBid?.EngineeringTasks.Add(new WorkTask { Title = "Engineering Task" });
-
-    private void RemoveEngineeringTask(Guid taskId) =>
-        SelectedBid?.EngineeringTasks.RemoveAll(task => task.Id == taskId);
+    private void AddAdministrativeTask() => SelectedBid?.AdministrativeTasks.Add(new WorkTask { Title = "Administrative Task" });
+    private void RemoveAdministrativeTask(Guid taskId) => SelectedBid?.AdministrativeTasks.RemoveAll(task => task.Id == taskId);
+    private void AddEngineeringTask() => SelectedBid?.EngineeringTasks.Add(new WorkTask { Title = "Engineering Task" });
+    private void RemoveEngineeringTask(Guid taskId) => SelectedBid?.EngineeringTasks.RemoveAll(task => task.Id == taskId);
 
     private void AddComponent()
     {
-        if (SelectedBid is null)
-        {
-            return;
-        }
-
+        if (SelectedBid is null) return;
         var component = new BidComponent
         {
             Name = "Device",
-            Quantity = 1m
+            Quantity = 1m,
+            LocationProfile = string.Empty,
+            InstallType = string.Empty,
+            InstallMinutes = 0m,
+            DemoMinutes = 0m,
+            TrimMinutes = 0m,
+            TestMinutes = 0m
+        };
+        SelectedBid.Components.Add(component);
+        ExpandedComponentIds.Add(component.Id);
+        RefreshFieldLaborMix();
+    }
+
+    private void AddDemoItem()
+    {
+        if (SelectedBid is null) return;
+        var demoItem = new BidDemoItem
+        {
+            Name = "Demo Item",
+            Quantity = 1m,
+            LocationProfile = string.Empty,
+            InstallType = string.Empty,
+            DemoHoursEach = 0m
         };
 
-        if (!Store.ApplyTemplateToComponent(component, Store.GetTemplate(SelectedBid.TemplateId)))
-        {
-            component.LocationProfile = "Normal Area";
-            component.InstallType = "No Pipe";
-        }
-
-        SelectedBid.Components.Add(component);
+        SelectedBid.DemoItems.Add(demoItem);
+        RefreshFieldLaborMix();
     }
 
     private void MatchComponent(BidComponent component)
     {
         var matched = Store.ApplyTemplateToComponent(component, Store.GetTemplate(SelectedBid?.TemplateId));
-        StatusMessage = matched
-            ? "Component labor matched from the selected template."
-            : "No matching template rule was found for that location/install combination.";
+        StatusMessage = matched ? "Component labor matched from the selected template." : "No matching template rule was found for that location/condition combination.";
     }
 
-    private void RemoveComponent(Guid componentId) =>
-        SelectedBid?.Components.RemoveAll(component => component.Id == componentId);
+    private void MatchComponentSilently(BidComponent component)
+    {
+        Store.ApplyTemplateToComponent(component, Store.GetTemplate(SelectedBid?.TemplateId));
+    }
 
-    private void AddMaterial() =>
-        SelectedBid?.Materials.Add(new BidMaterialItem { Description = "Material Item" });
+    private void MatchComponentAndRefresh(BidComponent component)
+    {
+        MatchComponentSilently(component);
+        RefreshFieldLaborMix();
+    }
 
-    private void RemoveMaterial(Guid materialId) =>
-        SelectedBid?.Materials.RemoveAll(material => material.Id == materialId);
+    private void MatchDemoItemSilently(BidDemoItem demoItem)
+    {
+        Store.ApplyTemplateToDemoItem(demoItem, Store.GetTemplate(SelectedBid?.TemplateId));
+    }
 
-    private static Guid? ParseNullableGuid(string? value) =>
-        Guid.TryParse(value, out var parsed) ? parsed : null;
+    private void MatchDemoItemAndRefresh(BidDemoItem demoItem)
+    {
+        MatchDemoItemSilently(demoItem);
+        RefreshFieldLaborMix();
+    }
+
+    private void RoundAcceptedSale()
+    {
+        if (SelectedBid is null) return;
+        SelectedBid.AcceptedSalePrice = EstimateMath.RoundCurrency(SelectedBid.AcceptedSalePrice);
+    }
+
+    private void SyncComponentSale(BidComponent component)
+    {
+        if (SelectedBid is null) return;
+        component.UnitSale = EstimateMath.GetDefaultSaleFromMarkup(component.UnitCost, SelectedBid.MarkupPercent);
+    }
+
+    private void NormalizeComponentCost(BidComponent component)
+    {
+        component.UnitCost = EstimateMath.RoundCurrency(component.UnitCost);
+        SyncComponentSale(component);
+    }
+
+    private static void NormalizeComponentSale(BidComponent component)
+    {
+        component.UnitSale = EstimateMath.RoundCurrency(component.UnitSale);
+    }
+
+    private void RemoveComponent(Guid componentId)
+    {
+        if (SelectedBid is null) return;
+        SelectedBid.Components.RemoveAll(component => component.Id == componentId);
+        ExpandedComponentIds.Remove(componentId);
+        RefreshFieldLaborMix();
+    }
+
+    private void RemoveDemoItem(Guid demoItemId)
+    {
+        if (SelectedBid is null) return;
+        SelectedBid.DemoItems.RemoveAll(demoItem => demoItem.Id == demoItemId);
+        RefreshFieldLaborMix();
+    }
+
+    private void AddWire() => AddMaterialLine(BidMaterialKind.Wire, "Wire", "Wire Item");
+    private void AddMaterial() => AddMaterialLine(BidMaterialKind.Material, "Material", "Material Item");
+
+    private void AddMaterialLine(BidMaterialKind kind, string category, string description)
+    {
+        if (SelectedBid is null) return;
+        SelectedBid.Materials.Add(new BidMaterialItem { Kind = kind, Category = category, Description = description });
+    }
+
+    private void RemoveMaterial(Guid materialId) => SelectedBid?.Materials.RemoveAll(material => material.Id == materialId);
+
+    private void RefreshFieldLaborMix()
+    {
+        if (SelectedBid is null) return;
+        Store.RebalanceBidLaborDistribution(SelectedBid);
+    }
+
+    private Task RefreshBidView() => InvokeAsync(StateHasChanged);
+
+    private void NormalizeLaborLine(BidLaborDistributionLine line)
+    {
+        line.InstallHours = EstimateMath.RoundHours(line.InstallHours);
+        line.DemoHours = EstimateMath.RoundHours(line.DemoHours);
+        line.TrimHours = EstimateMath.RoundHours(line.TrimHours);
+        line.TestHours = EstimateMath.RoundHours(line.TestHours);
+    }
+
+    private void NormalizeDemoHours(BidDemoItem demoItem)
+    {
+        demoItem.DemoHoursEach = EstimateMath.RoundHours(demoItem.DemoHoursEach);
+        RefreshFieldLaborMix();
+    }
+
+    private void ToggleComponentExpanded(Guid componentId)
+    {
+        if (!ExpandedComponentIds.Add(componentId))
+        {
+            ExpandedComponentIds.Remove(componentId);
+        }
+    }
+
+    private bool IsComponentExpanded(Guid componentId) =>
+        ExpandedComponentIds.Contains(componentId);
+
+    private static string GetComponentDisplayName(BidComponent component) =>
+        string.IsNullOrWhiteSpace(component.Name) ? "Untitled Component" : component.Name.Trim();
+
+    private static string FormatCompactNumber(decimal value) =>
+        value.ToString("0.##");
+
+    private void SyncAllCalculatedSales()
+    {
+        if (SelectedBid is null) return;
+
+        foreach (var task in SelectedBid.AdministrativeTasks.Where(task => task.PricingMode == TaskPricingMode.Fixed))
+        {
+            task.SalePrice = EstimateMath.GetDefaultSaleFromMarkup(task.CostPrice, SelectedBid.MarkupPercent);
+        }
+
+        foreach (var task in SelectedBid.EngineeringTasks.Where(task => task.PricingMode == TaskPricingMode.Fixed))
+        {
+            task.SalePrice = EstimateMath.GetDefaultSaleFromMarkup(task.CostPrice, SelectedBid.MarkupPercent);
+        }
+
+        foreach (var component in SelectedBid.Components)
+        {
+            component.UnitSale = EstimateMath.GetDefaultSaleFromMarkup(component.UnitCost, SelectedBid.MarkupPercent);
+        }
+
+        foreach (var material in SelectedBid.Materials)
+        {
+            material.UnitSale = EstimateMath.GetDefaultSaleFromMarkup(material.UnitCost, SelectedBid.MarkupPercent);
+        }
+    }
+
+    private static Guid? ParseNullableGuid(string? value) => Guid.TryParse(value, out var parsed) ? parsed : null;
 }

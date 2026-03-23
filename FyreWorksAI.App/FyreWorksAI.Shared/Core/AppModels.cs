@@ -9,6 +9,31 @@ public enum StorageMode
     SqlServer
 }
 
+public enum TaskPricingMode
+{
+    Hourly,
+    Fixed
+}
+
+public enum BidMaterialKind
+{
+    Unknown,
+    Wire,
+    Material
+}
+
+public enum PersonnelType
+{
+    Journeyman,
+    Apprentice
+}
+
+public enum HourType
+{
+    Regular,
+    Overnight
+}
+
 public sealed class FyreWorksWorkspace
 {
     public AppSettings Settings { get; set; } = new();
@@ -31,6 +56,13 @@ public sealed class AppSettings
     public int DefaultServiceContractMonths { get; set; } = 24;
     public int DefaultInspectionIntervalMonths { get; set; } = 12;
     public decimal DefaultMonthlyMonitoringAmount { get; set; } = 165m;
+    public List<YearSequenceCounter> BidNumberCounters { get; set; } = [];
+}
+
+public sealed class YearSequenceCounter
+{
+    public int Year { get; set; }
+    public int NextSequence { get; set; } = 1;
 }
 
 public sealed class ClientRecord
@@ -56,6 +88,15 @@ public sealed class SiteInformation
     public string PostalCode { get; set; } = string.Empty;
     public string OccupancyType { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
+    public string ScopeOfWork { get; set; } = string.Empty;
+    public string ParcelNumber { get; set; } = string.Empty;
+    public string Jurisdiction { get; set; } = string.Empty;
+    public string BuildingArea { get; set; } = string.Empty;
+    public string NumberOfStories { get; set; } = string.Empty;
+    public string OccupancyGroup { get; set; } = string.Empty;
+    public string OccupantLoad { get; set; } = string.Empty;
+    public string ConstructionType { get; set; } = string.Empty;
+    public bool IsSprinklered { get; set; }
 
     [JsonIgnore]
     public string SingleLineAddress
@@ -97,6 +138,20 @@ public sealed class LaborTemplate
     public string Name { get; set; } = "Standard Alarm Template";
     public string Notes { get; set; } = string.Empty;
     public bool IsArchived { get; set; }
+    public string BidNumberFormat { get; set; } = "BID-YY-NNNN";
+    public decimal DefaultMarkupPercent { get; set; } = 22m;
+    public decimal JourneymanRegularDirectRate { get; set; } = 65m;
+    public decimal JourneymanRegularBilledRate { get; set; } = 90m;
+    public decimal JourneymanOvernightDirectRate { get; set; } = 97.5m;
+    public decimal JourneymanOvernightBilledRate { get; set; } = 135m;
+    public decimal ApprenticeRegularDirectRate { get; set; } = 45m;
+    public decimal ApprenticeRegularBilledRate { get; set; } = 65m;
+    public decimal ApprenticeOvernightDirectRate { get; set; } = 67.5m;
+    public decimal ApprenticeOvernightBilledRate { get; set; } = 97.5m;
+    public decimal AdminDirectRate { get; set; } = 68m;
+    public decimal AdminBilledRate { get; set; } = 95m;
+    public decimal EngineeringDirectRate { get; set; } = 96m;
+    public decimal EngineeringBilledRate { get; set; } = 130m;
     public List<LaborRule> Rules { get; set; } = [];
 }
 
@@ -104,7 +159,7 @@ public sealed class LaborRule
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string LocationProfile { get; set; } = "Normal Area";
-    public string InstallType { get; set; } = "No Pipe";
+    public string InstallType { get; set; } = "Normal";
     public decimal InstallMinutes { get; set; } = 15m;
     public decimal DemoMinutes { get; set; } = 0m;
     public decimal TrimMinutes { get; set; } = 10m;
@@ -116,9 +171,26 @@ public sealed class WorkTask
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Title { get; set; } = string.Empty;
+    public TaskPricingMode PricingMode { get; set; } = TaskPricingMode.Hourly;
     public decimal EstimatedHours { get; set; } = 1m;
+    public decimal CostPrice { get; set; }
+    public decimal SalePrice { get; set; }
     public bool Complete { get; set; }
     public string Notes { get; set; } = string.Empty;
+}
+
+public sealed class BidLaborDistributionLine
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public PersonnelType PersonnelType { get; set; }
+    public HourType HourType { get; set; }
+    public decimal InstallHours { get; set; }
+    public decimal DemoHours { get; set; }
+    public decimal TrimHours { get; set; }
+    public decimal TestHours { get; set; }
+
+    [JsonIgnore]
+    public decimal TotalHours => InstallHours + DemoHours + TrimHours + TestHours;
 }
 
 public sealed class BidComponent
@@ -127,8 +199,12 @@ public sealed class BidComponent
     public string Name { get; set; } = string.Empty;
     public decimal Quantity { get; set; } = 1m;
     public string LocationProfile { get; set; } = "Normal Area";
-    public string InstallType { get; set; } = "No Pipe";
+    public string InstallType { get; set; } = "Normal";
     public decimal MaterialCostEach { get; set; }
+    public decimal UnitSale { get; set; }
+    public bool IncludeInstall { get; set; } = true;
+    public bool IncludeTrim { get; set; } = true;
+    public bool IncludeTest { get; set; } = true;
     public decimal InstallMinutes { get; set; } = 15m;
     public decimal DemoMinutes { get; set; }
     public decimal TrimMinutes { get; set; } = 10m;
@@ -136,23 +212,65 @@ public sealed class BidComponent
     public string Notes { get; set; } = string.Empty;
 
     [JsonIgnore]
-    public decimal TotalMinutes => Quantity * (InstallMinutes + DemoMinutes + TrimMinutes + TestMinutes);
+    public decimal UnitCost
+    {
+        get => MaterialCostEach;
+        set => MaterialCostEach = value;
+    }
+
+    [JsonIgnore]
+    public decimal InstallHours => IncludeInstall ? Quantity * InstallMinutes / 60m : 0m;
+
+    [JsonIgnore]
+    public decimal DemoHours => Quantity * DemoMinutes / 60m;
+
+    [JsonIgnore]
+    public decimal TrimHours => IncludeTrim ? Quantity * TrimMinutes / 60m : 0m;
+
+    [JsonIgnore]
+    public decimal TestHours => IncludeTest ? Quantity * TestMinutes / 60m : 0m;
+
+    [JsonIgnore]
+    public decimal TotalMinutes =>
+        Quantity * ((IncludeInstall ? InstallMinutes : 0m) + (IncludeTrim ? TrimMinutes : 0m) + (IncludeTest ? TestMinutes : 0m));
 
     [JsonIgnore]
     public decimal TotalMaterialCost => Quantity * MaterialCostEach;
+
+    [JsonIgnore]
+    public decimal TotalMaterialSale => Quantity * UnitSale;
+}
+
+public sealed class BidDemoItem
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "Demo Item";
+    public decimal Quantity { get; set; } = 1m;
+    public string LocationProfile { get; set; } = "Normal Area";
+    public string InstallType { get; set; } = "Normal";
+    public decimal DemoHoursEach { get; set; }
+    public string Notes { get; set; } = string.Empty;
+
+    [JsonIgnore]
+    public decimal TotalHours => Quantity * DemoHoursEach;
 }
 
 public sealed class BidMaterialItem
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public BidMaterialKind Kind { get; set; } = BidMaterialKind.Unknown;
     public string Category { get; set; } = "Material";
     public string Description { get; set; } = string.Empty;
     public decimal Quantity { get; set; } = 1m;
     public decimal UnitCost { get; set; }
+    public decimal UnitSale { get; set; }
     public string Notes { get; set; } = string.Empty;
 
     [JsonIgnore]
     public decimal ExtendedCost => Quantity * UnitCost;
+
+    [JsonIgnore]
+    public decimal ExtendedSale => Quantity * UnitSale;
 }
 
 public sealed class BidRecord
@@ -174,11 +292,32 @@ public sealed class BidRecord
     public decimal ProposedRevenue { get; set; }
     public string ScopeSummary { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
+    public decimal JourneymanRegularDirectRate { get; set; } = 65m;
+    public decimal JourneymanRegularBilledRate { get; set; } = 90m;
+    public decimal JourneymanOvernightDirectRate { get; set; } = 97.5m;
+    public decimal JourneymanOvernightBilledRate { get; set; } = 135m;
+    public decimal ApprenticeRegularDirectRate { get; set; } = 45m;
+    public decimal ApprenticeRegularBilledRate { get; set; } = 65m;
+    public decimal ApprenticeOvernightDirectRate { get; set; } = 67.5m;
+    public decimal ApprenticeOvernightBilledRate { get; set; } = 97.5m;
+    public decimal AdminDirectRate { get; set; } = 68m;
+    public decimal AdminBilledRate { get; set; } = 95m;
+    public decimal EngineeringDirectRate { get; set; } = 96m;
+    public decimal EngineeringBilledRate { get; set; } = 130m;
+    public List<BidLaborDistributionLine> LaborDistribution { get; set; } = [];
     public List<WorkTask> AdministrativeTasks { get; set; } = [];
     public List<WorkTask> EngineeringTasks { get; set; } = [];
     public List<BidComponent> Components { get; set; } = [];
+    public List<BidDemoItem> DemoItems { get; set; } = [];
     public List<BidMaterialItem> Materials { get; set; } = [];
     public List<AttachmentRecord> Attachments { get; set; } = [];
+
+    [JsonIgnore]
+    public decimal AcceptedSalePrice
+    {
+        get => ProposedRevenue;
+        set => ProposedRevenue = value;
+    }
 }
 
 public sealed class BaselineEstimate
@@ -195,6 +334,7 @@ public sealed class BaselineEstimate
     public List<WorkTask> AdministrativeTasks { get; set; } = [];
     public List<WorkTask> EngineeringTasks { get; set; } = [];
     public List<BidComponent> Components { get; set; } = [];
+    public List<BidDemoItem> DemoItems { get; set; } = [];
     public List<BidMaterialItem> Materials { get; set; } = [];
 }
 

@@ -1,5 +1,6 @@
 @page "/"
 @inject WorkspaceStore Store
+@inject NavigationManager NavigationManager
 
 <PageTitle>FyreWorks Dashboard</PageTitle>
 
@@ -17,52 +18,30 @@ else
     var activeService = Store.Workspace.ServiceAgreements.Where(item => item.IsActive).OrderBy(item => EstimateMath.GetNextBillingDate(item)).ToList();
     var inactiveCount = Store.Workspace.Bids.Count(item => !item.IsActive) + Store.Workspace.Jobs.Count(item => !item.IsActive) + Store.Workspace.ServiceAgreements.Count(item => !item.IsActive);
 
-    <section class="hero">
-        <div>
-            <p class="eyebrow">Office command center</p>
-            <h1>Manage bids, live job costs, and recurring service from one workspace.</h1>
-            <p class="hero-copy">This Windows-first MAUI Blazor app saves to text files today, keeps attachments organized, and stays structured for future SQLite, SQL Server, or Azure-backed expansion.</p>
-        </div>
-        <div class="hero-actions">
-            <NavLink class="button" href="/bids">Open Bids</NavLink>
-            <NavLink class="button button-secondary" href="/jobs">Open Jobs</NavLink>
-            <NavLink class="button button-secondary" href="/service">Open Service</NavLink>
+    <section class="hero hero-compact">
+        <div class="hero-center">
+            <p class="eyebrow">Office Command Center</p>
+            <h1>Office workflow management</h1>
+            <p class="hero-copy">Manage bids, job costing, and recurring service from one workspace while the evolving profile system settles into place.</p>
         </div>
     </section>
 
     <section class="summary-grid">
-        <article class="summary-card">
-            <p class="eyebrow">Bids</p>
-            <h2>@Store.Workspace.Bids.Count</h2>
-            <p>@activeBids.Count active / @Store.Workspace.Bids.Count(item => !item.IsActive) inactive</p>
-        </article>
-        <article class="summary-card">
-            <p class="eyebrow">Jobs</p>
-            <h2>@Store.Workspace.Jobs.Count</h2>
-            <p>@activeJobs.Count active / @Store.Workspace.Jobs.Count(item => !item.IsActive) inactive</p>
-        </article>
-        <article class="summary-card">
-            <p class="eyebrow">Service</p>
-            <h2>@Store.Workspace.ServiceAgreements.Count</h2>
-            <p>@activeService.Count active / @Store.Workspace.ServiceAgreements.Count(item => !item.IsActive) inactive</p>
-        </article>
-        <article class="summary-card">
-            <p class="eyebrow">Dormant Work</p>
-            <h2>@inactiveCount</h2>
-            <p>Closed, archived, or inactive records still available for editing.</p>
-        </article>
+        <article class="summary-card"><p class="eyebrow">Bids</p><h2>@Store.Workspace.Bids.Count</h2><p>@activeBids.Count active / @Store.Workspace.Bids.Count(item => !item.IsActive) inactive</p></article>
+        <article class="summary-card"><p class="eyebrow">Jobs</p><h2>@Store.Workspace.Jobs.Count</h2><p>@activeJobs.Count active / @Store.Workspace.Jobs.Count(item => !item.IsActive) inactive</p></article>
+        <article class="summary-card"><p class="eyebrow">Service</p><h2>@Store.Workspace.ServiceAgreements.Count</h2><p>@activeService.Count active / @Store.Workspace.ServiceAgreements.Count(item => !item.IsActive) inactive</p></article>
+        <article class="summary-card"><p class="eyebrow">Dormant Work</p><h2>@inactiveCount</h2><p>Closed, archived, or inactive records still available for editing.</p></article>
     </section>
 
     <section class="dashboard-grid">
         <article class="panel">
             <div class="panel-header">
                 <div>
-                    <p class="eyebrow">Action queue</p>
-                    <h3>Bids Due Soon</h3>
+                    <p class="queue-label">Bids Queue</p>
+                    <h3 class="queue-subtitle">Bids Due Soon</h3>
                 </div>
-                <NavLink class="text-link" href="/bids">Go to bids</NavLink>
+                <NavLink class="button" href="/bids">Go to bids</NavLink>
             </div>
-
             @if (activeBids.Count == 0)
             {
                 <p class="muted">No active bids yet. Start one from the bids page and the dashboard will surface it here.</p>
@@ -72,16 +51,16 @@ else
                 <div class="list-stack">
                     @foreach (var bid in activeBids.Take(5))
                     {
-                        <div class="list-row">
+                        <button class="list-row list-row-button" type="button" @onclick="() => OpenBid(bid.Id)">
                             <div>
                                 <strong>@bid.BidNumber</strong>
                                 <p>@bid.ProjectName</p>
                             </div>
                             <div class="align-right">
-                                <p>@bid.DueDate:d</p>
+                                <p>@bid.DueDate:MM/dd/yyyy</p>
                                 <span class="pill">@bid.Status</span>
                             </div>
-                        </div>
+                        </button>
                     }
                 </div>
             }
@@ -90,12 +69,11 @@ else
         <article class="panel">
             <div class="panel-header">
                 <div>
-                    <p class="eyebrow">Project cost control</p>
-                    <h3>Active Jobs</h3>
+                    <p class="queue-label">Jobs Queue</p>
+                    <h3 class="queue-subtitle">Active Jobs</h3>
                 </div>
-                <NavLink class="text-link" href="/jobs">Go to jobs</NavLink>
+                <NavLink class="button button-secondary" href="/jobs">Go to jobs</NavLink>
             </div>
-
             @if (activeJobs.Count == 0)
             {
                 <p class="muted">Converted jobs and direct-entry projects appear here.</p>
@@ -105,7 +83,7 @@ else
                 <div class="list-stack">
                     @foreach (var job in activeJobs.Take(5))
                     {
-                        <div class="list-row">
+                        <button class="list-row list-row-button" type="button" @onclick="() => OpenJob(job.Id)">
                             <div>
                                 <strong>@job.JobNumber</strong>
                                 <p>@job.ProjectName</p>
@@ -114,7 +92,7 @@ else
                                 <p>@EstimateMath.GetCurrency(EstimateMath.GetJobProfit(job))</p>
                                 <span class="pill">@job.Status</span>
                             </div>
-                        </div>
+                        </button>
                     }
                 </div>
             }
@@ -123,12 +101,11 @@ else
         <article class="panel">
             <div class="panel-header">
                 <div>
-                    <p class="eyebrow">Recurring revenue</p>
-                    <h3>Upcoming Inspections & Billing</h3>
+                    <p class="queue-label">Service Queue</p>
+                    <h3 class="queue-subtitle">Upcoming Service and Billing</h3>
                 </div>
-                <NavLink class="text-link" href="/service">Go to service</NavLink>
+                <NavLink class="button button-secondary" href="/service">Go to service</NavLink>
             </div>
-
             @if (activeService.Count == 0)
             {
                 <p class="muted">Create a monitoring agreement to track inspection dates and monthly payments.</p>
@@ -138,16 +115,16 @@ else
                 <div class="list-stack">
                     @foreach (var agreement in activeService.Take(5))
                     {
-                        <div class="list-row">
+                        <button class="list-row list-row-button" type="button" @onclick="() => OpenService(agreement.Id)">
                             <div>
                                 <strong>@agreement.AgreementNumber</strong>
                                 <p>@agreement.AgreementName</p>
                             </div>
                             <div class="align-right">
-                                <p>Bill @EstimateMath.GetNextBillingDate(agreement):d</p>
-                                <span class="pill">@agreement.NextInspectionDate:d</span>
+                                <p>Bill @EstimateMath.GetNextBillingDate(agreement):MM/dd/yyyy</p>
+                                <span class="pill">@agreement.NextInspectionDate:MM/dd/yyyy</span>
                             </div>
-                        </div>
+                        </button>
                     }
                 </div>
             }
@@ -156,13 +133,13 @@ else
         <article class="panel accent">
             <div class="panel-header">
                 <div>
-                    <p class="eyebrow">Storage profile</p>
-                    <h3>@Store.Workspace.Settings.StorageMode</h3>
+                    <p class="queue-label">Profiles Placeholder</p>
+                    <h3 class="queue-subtitle">Template Profiles In Progress</h3>
                 </div>
-                <NavLink class="text-link" href="/settings">Open settings</NavLink>
+                <NavLink class="button button-secondary" href="/templates">Open Templates</NavLink>
             </div>
-            <p>@Store.Workspace.Settings.StorageNotes</p>
-            <p class="muted small">Data file: @Store.DataFilePath</p>
+            <p class="muted">Bid profiles are live now, and the dashboard placeholder stays here while job and service profile ideas are still taking shape.</p>
+            <p class="muted small">Current default: @(Store.GetTemplate(Store.Workspace.Settings.DefaultTemplateId)?.Name ?? "None selected")</p>
         </article>
     </section>
 }
@@ -172,4 +149,8 @@ else
     {
         await Store.InitializeAsync();
     }
+
+    private void OpenBid(Guid bidId) => NavigationManager.NavigateTo($"/bids?selected={bidId}");
+    private void OpenJob(Guid jobId) => NavigationManager.NavigateTo($"/jobs?selected={jobId}");
+    private void OpenService(Guid agreementId) => NavigationManager.NavigateTo($"/service?selected={agreementId}");
 }

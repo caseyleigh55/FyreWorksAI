@@ -75,6 +75,11 @@ textarea {
     color: var(--text);
 }
 
+select option {
+    color: #111;
+    background: #efe0cf;
+}
+
 input:focus,
 select:focus,
 textarea:focus {
@@ -223,6 +228,21 @@ button:disabled {
     line-height: 1.6;
 }
 
+.hero-compact {
+    padding: 1.3rem 1.5rem;
+}
+
+.hero-center {
+    display: grid;
+    justify-items: center;
+    text-align: center;
+}
+
+.hero-compact h1 {
+    max-width: none;
+    font-size: clamp(1.9rem, 2.6vw, 2.5rem);
+}
+
 .hero-actions,
 .button-row {
     display: flex;
@@ -317,6 +337,23 @@ button:disabled {
     margin-top: 0.2rem;
 }
 
+.queue-label {
+    margin: 0;
+    color: #ffb17f;
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.queue-subtitle {
+    margin-top: 0.35rem;
+    color: var(--muted);
+    font-family: var(--font-body);
+    font-size: 0.98rem;
+    letter-spacing: 0.02em;
+}
+
 .eyebrow {
     text-transform: uppercase;
     letter-spacing: 0.18em;
@@ -401,6 +438,174 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.inline-select-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.inline-select-row select {
+    flex: 1 1 auto;
+}
+
+.inline-select-row .button {
+    flex: 0 0 auto;
+}
+
+.field-card-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.list-caption {
+    margin-bottom: -0.2rem;
+}
+
+.field-card {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--line);
+}
+
+.field-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 1rem;
+}
+
+.field-card-header h4 {
+    margin-top: 0.25rem;
+    font-size: 1.1rem;
+}
+
+.field-card-summary-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.field-card-summary-button {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: minmax(10rem, 1.5fr) repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+    padding: 0.9rem 1rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text);
+    text-align: left;
+}
+
+.field-card-summary-button strong,
+.field-card-summary-button span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.field-card-summary-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.field-card-collapsed {
+    gap: 0;
+}
+
+.field-card-grid {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.field-card-grid-four {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.field-card-grid-three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.field-toggle-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 1.2rem;
+}
+
+.field-toggle-label input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    accent-color: var(--accent);
+}
+
+.input-shell {
+    display: flex;
+    align-items: center;
+    min-height: 3rem;
+    padding: 0 0.9rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--line-strong);
+    background: rgba(255, 255, 255, 0.04);
+    box-sizing: border-box;
+}
+
+.input-shell:focus-within {
+    outline: 2px solid rgba(255, 122, 47, 0.45);
+    border-color: rgba(255, 122, 47, 0.55);
+}
+
+.input-shell .shell-input {
+    border: none;
+    background: transparent;
+    outline: none;
+    padding: 0;
+    min-height: auto;
+    box-shadow: none;
+}
+
+.input-shell .shell-input:focus {
+    outline: none;
+    border-color: transparent;
+}
+
+.input-prefix,
+.input-suffix {
+    color: var(--muted);
+    white-space: nowrap;
+    font-size: 0.92rem;
+}
+
+.input-prefix {
+    padding-right: 0.45rem;
+}
+
+.input-suffix {
+    padding-left: 0.45rem;
+}
+
+.money-input-shell {
+    max-width: 12rem;
+}
+
+.input-shell-disabled {
+    opacity: 0.52;
+}
+
+.value-pill {
+    justify-content: flex-start;
+    min-height: 3rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
 label {
     display: grid;
     gap: 0.45rem;
@@ -461,6 +666,18 @@ label span {
     border: 1px solid var(--line);
 }
 
+.list-row-button {
+    width: 100%;
+    border: 1px solid var(--line);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+}
+
+.list-row-button p {
+    color: var(--muted);
+}
+
 .list-actions {
     display: flex;
     gap: 0.75rem;
@@ -503,6 +720,10 @@ label span {
     letter-spacing: 0.08em;
 }
 
+.data-table .group-end {
+    border-right: 2px solid var(--line-strong);
+}
+
 .data-table td input,
 .data-table td select {
     min-width: 0;
@@ -536,6 +757,47 @@ label span {
     display: grid;
     grid-template-columns: 16rem minmax(0, 1fr);
     gap: 1rem;
+}
+
+.totals-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.metric-list {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.metric-list div,
+.metric-input {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.metric-list span,
+.metric-input span {
+    color: var(--muted);
+}
+
+.metric-input input {
+    max-width: 12rem;
+}
+
+.metric-input .input-shell {
+    width: min(100%, 12rem);
+}
+
+.compact-summary-grid {
+    margin-bottom: 1rem;
+}
+
+.compact-table {
+    margin-top: 0.75rem;
 }
 
 .quote-directory {
@@ -572,6 +834,10 @@ label span {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .totals-grid {
+        grid-template-columns: 1fr;
+    }
+
     .workspace-grid,
     .quote-layout {
         grid-template-columns: 1fr;
@@ -604,8 +870,25 @@ label span {
 
     .summary-grid,
     .dashboard-grid,
-    .form-grid.two-columns {
+    .form-grid.two-columns,
+    .field-card-grid-four,
+    .field-card-grid-three {
         grid-template-columns: 1fr;
+    }
+
+    .field-card-summary-row,
+    .field-card-summary-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .field-card-summary-button {
+        grid-template-columns: 1fr;
+    }
+
+    .inline-select-row {
+        flex-direction: column;
+        align-items: stretch;
     }
 
     .hero h1 {
