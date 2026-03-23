@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FyreWorksAI.Shared;
 
 namespace FyreWorksAI;
@@ -6,6 +7,27 @@ public sealed class MauiStoragePathResolver : IStoragePathResolver
 {
     public string GetRootDirectory() =>
         Path.Combine(FileSystem.Current.AppDataDirectory, "FyreWorksAI");
+}
+
+public sealed class MauiWorkspaceLocationService : IWorkspaceLocationService
+{
+    public bool SupportsOpeningDirectories => true;
+
+    public Task OpenDirectoryAsync(string fullPath)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath))
+        {
+            return Task.CompletedTask;
+        }
+
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = fullPath,
+            UseShellExecute = true
+        });
+
+        return Task.CompletedTask;
+    }
 }
 
 public sealed class MauiAttachmentService : IAttachmentService

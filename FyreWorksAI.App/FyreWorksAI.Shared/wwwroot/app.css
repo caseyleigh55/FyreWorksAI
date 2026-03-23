@@ -275,6 +275,12 @@ button:disabled {
     color: var(--text);
 }
 
+.button.button-danger {
+    background: rgba(255, 128, 112, 0.08);
+    border-color: rgba(255, 128, 112, 0.35);
+    color: #ffd7d0;
+}
+
 .text-link,
 .text-button {
     background: none;
@@ -458,7 +464,7 @@ button:disabled {
 }
 
 .list-caption {
-    margin-bottom: -0.2rem;
+    margin-bottom: 0.7rem;
 }
 
 .field-card {
@@ -517,6 +523,11 @@ button:disabled {
 
 .field-card-collapsed {
     gap: 0;
+    padding: 0.45rem;
+}
+
+.field-card-collapsed .field-card-summary-button {
+    padding: 0.7rem 0.85rem;
 }
 
 .field-card-grid {
@@ -664,6 +675,22 @@ label span {
     border-radius: var(--radius-sm);
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--line);
+}
+
+.storage-path-row {
+    align-items: center;
+}
+
+.storage-path-copy {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.storage-path-copy span {
+    color: var(--muted);
+    overflow-wrap: anywhere;
 }
 
 .list-row-button {

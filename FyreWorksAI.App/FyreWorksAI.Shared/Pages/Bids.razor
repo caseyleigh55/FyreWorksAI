@@ -82,6 +82,7 @@ else
                             <h2>@SelectedBid.ProjectName</h2>
                         </div>
                         <div class="button-row">
+                            <button class="button button-danger" type="button" @onclick="DeleteBidAsync">Delete Bid</button>
                             <button class="button button-secondary" type="button" @onclick="SaveAsync">Save Bid</button>
                             <button class="button" type="button" @onclick="ConvertToJobAsync">Convert To Job</button>
                         </div>
@@ -597,6 +598,28 @@ else
         StatusMessage = "Bid saved.";
     }
 
+    private async Task DeleteBidAsync()
+    {
+        if (SelectedBid is null)
+        {
+            return;
+        }
+
+        var deletedBidId = SelectedBid.Id;
+        if (!Store.DeleteBid(deletedBidId))
+        {
+            return;
+        }
+
+        SelectedBidId = GetNextBidId();
+        ExpandedComponentIds.Clear();
+        await Store.SaveAsync();
+        StatusMessage = "Bid deleted.";
+        NavigationManager.NavigateTo(
+            SelectedBidId is null ? "/bids" : $"/bids?selected={SelectedBidId}",
+            replace: true);
+    }
+
     private async Task ApplyTemplateAsync()
     {
         if (SelectedBid is null) return;
@@ -637,6 +660,18 @@ else
         SelectedBid.ClientId = ParseNullableGuid(args.Value?.ToString());
         return Task.CompletedTask;
     }
+
+    private Guid? GetNextBidId() =>
+        Store.Workspace.Bids
+            .Where(bid => bid.IsActive)
+            .OrderBy(bid => bid.DueDate)
+            .Select(bid => (Guid?)bid.Id)
+            .Concat(
+                Store.Workspace.Bids
+                    .Where(bid => !bid.IsActive)
+                    .OrderByDescending(bid => bid.CreatedOn)
+                    .Select(bid => (Guid?)bid.Id))
+            .FirstOrDefault();
 
     private void AddAdministrativeTask() => SelectedBid?.AdministrativeTasks.Add(new WorkTask { Title = "Administrative Task" });
     private void RemoveAdministrativeTask(Guid taskId) => SelectedBid?.AdministrativeTasks.RemoveAll(task => task.Id == taskId);

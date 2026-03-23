@@ -1,5 +1,6 @@
 @page "/jobs"
 @inject WorkspaceStore Store
+@inject NavigationManager NavigationManager
 
 <PageTitle>Jobs</PageTitle>
 
@@ -83,6 +84,7 @@ else
                             <h2>@SelectedJob.ProjectName</h2>
                         </div>
                         <div class="button-row">
+                            <button class="button button-danger" type="button" @onclick="DeleteJobAsync">Delete Job</button>
                             <button class="button button-secondary" type="button" @onclick="SaveAsync">Save Job</button>
                             <button class="button" type="button" @onclick="ExportAsync">Export Job Cost</button>
                         </div>
@@ -562,6 +564,7 @@ else
     {
         SelectedJobId = jobId;
         StatusMessage = string.Empty;
+        NavigationManager.NavigateTo($"/jobs?selected={jobId}", replace: true);
     }
 
     private async Task CreateJobAsync()
@@ -570,6 +573,7 @@ else
         SelectedJobId = job.Id;
         StatusMessage = "New job created.";
         await Store.SaveAsync();
+        NavigationManager.NavigateTo($"/jobs?selected={job.Id}", replace: true);
     }
 
     private void CreateClientForJob()
@@ -588,6 +592,27 @@ else
     {
         await Store.SaveAsync();
         StatusMessage = "Job saved.";
+    }
+
+    private async Task DeleteJobAsync()
+    {
+        if (SelectedJob is null)
+        {
+            return;
+        }
+
+        var deletedJobId = SelectedJob.Id;
+        if (!Store.DeleteJob(deletedJobId))
+        {
+            return;
+        }
+
+        SelectedJobId = GetNextJobId();
+        await Store.SaveAsync();
+        StatusMessage = "Job deleted.";
+        NavigationManager.NavigateTo(
+            SelectedJobId is null ? "/jobs" : $"/jobs?selected={SelectedJobId}",
+            replace: true);
     }
 
     private async Task ExportAsync()
@@ -612,6 +637,18 @@ else
         SelectedJob.ClientId = ParseNullableGuid(args.Value?.ToString());
         await Task.CompletedTask;
     }
+
+    private Guid? GetNextJobId() =>
+        Store.Workspace.Jobs
+            .Where(job => job.IsActive)
+            .OrderBy(job => job.ProjectName)
+            .Select(job => (Guid?)job.Id)
+            .Concat(
+                Store.Workspace.Jobs
+                    .Where(job => !job.IsActive)
+                    .OrderByDescending(job => job.CreatedOn)
+                    .Select(job => (Guid?)job.Id))
+            .FirstOrDefault();
 
     private void AddTimeEntry() =>
         SelectedJob?.TimeEntries.Add(new JobTimeEntry

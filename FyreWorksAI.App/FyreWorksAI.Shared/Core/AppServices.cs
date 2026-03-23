@@ -20,6 +20,12 @@ public interface IStoragePathResolver
     string GetRootDirectory();
 }
 
+public interface IWorkspaceLocationService
+{
+    bool SupportsOpeningDirectories { get; }
+    Task OpenDirectoryAsync(string fullPath);
+}
+
 public interface IWorkspaceStorage
 {
     string DataFilePath { get; }
@@ -68,7 +74,8 @@ public sealed class TextFileWorkspaceStorage(IStoragePathResolver pathResolver) 
 public sealed class WorkspaceStore(
     IWorkspaceStorage storage,
     IStoragePathResolver pathResolver,
-    IAttachmentService attachmentService)
+    IAttachmentService attachmentService,
+    IWorkspaceLocationService workspaceLocationService)
 {
     private static readonly JsonSerializerOptions CloneOptions = new()
     {
@@ -84,6 +91,7 @@ public sealed class WorkspaceStore(
     public string BackupRootPath => Path.Combine(RootDirectory, "backups");
     public bool CanPickAttachments => attachmentService.SupportsPicking;
     public bool CanOpenAttachments => attachmentService.SupportsOpening;
+    public bool CanOpenStorageLocations => workspaceLocationService.SupportsOpeningDirectories;
 
     public async Task InitializeAsync()
     {
@@ -456,6 +464,44 @@ public sealed class WorkspaceStore(
         return backupPath;
     }
 
+    public bool DeleteBid(Guid bidId)
+    {
+        var bid = Workspace.Bids.FirstOrDefault(item => item.Id == bidId);
+        if (bid is null)
+        {
+            return false;
+        }
+
+        Workspace.Bids.Remove(bid);
+        DeleteAttachmentDirectory("bids", bid.Id);
+        return true;
+    }
+
+    public bool DeleteJob(Guid jobId)
+    {
+        var job = Workspace.Jobs.FirstOrDefault(item => item.Id == jobId);
+        if (job is null)
+        {
+            return false;
+        }
+
+        Workspace.Jobs.Remove(job);
+        DeleteAttachmentDirectory("jobs", job.Id);
+        return true;
+    }
+
+    public Task OpenDataDirectoryAsync() =>
+        OpenDirectoryAsync(Path.GetDirectoryName(DataFilePath)!);
+
+    public Task OpenAttachmentDirectoryAsync() =>
+        OpenDirectoryAsync(AttachmentRootPath);
+
+    public Task OpenExportDirectoryAsync() =>
+        OpenDirectoryAsync(ExportRootPath);
+
+    public Task OpenBackupDirectoryAsync() =>
+        OpenDirectoryAsync(BackupRootPath);
+
     private void ApplyTemplateValuesToBid(BidRecord bid, LaborTemplate template)
     {
         bid.TemplateId = template.Id;
@@ -475,6 +521,21 @@ public sealed class WorkspaceStore(
         bid.FieldLaborRate = template.JourneymanRegularDirectRate;
         bid.AdminLaborRate = template.AdminDirectRate;
         bid.EngineeringLaborRate = template.EngineeringDirectRate;
+    }
+
+    private async Task OpenDirectoryAsync(string fullPath)
+    {
+        Directory.CreateDirectory(fullPath);
+        await workspaceLocationService.OpenDirectoryAsync(fullPath);
+    }
+
+    private void DeleteAttachmentDirectory(string area, Guid ownerId)
+    {
+        var targetDirectory = Path.Combine(AttachmentRootPath, area, ownerId.ToString("N"));
+        if (Directory.Exists(targetDirectory))
+        {
+            Directory.Delete(targetDirectory, recursive: true);
+        }
     }
 
     private int GetNextBidSequence(int year)

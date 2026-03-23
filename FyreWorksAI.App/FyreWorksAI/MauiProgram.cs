@@ -17,6 +17,7 @@ public static class MauiProgram
         builder.Services.AddMauiBlazorWebView();
         builder.Services.AddSingleton<IStoragePathResolver, MauiStoragePathResolver>();
         builder.Services.AddSingleton<IAttachmentService, MauiAttachmentService>();
+        builder.Services.AddSingleton<IWorkspaceLocationService, MauiWorkspaceLocationService>();
         builder.Services.AddFyreWorksCore();
 
 #if DEBUG

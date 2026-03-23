@@ -9,6 +9,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddSingleton<IStoragePathResolver, WebStoragePathResolver>();
 builder.Services.AddSingleton<IAttachmentService, UnsupportedAttachmentService>();
+builder.Services.AddSingleton<IWorkspaceLocationService, WebWorkspaceLocationService>();
 builder.Services.AddFyreWorksCore();
 
 var app = builder.Build();

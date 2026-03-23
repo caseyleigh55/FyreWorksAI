@@ -29,21 +29,45 @@ else
 
             <p>@Store.Workspace.Settings.StorageNotes</p>
             <div class="list-stack compact">
-                <div class="list-row">
-                    <strong>Data File</strong>
-                    <span>@Store.DataFilePath</span>
+                <div class="list-row storage-path-row">
+                    <div class="storage-path-copy">
+                        <strong>Data File</strong>
+                        <span>@Store.DataFilePath</span>
+                    </div>
+                    @if (Store.CanOpenStorageLocations)
+                    {
+                        <button class="button button-secondary" type="button" @onclick="OpenDataDirectoryAsync">Open Folder</button>
+                    }
                 </div>
-                <div class="list-row">
-                    <strong>Attachments</strong>
-                    <span>@Store.AttachmentRootPath</span>
+                <div class="list-row storage-path-row">
+                    <div class="storage-path-copy">
+                        <strong>Attachments</strong>
+                        <span>@Store.AttachmentRootPath</span>
+                    </div>
+                    @if (Store.CanOpenStorageLocations)
+                    {
+                        <button class="button button-secondary" type="button" @onclick="OpenAttachmentDirectoryAsync">Open Folder</button>
+                    }
                 </div>
-                <div class="list-row">
-                    <strong>Exports</strong>
-                    <span>@Store.ExportRootPath</span>
+                <div class="list-row storage-path-row">
+                    <div class="storage-path-copy">
+                        <strong>Exports</strong>
+                        <span>@Store.ExportRootPath</span>
+                    </div>
+                    @if (Store.CanOpenStorageLocations)
+                    {
+                        <button class="button button-secondary" type="button" @onclick="OpenExportDirectoryAsync">Open Folder</button>
+                    }
                 </div>
-                <div class="list-row">
-                    <strong>Backups</strong>
-                    <span>@Store.BackupRootPath</span>
+                <div class="list-row storage-path-row">
+                    <div class="storage-path-copy">
+                        <strong>Backups</strong>
+                        <span>@Store.BackupRootPath</span>
+                    </div>
+                    @if (Store.CanOpenStorageLocations)
+                    {
+                        <button class="button button-secondary" type="button" @onclick="OpenBackupDirectoryAsync">Open Folder</button>
+                    }
                 </div>
             </div>
         </article>
@@ -125,5 +149,23 @@ else
     {
         var path = await Store.CreateBackupAsync();
         StatusMessage = $"Backup created at {path}.";
+    }
+
+    private Task OpenDataDirectoryAsync() =>
+        OpenStorageFolderAsync(Store.OpenDataDirectoryAsync, "data");
+
+    private Task OpenAttachmentDirectoryAsync() =>
+        OpenStorageFolderAsync(Store.OpenAttachmentDirectoryAsync, "attachments");
+
+    private Task OpenExportDirectoryAsync() =>
+        OpenStorageFolderAsync(Store.OpenExportDirectoryAsync, "exports");
+
+    private Task OpenBackupDirectoryAsync() =>
+        OpenStorageFolderAsync(Store.OpenBackupDirectoryAsync, "backups");
+
+    private async Task OpenStorageFolderAsync(Func<Task> openAction, string label)
+    {
+        await openAction();
+        StatusMessage = $"Opened the {label} folder.";
     }
 }
