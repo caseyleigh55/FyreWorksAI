@@ -1,5 +1,8 @@
 # FyreWorksAI Project Notes
 
+## solution
+the solution should be located within the root folder and all projects in a folder labeled src. this is the core foundation.
+
 ## C# code creation and refactoring
 C# code shall follow the SOLID principles for both creation and refactoring
 The acronym SOLID stands for:
