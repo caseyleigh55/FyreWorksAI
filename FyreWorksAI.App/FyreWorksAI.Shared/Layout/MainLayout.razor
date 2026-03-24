@@ -1,13 +1,11 @@
 @inherits LayoutComponentBase
 
 <div class="shell">
-    <aside class="shell-sidebar">
-        <div class="brand-block">
+    <header class="shell-topbar">
+        <div class="topbar-brand">
             <p class="eyebrow">FyreWorks</p>
             <h1>Operations Hub</h1>
-            <p class="muted">Commercial fire alarm workflows for bids, jobs, and recurring service.</p>
         </div>
-
         <nav class="shell-nav">
             <NavLink href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
             <NavLink href="/bids">Bids</NavLink>
@@ -16,21 +14,16 @@
             <NavLink href="/templates">Templates</NavLink>
             <NavLink href="/settings">Settings</NavLink>
         </nav>
-
-        <div class="sidebar-note">
-            <strong>Windows-first</strong>
-            <span>Built as a MAUI Blazor workspace with future expansion paths for mobile, web, and cloud storage.</span>
+        <div class="header-badge">
+            <span>Text file storage active</span>
         </div>
-    </aside>
+    </header>
 
     <main class="shell-main">
         <header class="shell-header">
             <div>
                 <p class="eyebrow">Command center</p>
                 <h2>Office workflow management</h2>
-            </div>
-            <div class="header-badge">
-                <span>Text file storage active</span>
             </div>
         </header>
 

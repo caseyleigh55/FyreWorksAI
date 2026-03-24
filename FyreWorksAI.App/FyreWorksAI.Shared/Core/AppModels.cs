@@ -57,6 +57,7 @@ public sealed class AppSettings
     public int DefaultInspectionIntervalMonths { get; set; } = 12;
     public decimal DefaultMonthlyMonitoringAmount { get; set; } = 165m;
     public List<YearSequenceCounter> BidNumberCounters { get; set; } = [];
+    public List<YearSequenceCounter> JobNumberCounters { get; set; } = [];
 }
 
 public sealed class YearSequenceCounter
@@ -310,6 +311,9 @@ public sealed class BidRecord
     public List<BidComponent> Components { get; set; } = [];
     public List<BidDemoItem> DemoItems { get; set; } = [];
     public List<BidMaterialItem> Materials { get; set; } = [];
+    public string Exclusions { get; set; } = string.Empty;
+    public string ProposalSummary { get; set; } = string.Empty;
+    public string ProposalClosing { get; set; } = string.Empty;
     public List<AttachmentRecord> Attachments { get; set; } = [];
 
     [JsonIgnore]
@@ -326,16 +330,98 @@ public sealed class BaselineEstimate
     public string ScopeSummary { get; set; } = string.Empty;
     public decimal OriginalRevenue { get; set; }
     public decimal EstimatedLaborCost { get; set; }
+    public decimal EstimatedFieldLaborSale { get; set; }
     public decimal EstimatedMaterialCost { get; set; }
+    public decimal EstimatedMaterialSale { get; set; }
     public decimal EstimatedTotalCost { get; set; }
     public decimal EstimatedFieldHours { get; set; }
     public decimal EstimatedAdminHours { get; set; }
     public decimal EstimatedEngineeringHours { get; set; }
+    public decimal EstimatedInstallHours { get; set; }
+    public decimal EstimatedDemoHours { get; set; }
+    public decimal EstimatedTrimHours { get; set; }
+    public decimal EstimatedTestHours { get; set; }
+    public decimal EstimatedInstallCost { get; set; }
+    public decimal EstimatedDemoCost { get; set; }
+    public decimal EstimatedTrimCost { get; set; }
+    public decimal EstimatedTestCost { get; set; }
+    public decimal EstimatedInstallSale { get; set; }
+    public decimal EstimatedDemoSale { get; set; }
+    public decimal EstimatedTrimSale { get; set; }
+    public decimal EstimatedTestSale { get; set; }
+    public decimal EstimatedAdminCost { get; set; }
+    public decimal EstimatedAdminSale { get; set; }
+    public decimal EstimatedEngineeringCost { get; set; }
+    public decimal EstimatedEngineeringSale { get; set; }
+    public decimal EstimatedComponentCost { get; set; }
+    public decimal EstimatedComponentSale { get; set; }
+    public decimal EstimatedWireCost { get; set; }
+    public decimal EstimatedWireSale { get; set; }
+    public decimal EstimatedMaterialOnlyCost { get; set; }
+    public decimal EstimatedMaterialOnlySale { get; set; }
     public List<WorkTask> AdministrativeTasks { get; set; } = [];
     public List<WorkTask> EngineeringTasks { get; set; } = [];
     public List<BidComponent> Components { get; set; } = [];
     public List<BidDemoItem> DemoItems { get; set; } = [];
     public List<BidMaterialItem> Materials { get; set; } = [];
+    public List<JobBaselineLineItem> LineItems { get; set; } = [];
+}
+
+public sealed class JobBaselineLineItem
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string ReferenceNumber { get; set; } = string.Empty;
+    public string SourceSection { get; set; } = string.Empty;
+    public string CategoryCode { get; set; } = JobCostCodes.Other;
+    public string Description { get; set; } = string.Empty;
+    public decimal Quantity { get; set; } = 1m;
+    public string UnitLabel { get; set; } = "ea";
+    public decimal EstimatedUnitCost { get; set; }
+    public decimal EstimatedUnitSale { get; set; }
+    public decimal ActualUnitCost { get; set; }
+    public Guid? InvoiceId { get; set; }
+    public decimal EstimatedHours { get; set; }
+    public string Notes { get; set; } = string.Empty;
+
+    [JsonIgnore]
+    public decimal EstimatedCost => Quantity * EstimatedUnitCost;
+
+    [JsonIgnore]
+    public decimal EstimatedSale => Quantity * EstimatedUnitSale;
+
+    [JsonIgnore]
+    public decimal ActualCost => Quantity * ActualUnitCost;
+}
+
+public sealed class JobDeviceItem
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string CategoryCode { get; set; } = JobCostCodes.Material;
+    public string Description { get; set; } = string.Empty;
+    public decimal Quantity { get; set; } = 1m;
+    public string UnitLabel { get; set; } = "ea";
+    public decimal EstimatedUnitCost { get; set; }
+    public decimal ActualUnitCost { get; set; }
+    public Guid? InvoiceId { get; set; }
+    public string Notes { get; set; } = string.Empty;
+
+    [JsonIgnore]
+    public decimal EstimatedCost => Quantity * EstimatedUnitCost;
+
+    [JsonIgnore]
+    public decimal ActualCost => Quantity * ActualUnitCost;
+}
+
+public sealed class JobInvoiceRecord
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string ReferenceNumber { get; set; } = string.Empty;
+    public DateTime InvoiceDate { get; set; } = DateTime.Today;
+    public string Vendor { get; set; } = string.Empty;
+    public string InvoiceNumber { get; set; } = string.Empty;
+    public decimal InvoiceTotal { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public List<AttachmentRecord> Attachments { get; set; } = [];
 }
 
 public sealed class JobTimeEntry
@@ -343,6 +429,7 @@ public sealed class JobTimeEntry
     public Guid Id { get; set; } = Guid.NewGuid();
     public DateTime WorkDate { get; set; } = DateTime.Today;
     public string CrewMember { get; set; } = string.Empty;
+    public bool IsOvernight { get; set; }
     public decimal Hours { get; set; } = 8m;
     public decimal HourlyRate { get; set; } = 115m;
     public string CostCode { get; set; } = "Field";
@@ -359,8 +446,20 @@ public sealed class JobMaterialPurchase
     public string Vendor { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public decimal ActualCost { get; set; }
+    public Guid? BaselineLineItemId { get; set; }
+    public string ReferenceNumber { get; set; } = string.Empty;
+    public decimal Quantity { get; set; } = 1m;
+    public decimal UnitCost { get; set; }
+    public decimal SalesTax { get; set; }
     public string ReceiptNumber { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
+    public List<AttachmentRecord> Attachments { get; set; } = [];
+
+    [JsonIgnore]
+    public decimal Subtotal => Quantity * UnitCost;
+
+    [JsonIgnore]
+    public decimal TotalCost => Subtotal + SalesTax;
 }
 
 public sealed class ChangeOrderRecord
@@ -372,26 +471,55 @@ public sealed class ChangeOrderRecord
     public decimal EstimatedCostImpact { get; set; }
     public bool Approved { get; set; } = true;
     public string Notes { get; set; } = string.Empty;
+    public List<AttachmentRecord> Attachments { get; set; } = [];
 }
 
 public sealed class ScheduleValueItem
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Description { get; set; } = string.Empty;
+    public string CategoryCode { get; set; } = JobCostCodes.Other;
+    public decimal ReferenceValue { get; set; }
     public decimal ScheduledValue { get; set; }
+    public decimal PercentageOfTotal { get; set; }
     public decimal BilledToDate { get; set; }
     public decimal PaidToDate { get; set; }
+    public Guid? LinkedChangeOrderId { get; set; }
+    public bool IsAutoGenerated { get; set; }
+    public bool IsPercentageManual { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public List<ScheduleValueSubLine> SubLines { get; set; } = [];
+
+    [JsonIgnore]
+    public bool IsChangeOrderLine => LinkedChangeOrderId is not null;
+
+    [JsonIgnore]
+    public decimal RemainingToBill => Math.Max(0m, ScheduledValue - BilledToDate);
+}
+
+public sealed class ScheduleValueSubLine
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Description { get; set; } = string.Empty;
+    public decimal BilledAmount { get; set; }
+    public decimal PaidAmount { get; set; }
+    public Guid? LinkedCommitmentId { get; set; }
+    public bool IsAutoGenerated { get; set; }
     public string Notes { get; set; } = string.Empty;
 }
 
 public sealed class CommitmentRecord
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public string CommitmentNumber { get; set; } = string.Empty;
     public string Vendor { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public Guid? ScheduleValueItemId { get; set; }
     public decimal CommittedAmount { get; set; }
     public decimal BilledAmount { get; set; }
     public decimal PaidAmount { get; set; }
+    public string InvoiceNumber { get; set; } = string.Empty;
+    public DateTime InvoiceDate { get; set; } = DateTime.Today;
     public DateTime DueDate { get; set; } = DateTime.Today.AddDays(30);
     public string Notes { get; set; } = string.Empty;
 }
@@ -408,12 +536,17 @@ public sealed class JobRecord
     public bool IsActive { get; set; } = true;
     public DateTime CreatedOn { get; set; } = DateTime.Today;
     public BaselineEstimate Baseline { get; set; } = new();
+    public List<JobDeviceItem> JobDevices { get; set; } = [];
+    public List<JobInvoiceRecord> Invoices { get; set; } = [];
     public List<JobTimeEntry> TimeEntries { get; set; } = [];
     public List<JobMaterialPurchase> MaterialPurchases { get; set; } = [];
     public List<ChangeOrderRecord> ChangeOrders { get; set; } = [];
     public List<ScheduleValueItem> ScheduleOfValues { get; set; } = [];
     public List<CommitmentRecord> Commitments { get; set; } = [];
     public List<AttachmentRecord> Attachments { get; set; } = [];
+    public string Exclusions { get; set; } = string.Empty;
+    public string ProposalSummary { get; set; } = string.Empty;
+    public string ProposalClosing { get; set; } = string.Empty;
     public string Notes { get; set; } = string.Empty;
 }
 

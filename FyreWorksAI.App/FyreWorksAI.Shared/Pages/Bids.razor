@@ -18,17 +18,26 @@ else
     var selectedTemplate = SelectedBid is null ? null : Store.GetTemplate(SelectedBid.TemplateId);
     var hasDemoScope = SelectedBid?.DemoItems.Count > 0;
     var currentClient = CurrentClient;
+    var linkedJob = CurrentLinkedJob;
     var wireItems = SelectedBid?.Materials.Where(item => item.Kind == BidMaterialKind.Wire).ToList() ?? [];
     var materialItems = SelectedBid?.Materials.Where(item => item.Kind == BidMaterialKind.Material).ToList() ?? [];
 
     <section class="workspace-grid">
-        <aside class="directory-panel">
+        <button class="workspace-flag" type="button" @onclick="ToggleDirectoryPanel" title="Toggle Bids panel">Bids</button>
+        @if (IsDirectoryPanelExpanded)
+        {
+            <button class="workspace-drawer-scrim" type="button" @onclick="CloseDirectoryPanel" aria-label="Close Bids panel"></button>
+        }
+        <aside class="directory-panel directory-drawer @(IsDirectoryPanelExpanded ? "directory-drawer-open" : null)">
             <div class="panel-header">
                 <div>
                     <p class="eyebrow">Estimating</p>
                     <h2>Bids</h2>
                 </div>
-                <button class="button" type="button" @onclick="CreateBidAsync">New Bid</button>
+                <div class="panel-header-actions">
+                    <button class="button" type="button" @onclick="CreateBidAsync">New Bid</button>
+                    <button class="button button-secondary" type="button" @onclick="CloseDirectoryPanel">Collapse</button>
+                </div>
             </div>
 
             <div class="directory-group">
@@ -84,6 +93,11 @@ else
                         <div class="button-row">
                             <button class="button button-danger" type="button" @onclick="DeleteBidAsync">Delete Bid</button>
                             <button class="button button-secondary" type="button" @onclick="SaveAsync">Save Bid</button>
+                            <button class="button button-secondary" type="button" @onclick="ExportProposalAsync">Export Proposal</button>
+                            @if (linkedJob is not null)
+                            {
+                                <button class="button button-secondary" type="button" @onclick="() => NavigateToJob(linkedJob.Id)">Job Reference</button>
+                            }
                             <button class="button" type="button" @onclick="ConvertToJobAsync">Convert To Job</button>
                         </div>
                     </div>
@@ -209,8 +223,14 @@ else
                         <div><p class="eyebrow">Site Info</p><h3>Project Scope + Code Data</h3></div>
                     </div>
                     <div class="form-grid two-columns">
+                        <label><span>Site Name</span><input @bind="SelectedBid.Site.SiteName" /></label>
+                        <label><span>Occupancy</span><input @bind="SelectedBid.Site.OccupancyType" /></label>
                         <label class="full-width"><span>Scope Of Work</span><textarea rows="3" @bind="SelectedBid.Site.ScopeOfWork"></textarea></label>
-                        <label class="full-width"><span>Address</span><textarea rows="2" @bind="SelectedBid.Site.AddressLine1"></textarea></label>
+                        <label><span>Address Line 1</span><input @bind="SelectedBid.Site.AddressLine1" /></label>
+                        <label><span>Address Line 2</span><input @bind="SelectedBid.Site.AddressLine2" /></label>
+                        <label><span>City</span><input @bind="SelectedBid.Site.City" /></label>
+                        <label><span>State</span><input @bind="SelectedBid.Site.State" /></label>
+                        <label><span>Postal Code</span><input @bind="SelectedBid.Site.PostalCode" /></label>
                         <label><span>Parcel Number</span><input @bind="SelectedBid.Site.ParcelNumber" /></label>
                         <label><span>Jurisdiction</span><input @bind="SelectedBid.Site.Jurisdiction" /></label>
                         <label><span>Building Area</span><input @bind="SelectedBid.Site.BuildingArea" /></label>
@@ -220,6 +240,33 @@ else
                         <label><span>Construction Type</span><input @bind="SelectedBid.Site.ConstructionType" /></label>
                         <label class="checkbox-field"><span>Sprinklered</span><input type="checkbox" @bind="SelectedBid.Site.IsSprinklered" /></label>
                     </div>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div><p class="eyebrow">Proposal Setup</p><h3>Exclusions</h3></div>
+                    </div>
+                    <label class="full-width">
+                        <span>Exclusions</span>
+                        <textarea rows="4" @bind="SelectedBid.Exclusions"></textarea>
+                    </label>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <div><p class="eyebrow">Client Facing Copy</p><h3>Proposal</h3></div>
+                    </div>
+                    <div class="form-grid">
+                        <label class="full-width">
+                            <span>Proposal Summary</span>
+                            <textarea rows="5" @bind="SelectedBid.ProposalSummary"></textarea>
+                        </label>
+                        <label class="full-width">
+                            <span>Proposal Closing</span>
+                            <textarea rows="3" @bind="SelectedBid.ProposalClosing"></textarea>
+                        </label>
+                    </div>
+                    <p class="muted">The export uses this proposal copy plus the client, project, scope, exclusions, and pricing already captured on the bid.</p>
                 </section>
 
                 <section class="panel">
@@ -538,9 +585,11 @@ else
     private Guid? SelectedBidId { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
     private HashSet<Guid> ExpandedComponentIds { get; } = [];
+    private bool IsDirectoryPanelExpanded { get; set; }
 
     private BidRecord? SelectedBid => SelectedBidId is null ? null : Store.Workspace.Bids.FirstOrDefault(bid => bid.Id == SelectedBidId.Value);
     private ClientRecord? CurrentClient => SelectedBid is null ? null : Store.GetClient(SelectedBid.ClientId);
+    private JobRecord? CurrentLinkedJob => SelectedBid is null ? null : Store.Workspace.Jobs.FirstOrDefault(job => job.SourceBidId == SelectedBid.Id);
 
     protected override async Task OnInitializedAsync()
     {
@@ -571,18 +620,29 @@ else
     private void SelectBid(Guid bidId)
     {
         SelectedBidId = bidId;
+        CloseDirectoryPanel();
         StatusMessage = string.Empty;
         NavigationManager.NavigateTo($"/bids?selected={bidId}", replace: true);
     }
+
+    private void NavigateToJob(Guid jobId) =>
+        NavigationManager.NavigateTo($"/jobs?selected={jobId}");
 
     private async Task CreateBidAsync()
     {
         var bid = Store.CreateBid();
         SelectedBidId = bid.Id;
+        CloseDirectoryPanel();
         StatusMessage = "New bid created.";
         await Store.SaveAsync();
         NavigationManager.NavigateTo($"/bids?selected={bid.Id}", replace: true);
     }
+
+    private void ToggleDirectoryPanel() =>
+        IsDirectoryPanelExpanded = !IsDirectoryPanelExpanded;
+
+    private void CloseDirectoryPanel() =>
+        IsDirectoryPanelExpanded = false;
 
     private void CreateClientForBid()
     {
@@ -635,6 +695,14 @@ else
         var template = Store.CreateTemplateFromBid(SelectedBid);
         await Store.SaveAsync();
         StatusMessage = $"Saved pricing profile {template.Name}.";
+    }
+
+    private async Task ExportProposalAsync()
+    {
+        if (SelectedBid is null) return;
+        await Store.SaveAsync();
+        var path = await Store.ExportBidProposalAsync(SelectedBid);
+        StatusMessage = $"Proposal export created at {path}.";
     }
 
     private async Task ConvertToJobAsync()

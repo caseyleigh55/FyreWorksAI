@@ -13,13 +13,21 @@
 else
 {
     <section class="workspace-grid">
-        <aside class="directory-panel">
+        <button class="workspace-flag" type="button" @onclick="ToggleDirectoryPanel" title="Toggle Templates panel">Templates</button>
+        @if (IsDirectoryPanelExpanded)
+        {
+            <button class="workspace-drawer-scrim" type="button" @onclick="CloseDirectoryPanel" aria-label="Close Templates panel"></button>
+        }
+        <aside class="directory-panel directory-drawer @(IsDirectoryPanelExpanded ? "directory-drawer-open" : null)">
             <div class="panel-header">
                 <div>
                     <p class="eyebrow">Estimating standards</p>
                     <h2>Templates</h2>
                 </div>
-                <button class="button" type="button" @onclick="CreateTemplateAsync">New Template</button>
+                <div class="panel-header-actions">
+                    <button class="button" type="button" @onclick="CreateTemplateAsync">New Template</button>
+                    <button class="button button-secondary" type="button" @onclick="CloseDirectoryPanel">Collapse</button>
+                </div>
             </div>
 
             <div class="directory-group">
@@ -129,6 +137,7 @@ else
 @code {
     private Guid? SelectedTemplateId { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
+    private bool IsDirectoryPanelExpanded { get; set; }
 
     private LaborTemplate? SelectedTemplate =>
         SelectedTemplateId is null
@@ -144,6 +153,7 @@ else
     private void SelectTemplate(Guid templateId)
     {
         SelectedTemplateId = templateId;
+        CloseDirectoryPanel();
         StatusMessage = string.Empty;
     }
 
@@ -151,9 +161,16 @@ else
     {
         var template = Store.CreateTemplate();
         SelectedTemplateId = template.Id;
+        CloseDirectoryPanel();
         StatusMessage = "New template created.";
         await Store.SaveAsync();
     }
+
+    private void ToggleDirectoryPanel() =>
+        IsDirectoryPanelExpanded = !IsDirectoryPanelExpanded;
+
+    private void CloseDirectoryPanel() =>
+        IsDirectoryPanelExpanded = false;
 
     private async Task SaveAsync()
     {

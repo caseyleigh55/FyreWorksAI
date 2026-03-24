@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FyreWorksAI.Shared;
@@ -81,6 +82,12 @@ public sealed class WorkspaceStore(
     {
         WriteIndented = false
     };
+    private static readonly Regex StandardJobNumberPattern = new(
+        @"^JOB-(?<year>\d{2})-(?<sequence>\d{4})$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex LegacyJobNumberPattern = new(
+        @"^JOB-(?<date>\d{8})-(?<sequence>\d{3,4})$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     public FyreWorksWorkspace Workspace { get; private set; } = new();
     public bool IsInitialized { get; private set; }
@@ -159,17 +166,19 @@ public sealed class WorkspaceStore(
 
     public JobRecord CreateBlankJob()
     {
+        var createdOn = DateTime.Today;
         var job = new JobRecord
         {
-            JobNumber = GenerateNumber("JOB", Workspace.Jobs.Count + 1),
+            JobNumber = GenerateJobNumber(createdOn),
             ProjectName = $"Job {Workspace.Jobs.Count + 1}",
-            CreatedOn = DateTime.Today,
+            CreatedOn = createdOn,
             Baseline =
             {
                 ScopeSummary = "Direct job entry without a converted bid."
             }
         };
 
+        JobFinancialBuilder.EnsureJobDerivedData(job);
         Workspace.Jobs.Insert(0, job);
         return job;
     }
@@ -242,38 +251,28 @@ public sealed class WorkspaceStore(
             return existingJob;
         }
 
-        var baseline = new BaselineEstimate
-        {
-            SourceBidNumber = bid.BidNumber,
-            ScopeSummary = !string.IsNullOrWhiteSpace(bid.Site.ScopeOfWork) ? bid.Site.ScopeOfWork : bid.ScopeSummary,
-            OriginalRevenue = EstimateMath.GetBidAdjustedRevenue(bid),
-            EstimatedLaborCost = EstimateMath.GetBidLaborCost(bid),
-            EstimatedMaterialCost = EstimateMath.GetBidMaterialCost(bid),
-            EstimatedTotalCost = EstimateMath.GetBidEstimatedCost(bid),
-            EstimatedFieldHours = EstimateMath.GetBidAllocatedFieldHours(bid),
-            EstimatedAdminHours = EstimateMath.GetBidAdminHours(bid),
-            EstimatedEngineeringHours = EstimateMath.GetBidEngineeringHours(bid),
-            AdministrativeTasks = Clone(bid.AdministrativeTasks),
-            EngineeringTasks = Clone(bid.EngineeringTasks),
-            Components = Clone(bid.Components),
-            DemoItems = Clone(bid.DemoItems),
-            Materials = Clone(bid.Materials)
-        };
+        var createdOn = DateTime.Today;
+        var jobNumber = GenerateJobNumber(createdOn);
+        var baseline = JobFinancialBuilder.BuildBaselineFromBid(bid, jobNumber);
 
         var job = new JobRecord
         {
-            JobNumber = GenerateNumber("JOB", Workspace.Jobs.Count + 1),
+            JobNumber = jobNumber,
             ProjectName = bid.ProjectName,
             ClientId = bid.ClientId,
             SourceBidId = bid.Id,
             Site = Clone(bid.Site),
-            CreatedOn = DateTime.Today,
+            CreatedOn = createdOn,
             Status = "Planning",
             IsActive = true,
             Notes = $"Converted from bid {bid.BidNumber}.",
-            Baseline = baseline
+            Baseline = baseline,
+            Exclusions = bid.Exclusions,
+            ProposalSummary = bid.ProposalSummary,
+            ProposalClosing = bid.ProposalClosing
         };
 
+        JobFinancialBuilder.EnsureJobDerivedData(job);
         Workspace.Jobs.Insert(0, job);
         bid.Status = "Awarded";
         return job;
@@ -451,9 +450,21 @@ public sealed class WorkspaceStore(
         Directory.CreateDirectory(ExportRootPath);
         var fileName = $"{MakeSafeFileName(job.JobNumber)}-{DateTime.Now:yyyyMMddHHmmss}.txt";
         var fullPath = Path.Combine(ExportRootPath, fileName);
-        await File.WriteAllTextAsync(fullPath, BuildJobCostReport(job));
+        await File.WriteAllTextAsync(fullPath, JobFinancialBuilder.BuildJobCostReport(job, GetClient(job.ClientId)));
         return fullPath;
     }
+
+    public async Task<string> ExportBidProposalAsync(BidRecord bid)
+    {
+        Directory.CreateDirectory(ExportRootPath);
+        var fileName = $"{MakeSafeFileName(bid.BidNumber)}-proposal-{DateTime.Now:yyyyMMddHHmmss}.txt";
+        var fullPath = Path.Combine(ExportRootPath, fileName);
+        await File.WriteAllTextAsync(fullPath, JobFinancialBuilder.BuildBidProposal(bid, GetClient(bid.ClientId)));
+        return fullPath;
+    }
+
+    public void SyncJobFinancials(JobRecord job) =>
+        SyncLinkedJobBaseline(job);
 
     public async Task<string> CreateBackupAsync()
     {
@@ -556,6 +567,24 @@ public sealed class WorkspaceStore(
         return current;
     }
 
+    private int GetNextJobSequence(int year)
+    {
+        Workspace.Settings.JobNumberCounters ??= [];
+        var counter = Workspace.Settings.JobNumberCounters.FirstOrDefault(item => item.Year == year);
+        if (counter is null)
+        {
+            counter = new YearSequenceCounter { Year = year };
+            Workspace.Settings.JobNumberCounters.Add(counter);
+        }
+
+        var minimumSequence = Workspace.Jobs.Count(job => job.CreatedOn.Year == year) + 1;
+        counter.NextSequence = Math.Max(counter.NextSequence, minimumSequence);
+
+        var current = counter.NextSequence;
+        counter.NextSequence++;
+        return current;
+    }
+
     private string GenerateBidNumber(LaborTemplate template, DateTime createdOn)
     {
         var year = createdOn.Year;
@@ -582,6 +611,13 @@ public sealed class WorkspaceStore(
         }
 
         return result;
+    }
+
+    private string GenerateJobNumber(DateTime createdOn)
+    {
+        var year = createdOn.Year;
+        var sequence = GetNextJobSequence(year);
+        return FormatJobNumber(year, sequence);
     }
 
     private static string BuildJobCostReport(JobRecord job)
@@ -647,11 +683,14 @@ public sealed class WorkspaceStore(
     {
         workspace.Settings ??= new AppSettings();
         workspace.Settings.BidNumberCounters ??= [];
+        workspace.Settings.JobNumberCounters ??= [];
         workspace.Clients ??= [];
         workspace.Templates ??= [];
         workspace.Bids ??= [];
         workspace.Jobs ??= [];
         workspace.ServiceAgreements ??= [];
+
+        NormalizeJobNumbers(workspace);
 
         if (workspace.Templates.Count == 0)
         {
@@ -901,12 +940,25 @@ public sealed class WorkspaceStore(
             job.Baseline.Components ??= [];
             job.Baseline.DemoItems ??= [];
             job.Baseline.Materials ??= [];
+            job.Baseline.LineItems ??= [];
+            job.JobDevices ??= [];
+            job.Invoices ??= [];
             job.TimeEntries ??= [];
             job.MaterialPurchases ??= [];
             job.ChangeOrders ??= [];
             job.ScheduleOfValues ??= [];
             job.Commitments ??= [];
             job.Attachments ??= [];
+            if (job.SourceBidId is not null)
+            {
+                var bid = workspace.Bids.FirstOrDefault(item => item.Id == job.SourceBidId.Value);
+                if (bid is not null)
+                {
+                    JobFinancialBuilder.RefreshBaselineFromBid(job, bid);
+                }
+            }
+
+            JobFinancialBuilder.EnsureJobDerivedData(job);
         }
 
         foreach (var agreement in workspace.ServiceAgreements)
@@ -938,6 +990,97 @@ public sealed class WorkspaceStore(
             }
         }
     }
+
+    private static void NormalizeJobNumbers(FyreWorksWorkspace workspace)
+    {
+        workspace.Settings.JobNumberCounters ??= [];
+
+        var nextSequenceByYear = new Dictionary<int, int>();
+        foreach (var counter in workspace.Settings.JobNumberCounters.Where(counter => counter.Year > 0))
+        {
+            if (nextSequenceByYear.TryGetValue(counter.Year, out var existing))
+            {
+                nextSequenceByYear[counter.Year] = Math.Max(existing, Math.Max(1, counter.NextSequence));
+            }
+            else
+            {
+                nextSequenceByYear[counter.Year] = Math.Max(1, counter.NextSequence);
+            }
+        }
+
+        var usedSequencesByYear = new Dictionary<int, HashSet<int>>();
+        foreach (var job in workspace.Jobs
+                     .OrderBy(job => job.CreatedOn)
+                     .ThenBy(job => job.JobNumber, StringComparer.OrdinalIgnoreCase))
+        {
+            var (year, preferredSequence) = ParseExistingJobNumber(job.JobNumber, job.CreatedOn);
+            if (!usedSequencesByYear.TryGetValue(year, out var usedSequences))
+            {
+                usedSequences = [];
+                usedSequencesByYear[year] = usedSequences;
+            }
+
+            var nextSequence = nextSequenceByYear.TryGetValue(year, out var trackedNextSequence)
+                ? Math.Max(1, trackedNextSequence)
+                : 1;
+
+            var assignedSequence = preferredSequence > 0 && !usedSequences.Contains(preferredSequence)
+                ? preferredSequence
+                : GetNextAvailableSequence(usedSequences, nextSequence);
+
+            usedSequences.Add(assignedSequence);
+            nextSequenceByYear[year] = Math.Max(nextSequence, assignedSequence + 1);
+            job.JobNumber = FormatJobNumber(year, assignedSequence);
+        }
+
+        workspace.Settings.JobNumberCounters = nextSequenceByYear
+            .OrderBy(item => item.Key)
+            .Select(item => new YearSequenceCounter
+            {
+                Year = item.Key,
+                NextSequence = Math.Max(1, item.Value)
+            })
+            .ToList();
+    }
+
+    private static (int Year, int Sequence) ParseExistingJobNumber(string? jobNumber, DateTime createdOn)
+    {
+        if (!string.IsNullOrWhiteSpace(jobNumber))
+        {
+            var trimmed = jobNumber.Trim();
+            var standardMatch = StandardJobNumberPattern.Match(trimmed);
+            if (standardMatch.Success)
+            {
+                var shortYear = int.Parse(standardMatch.Groups["year"].Value, CultureInfo.InvariantCulture);
+                var sequence = int.Parse(standardMatch.Groups["sequence"].Value, CultureInfo.InvariantCulture);
+                return (2000 + shortYear, sequence);
+            }
+
+            var legacyMatch = LegacyJobNumberPattern.Match(trimmed);
+            if (legacyMatch.Success)
+            {
+                var fullYear = int.Parse(legacyMatch.Groups["date"].Value[..4], CultureInfo.InvariantCulture);
+                var sequence = int.Parse(legacyMatch.Groups["sequence"].Value, CultureInfo.InvariantCulture);
+                return (fullYear, sequence);
+            }
+        }
+
+        return (Math.Max(2000, createdOn.Year), 0);
+    }
+
+    private static int GetNextAvailableSequence(HashSet<int> usedSequences, int startingSequence)
+    {
+        var candidate = Math.Max(1, startingSequence);
+        while (usedSequences.Contains(candidate))
+        {
+            candidate++;
+        }
+
+        return candidate;
+    }
+
+    private static string FormatJobNumber(int year, int sequence) =>
+        $"JOB-{(year % 100):00}-{sequence:0000}";
 
     private static void EnsureLaborDistributionRows(BidRecord bid)
     {
@@ -974,6 +1117,20 @@ public sealed class WorkspaceStore(
         RebalanceDistributionColumn(bid.LaborDistribution, line => line.DemoHours, (line, value) => line.DemoHours = value, EstimateMath.GetBidDemoHours(bid));
         RebalanceDistributionColumn(bid.LaborDistribution, line => line.TrimHours, (line, value) => line.TrimHours = value, EstimateMath.GetBidTrimHours(bid));
         RebalanceDistributionColumn(bid.LaborDistribution, line => line.TestHours, (line, value) => line.TestHours = value, EstimateMath.GetBidTestHours(bid));
+    }
+
+    private void SyncLinkedJobBaseline(JobRecord job)
+    {
+        if (job.SourceBidId is not null)
+        {
+            var bid = Workspace.Bids.FirstOrDefault(item => item.Id == job.SourceBidId.Value);
+            if (bid is not null)
+            {
+                JobFinancialBuilder.RefreshBaselineFromBid(job, bid);
+            }
+        }
+
+        JobFinancialBuilder.EnsureJobDerivedData(job);
     }
 
     private static void RebalanceDistributionColumn(
@@ -1292,37 +1449,45 @@ public static class EstimateMath
         job.TimeEntries.Sum(entry => entry.Hours);
 
     public static decimal GetJobActualLaborCost(JobRecord job) =>
-        job.TimeEntries.Sum(entry => entry.TotalCost);
+        RoundCurrency(job.TimeEntries.Sum(entry => entry.TotalCost));
 
     public static decimal GetJobActualMaterialCost(JobRecord job) =>
-        job.MaterialPurchases.Sum(purchase => purchase.ActualCost);
+        RoundCurrency(
+            JobFinancialMath.GetTrackedBidDeviceActualCost(job) +
+            JobFinancialMath.GetTrackedJobDeviceActualCost(job) +
+            job.MaterialPurchases.Sum(JobFinancialMath.GetMaterialPurchaseTotal));
+
+    public static decimal GetJobEstimatedCost(JobRecord job) =>
+        RoundCurrency(job.Baseline.EstimatedTotalCost + GetJobApprovedChangeOrderCost(job));
 
     public static decimal GetJobApprovedChangeOrderRevenue(JobRecord job) =>
-        job.ChangeOrders.Where(changeOrder => changeOrder.Approved).Sum(changeOrder => changeOrder.RevenueAmount);
+        RoundCurrency(job.ChangeOrders.Where(changeOrder => changeOrder.Approved).Sum(changeOrder => changeOrder.RevenueAmount));
 
     public static decimal GetJobApprovedChangeOrderCost(JobRecord job) =>
-        job.ChangeOrders.Where(changeOrder => changeOrder.Approved).Sum(changeOrder => changeOrder.EstimatedCostImpact);
+        RoundCurrency(job.ChangeOrders.Where(changeOrder => changeOrder.Approved).Sum(changeOrder => changeOrder.EstimatedCostImpact));
 
     public static decimal GetJobRevenue(JobRecord job) =>
-        job.Baseline.OriginalRevenue + GetJobApprovedChangeOrderRevenue(job);
+        RoundCurrency(job.Baseline.OriginalRevenue + GetJobApprovedChangeOrderRevenue(job));
 
     public static decimal GetJobBilledCommitments(JobRecord job) =>
-        job.Commitments.Sum(commitment => commitment.BilledAmount);
+        RoundCurrency(job.Commitments.Sum(commitment => commitment.BilledAmount));
 
     public static decimal GetJobCommittedExposure(JobRecord job) =>
-        GetJobActualLaborCost(job) +
-        GetJobActualMaterialCost(job) +
-        GetJobApprovedChangeOrderCost(job) +
-        job.Commitments.Sum(commitment => Math.Max(commitment.CommittedAmount, commitment.BilledAmount));
+        RoundCurrency(
+            GetJobActualLaborCost(job) +
+            GetJobActualMaterialCost(job) +
+            GetJobApprovedChangeOrderCost(job) +
+            job.Commitments.Sum(commitment => Math.Max(commitment.CommittedAmount, commitment.BilledAmount)));
 
     public static decimal GetJobActualCost(JobRecord job) =>
-        GetJobActualLaborCost(job) +
-        GetJobActualMaterialCost(job) +
-        GetJobApprovedChangeOrderCost(job) +
-        GetJobBilledCommitments(job);
+        RoundCurrency(
+            GetJobActualLaborCost(job) +
+            GetJobActualMaterialCost(job) +
+            GetJobApprovedChangeOrderCost(job) +
+            GetJobBilledCommitments(job));
 
     public static decimal GetJobProfit(JobRecord job) =>
-        GetJobRevenue(job) - GetJobActualCost(job);
+        RoundCurrency(GetJobRevenue(job) - GetJobActualCost(job));
 
     public static decimal GetJobMarginPercent(JobRecord job)
     {
@@ -1331,10 +1496,10 @@ public static class EstimateMath
     }
 
     public static decimal GetJobBilledRevenue(JobRecord job) =>
-        job.ScheduleOfValues.Sum(item => item.BilledToDate);
+        RoundCurrency(job.ScheduleOfValues.Sum(item => item.BilledToDate));
 
     public static decimal GetJobCollectedRevenue(JobRecord job) =>
-        job.ScheduleOfValues.Sum(item => item.PaidToDate);
+        RoundCurrency(job.ScheduleOfValues.Sum(item => item.PaidToDate));
 
     public static decimal GetServiceContractValue(ServiceAgreement agreement) =>
         agreement.MonthlyMonitoringAmount * agreement.ContractMonths;

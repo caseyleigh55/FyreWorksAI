@@ -17,13 +17,21 @@ else
     var currentClient = CurrentClient;
 
     <section class="workspace-grid">
-        <aside class="directory-panel">
+        <button class="workspace-flag" type="button" @onclick="ToggleDirectoryPanel" title="Toggle Service panel">Service</button>
+        @if (IsDirectoryPanelExpanded)
+        {
+            <button class="workspace-drawer-scrim" type="button" @onclick="CloseDirectoryPanel" aria-label="Close Service panel"></button>
+        }
+        <aside class="directory-panel directory-drawer @(IsDirectoryPanelExpanded ? "directory-drawer-open" : null)">
             <div class="panel-header">
                 <div>
                     <p class="eyebrow">Monitoring + service</p>
                     <h2>Service</h2>
                 </div>
-                <button class="button" type="button" @onclick="CreateAgreementAsync">New Agreement</button>
+                <div class="panel-header-actions">
+                    <button class="button" type="button" @onclick="CreateAgreementAsync">New Agreement</button>
+                    <button class="button button-secondary" type="button" @onclick="CloseDirectoryPanel">Collapse</button>
+                </div>
             </div>
 
             <div class="directory-group">
@@ -456,6 +464,7 @@ else
     private Guid? SelectedAgreementId { get; set; }
     private Guid? SelectedQuoteId { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
+    private bool IsDirectoryPanelExpanded { get; set; }
 
     private ServiceAgreement? SelectedAgreement =>
         SelectedAgreementId is null
@@ -504,6 +513,7 @@ else
     {
         SelectedAgreementId = agreementId;
         SelectedQuoteId = SelectedAgreement?.Quotes.FirstOrDefault()?.Id;
+        CloseDirectoryPanel();
         StatusMessage = string.Empty;
     }
 
@@ -512,9 +522,16 @@ else
         var agreement = Store.CreateServiceAgreement();
         SelectedAgreementId = agreement.Id;
         SelectedQuoteId = agreement.Quotes.FirstOrDefault()?.Id;
+        CloseDirectoryPanel();
         StatusMessage = "New service agreement created.";
         await Store.SaveAsync();
     }
+
+    private void ToggleDirectoryPanel() =>
+        IsDirectoryPanelExpanded = !IsDirectoryPanelExpanded;
+
+    private void CloseDirectoryPanel() =>
+        IsDirectoryPanelExpanded = false;
 
     private void CreateClientForAgreement()
     {
