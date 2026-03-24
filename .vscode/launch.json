@@ -1,7 +1,4 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
@@ -10,6 +7,14 @@
             "name": "Launch Chrome against localhost",
             "url": "http://localhost:8080",
             "webRoot": "${workspaceFolder}"
+        },
+        {
+            "name": "C#: FyreWorksAI [Windows Machine]",
+            "type": "dotnet",
+            "request": "launch",
+            "projectPath": "${workspaceFolder}\\FyreWorksAI.App\\FyreWorksAI\\FyreWorksAI.csproj",
+            "launchSettingsFilePath": "${workspaceFolder}\\FyreWorksAI.App\\FyreWorksAI\\Properties\\launchSettings.json",
+            "launchSettingsProfile": "Windows Machine"
         }
     ]
 }

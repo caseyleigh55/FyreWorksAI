@@ -1,5 +1,31 @@
 # FyreWorksAI Project Notes
 
+## C# code creation and refactoring
+C# code shall follow the SOLID principles for both creation and refactoring
+The acronym SOLID stands for:
+S - Single Responsibility Principle (SRP): A class should have only one reason to change, focusing on a single, well-defined job.
+O - Open/Closed Principle (OCP): Software entities should be open for extension but closed for modification, often achieved through interfaces.
+L - Liskov Substitution Principle (LSP): Derived classes must be substitutable for their base classes without altering program correctness.
+I - Interface Segregation Principle (ISP): Clients should not depend on interfaces they do not use, favoring smaller, specific interfaces over large ones.
+D - Dependency Inversion Principle (DIP): High-level modules should depend on abstractions, not low-level modules, enhancing flexibility.
+
+file structures must be maintained and namespaces properly attributed, if a file would be placed in a folder within a project, the namespace should reflect the folder it is in and not just be included within the projects namespace.
+
+all names used for files, methods, properties, folders etc. shall be explicitly clear as to their intent so as to be understood at a glance what is intended/happening
+
+xaml comments are required and should contain a brief description about the methods, classes, interfaces etc. that the comments are referencing
+
+headers are to be used to delineate different sections and the code for those sections should be consolidated as able into the section it pertains to.
+headers will be in this format
+//******************************//
+//********** Header ************//
+//******************************//
+
+sections are file specific so if for instance a page has totals, items, invoices, attachments etc. and the flow is top down with totals at the top of the page and attachments at the bottom, each section will have a header and contain the pertinent code relating to that section.
+
+classes, interfaces, helpers, extensions etc. are to be their own files in related folders with proper explicit naming and namespace attributions in accordance to the SOLID principles.
+
+
 ## Overview
 
 FyreWorksAI is a commercial fire alarm operations app for managing the full office workflow around:
