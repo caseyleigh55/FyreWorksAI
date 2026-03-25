@@ -102,9 +102,14 @@ button:disabled {
 }
 
 .shell {
+    --current-topbar-height: var(--topbar-height);
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+}
+
+.shell.shell-with-page-sections {
+    --current-topbar-height: 7.6rem;
 }
 
 .shell-topbar {
@@ -120,6 +125,12 @@ button:disabled {
     background: rgba(7, 13, 18, 0.92);
     border-bottom: 1px solid var(--line);
     backdrop-filter: blur(18px);
+}
+
+.topbar-center {
+    display: grid;
+    gap: 0.5rem;
+    min-width: 0;
 }
 
 .topbar-brand {
@@ -152,6 +163,40 @@ button:disabled {
     background: rgba(255, 122, 47, 0.12);
     color: var(--text);
     transform: translateY(-1px);
+}
+
+.shell-page-section-nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.45rem;
+}
+
+.shell-page-section-link {
+    min-height: 2rem;
+    padding: 0 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 122, 47, 0.2);
+    background: rgba(255, 122, 47, 0.06);
+    color: var(--accent);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.shell-page-section-link:hover,
+.shell-page-section-link:focus-visible {
+    background: rgba(255, 122, 47, 0.12);
+    border-color: rgba(255, 122, 47, 0.32);
+    transform: translateY(-1px);
+}
+
+.shell-page-section-link.shell-page-section-link-active {
+    background: rgba(102, 118, 55, 0.82);
+    border-color: rgba(163, 182, 92, 0.42);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .shell-main {
@@ -407,7 +452,7 @@ button:disabled {
 
 .workspace-drawer-scrim {
     position: fixed;
-    inset: var(--topbar-height) 0 0 0;
+    inset: var(--current-topbar-height) 0 0 0;
     z-index: 54;
     border: none;
     background: rgba(3, 8, 11, 0.58);
@@ -415,11 +460,11 @@ button:disabled {
 
 .directory-drawer {
     position: fixed;
-    top: calc(var(--topbar-height) + 1rem);
+    top: calc(var(--current-topbar-height) + 1rem);
     left: 1rem;
     z-index: 60;
     width: min(21rem, calc(100vw - 2rem));
-    max-height: calc(100vh - var(--topbar-height) - 2rem);
+    max-height: calc(100vh - var(--current-topbar-height) - 2rem);
     overflow-y: auto;
     transform: translateX(-120%);
     opacity: 0;
@@ -976,6 +1021,10 @@ label span {
     padding: 1rem 1.2rem;
 }
 
+.page-section-anchor {
+    scroll-margin-top: calc(var(--current-topbar-height) + 1rem);
+}
+
 @media (max-width: 1200px) {
     .summary-grid,
     .job-summary-grid,
@@ -993,13 +1042,23 @@ label span {
 }
 
 @media (max-width: 860px) {
+    .shell.shell-with-page-sections {
+        --current-topbar-height: 10.5rem;
+    }
+
     .shell-topbar {
         grid-template-columns: 1fr;
         justify-items: start;
         padding: 0.85rem 1rem;
     }
 
+    .topbar-center,
     .shell-nav {
+        width: 100%;
+    }
+
+    .shell-nav,
+    .shell-page-section-nav {
         justify-content: start;
     }
 

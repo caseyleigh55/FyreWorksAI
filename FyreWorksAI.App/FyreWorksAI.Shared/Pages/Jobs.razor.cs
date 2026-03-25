@@ -8,14 +8,60 @@ namespace FyreWorksAI.Shared.Pages;
 //******************************//
 //******** Jobs******************//
 //******************************//
-public partial class Jobs
+public partial class Jobs : IDisposable
 {
+    private const string PageSectionNavigationOwnerKey = "jobs";
+    private const string ProjectContactsSectionId = "project-contacts";
+    private const string ClientFacingSectionId = "client-facing";
+    private const string BaselineReferenceSectionId = "baseline-reference";
+    private const string ScheduleOfValuesSectionId = "schedule-of-values";
+    private const string TimeEntriesSectionId = "time-entries";
+    private const string BidDevicesSectionId = "bid-devices";
+    private const string JobDevicesSectionId = "job-devices";
+    private const string InvoicesSectionId = "invoices";
+    private const string ChangeOrdersSectionId = "change-orders";
+    private const string CommitmentsSectionId = "commitments";
+    private const string ProjectNotesSectionId = "project-notes";
+    private const string ProjectContactsElementId = "jobs-project-contacts-section";
+    private const string ClientFacingElementId = "jobs-client-facing-section";
+    private const string BaselineReferenceElementId = "jobs-baseline-reference-section";
+    private const string ScheduleOfValuesElementId = "jobs-schedule-of-values-section";
+    private const string TimeEntriesElementId = "jobs-time-entries-section";
+    private const string BidDevicesElementId = "jobs-bid-devices-section";
+    private const string JobDevicesElementId = "jobs-job-devices-section";
+    private const string InvoicesElementId = "jobs-invoices-section";
+    private const string ChangeOrdersElementId = "jobs-change-orders-section";
+    private const string CommitmentsElementId = "jobs-commitments-section";
+    private const string ProjectNotesElementId = "jobs-project-notes-section";
 
     [SupplyParameterFromQuery(Name = "selected")]
     public Guid? RequestedJobId { get; set; }
 
+    [Inject]
+    private IJSRuntime JsRuntime { get; set; } = default!;
+
+    [Inject]
+    private PageSectionNavigationState PageSectionNavigationState { get; set; } = default!;
+
+    private static readonly IReadOnlyList<PageSectionNavigationItem> JobPageSectionNavigationItems =
+    [
+        new(ProjectContactsSectionId, ProjectContactsElementId, "Project Contacts"),
+        new(ClientFacingSectionId, ClientFacingElementId, "Exclusions + Proposal"),
+        new(BaselineReferenceSectionId, BaselineReferenceElementId, "Baseline Reference"),
+        new(ScheduleOfValuesSectionId, ScheduleOfValuesElementId, "Schedule Of Values"),
+        new(TimeEntriesSectionId, TimeEntriesElementId, "Time Entries"),
+        new(BidDevicesSectionId, BidDevicesElementId, "Bid Devices"),
+        new(JobDevicesSectionId, JobDevicesElementId, "Job Devices"),
+        new(InvoicesSectionId, InvoicesElementId, "Invoices"),
+        new(ChangeOrdersSectionId, ChangeOrdersElementId, "Change Orders"),
+        new(CommitmentsSectionId, CommitmentsElementId, "Commitments"),
+        new(ProjectNotesSectionId, ProjectNotesElementId, "Notes")
+    ];
+
     private Guid? SelectedJobId { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
+    private string? ActiveMainSectionId { get; set; }
+    private string? PendingSectionElementId { get; set; }
     private static readonly IReadOnlyList<string> TimeEntryLaborClasses =
     [
         nameof(PersonnelType.Journeyman),
@@ -76,6 +122,18 @@ public partial class Jobs
         ApplySelection();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (string.IsNullOrWhiteSpace(PendingSectionElementId))
+        {
+            return;
+        }
+
+        var sectionElementId = PendingSectionElementId;
+        PendingSectionElementId = null;
+        await JsRuntime.InvokeVoidAsync("fyreWorksPageSectionNavigation.scrollToSection", sectionElementId);
+    }
+
     protected override void OnParametersSet()
     {
         if (Store.IsInitialized)
@@ -106,17 +164,29 @@ public partial class Jobs
                 NormalizeTimeEntry(entry);
             }
         }
+
+        if (SelectedJob is null)
+        {
+            ActiveMainSectionId = null;
+            ExpandedInvoiceIds.Clear();
+            ExpandedChangeOrderIds.Clear();
+            ExpandedScheduleValueIds.Clear();
+        }
+
+        RefreshPageSectionNavigation();
     }
 
     private void SelectJob(Guid jobId)
     {
         SelectedJobId = jobId;
-        ExpandedSectionIds.Clear();
+        CollapseAllSections();
         ExpandedInvoiceIds.Clear();
         ExpandedChangeOrderIds.Clear();
         ExpandedScheduleValueIds.Clear();
         CloseDirectoryPanel();
+        PendingSectionElementId = null;
         StatusMessage = string.Empty;
+        RefreshPageSectionNavigation();
         NavigationManager.NavigateTo($"/jobs?selected={jobId}", replace: true);
     }
 
@@ -127,8 +197,11 @@ public partial class Jobs
     {
         var job = Store.CreateBlankJob();
         SelectedJobId = job.Id;
+        CollapseAllSections();
         CloseDirectoryPanel();
+        PendingSectionElementId = null;
         StatusMessage = "New job created.";
+        RefreshPageSectionNavigation();
         await Store.SaveAsync();
         NavigationManager.NavigateTo($"/jobs?selected={job.Id}", replace: true);
     }
@@ -170,6 +243,9 @@ public partial class Jobs
         }
 
         SelectedJobId = GetNextJobId();
+        CollapseAllSections();
+        PendingSectionElementId = null;
+        RefreshPageSectionNavigation();
         await Store.SaveAsync();
         StatusMessage = "Job deleted.";
         NavigationManager.NavigateTo(
@@ -326,12 +402,61 @@ public partial class Jobs
             _ => 9
         };
 
+    private Task OnPageSectionNavigationRequestedAsync(PageSectionNavigationItem item)
+    {
+        CollapseAllSections();
+        ExpandSection(item.SectionId);
+        PendingSectionElementId = item.ElementId;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private void RefreshPageSectionNavigation()
+    {
+        if (SelectedJob is null)
+        {
+            PageSectionNavigationState.Clear(PageSectionNavigationOwnerKey);
+            return;
+        }
+
+        PageSectionNavigationState.Configure(
+            PageSectionNavigationOwnerKey,
+            JobPageSectionNavigationItems,
+            OnPageSectionNavigationRequestedAsync,
+            ActiveMainSectionId);
+    }
+
+    private void SetActiveMainSection(string? sectionId)
+    {
+        ActiveMainSectionId = sectionId;
+        PageSectionNavigationState.SetActiveSection(PageSectionNavigationOwnerKey, sectionId);
+    }
+
+    private void CollapseAllSections()
+    {
+        ExpandedSectionIds.Clear();
+        SetActiveMainSection(null);
+    }
+
+    private void ExpandSection(string sectionId)
+    {
+        ExpandedSectionIds.Add(sectionId);
+        SetActiveMainSection(sectionId);
+    }
+
     private void ToggleSection(string sectionId)
     {
         if (!ExpandedSectionIds.Add(sectionId))
         {
             ExpandedSectionIds.Remove(sectionId);
+            if (string.Equals(ActiveMainSectionId, sectionId, StringComparison.OrdinalIgnoreCase))
+            {
+                SetActiveMainSection(null);
+            }
+
+            return;
         }
+
+        SetActiveMainSection(sectionId);
     }
 
     private void ToggleDirectoryPanel() =>
@@ -515,7 +640,7 @@ public partial class Jobs
         entry.Hours = GetTimeEntryAvailableHours(entry);
         ApplyTimeEntryTemplateRate(entry);
         SelectedJob.TimeEntries.Add(entry);
-        ExpandedSectionIds.Add("time-entries");
+        ExpandSection(TimeEntriesSectionId);
     }
 
     private void RemoveTimeEntry(Guid entryId) =>
@@ -608,7 +733,7 @@ public partial class Jobs
 
         NormalizeJobDevice(item);
         SelectedJob.JobDevices.Add(item);
-        ExpandedSectionIds.Add("job-devices");
+        ExpandSection(JobDevicesSectionId);
     }
 
     private void RemoveJobDevice(Guid itemId) =>
@@ -650,7 +775,7 @@ public partial class Jobs
         };
 
         SelectedJob.Invoices.Add(invoice);
-        ExpandedSectionIds.Add("invoices");
+        ExpandSection(InvoicesSectionId);
         ExpandedInvoiceIds.Add(invoice.Id);
     }
 
@@ -715,7 +840,7 @@ public partial class Jobs
 
         var changeOrder = new ChangeOrderRecord { Title = "Change Order" };
         SelectedJob.ChangeOrders.Add(changeOrder);
-        ExpandedSectionIds.Add("change-orders");
+        ExpandSection(ChangeOrdersSectionId);
         ExpandedChangeOrderIds.Add(changeOrder.Id);
         SyncJobFinancials();
     }
@@ -768,7 +893,7 @@ public partial class Jobs
 
         SelectedJob.ScheduleOfValues.Add(item);
 
-        ExpandedSectionIds.Add("schedule-of-values");
+        ExpandSection(ScheduleOfValuesSectionId);
         ExpandedScheduleValueIds.Add(item.Id);
         SyncJobFinancials();
     }
@@ -974,7 +1099,7 @@ public partial class Jobs
             ScheduleValueItemId = SelectedJob.ScheduleOfValues.FirstOrDefault()?.Id
         });
 
-        ExpandedSectionIds.Add("commitments");
+        ExpandSection(CommitmentsSectionId);
         var firstScheduleValueId = SelectedJob.ScheduleOfValues.FirstOrDefault()?.Id;
         if (firstScheduleValueId is not null)
         {
@@ -1044,4 +1169,9 @@ public partial class Jobs
 
     private static Guid? ParseNullableGuid(string? value) =>
         Guid.TryParse(value, out var parsed) ? parsed : null;
+
+    public void Dispose()
+    {
+        PageSectionNavigationState.Clear(PageSectionNavigationOwnerKey);
+    }
 }

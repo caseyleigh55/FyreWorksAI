@@ -123,7 +123,7 @@ else
             }
             else
             {
-                <section class="panel">
+                <section id="@ProjectContactsElementId" class="panel page-section-anchor">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Job editor</p>
@@ -209,7 +209,7 @@ else
                     </article>
                 </section>
 
-                <section class="panel">
+                <section id="@ScheduleOfValuesElementId" class="panel page-section-anchor">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Client + site</p>
@@ -217,11 +217,11 @@ else
                         </div>
                         <div class="panel-header-actions">
                             <button class="button button-secondary" type="button" @onclick="CreateClientForJob">New Client</button>
-                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection("project-contacts")'>@(IsSectionExpanded("project-contacts") ? "Collapse" : "Expand")</button>
+                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ProjectContactsSectionId)'>@(IsSectionExpanded(ProjectContactsSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
 
-                    @if (IsSectionExpanded("project-contacts"))
+                    @if (IsSectionExpanded(ProjectContactsSectionId))
                     {
                         @if (currentClient is null)
                         {
@@ -290,15 +290,15 @@ else
                     }
                 </section>
 
-                <section class="panel">
+                <section id="@ClientFacingElementId" class="panel page-section-anchor">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Client Facing Copy</p>
                             <h3>Exclusions + Proposal</h3>
                         </div>
-                        <button class="button button-secondary" type="button" @onclick='() => ToggleSection("client-facing")'>@(IsSectionExpanded("client-facing") ? "Collapse" : "Expand")</button>
+                        <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ClientFacingSectionId)'>@(IsSectionExpanded(ClientFacingSectionId) ? "Collapse" : "Expand")</button>
                     </div>
-                    @if (IsSectionExpanded("client-facing"))
+                    @if (IsSectionExpanded(ClientFacingSectionId))
                     {
                         <div class="form-grid">
                             <label class="full-width">
@@ -317,7 +317,7 @@ else
                     }
                 </section>
 
-                <section class="panel accent">
+                <section id="@BaselineReferenceElementId" class="panel accent page-section-anchor">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Original estimate</p>
@@ -332,7 +332,7 @@ else
                             {
                                 <span class="pill">From @SelectedJob.Baseline.SourceBidNumber</span>
                             }
-                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection("baseline-reference")'>@(IsSectionExpanded("baseline-reference") ? "Collapse" : "Expand")</button>
+                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection(BaselineReferenceSectionId)'>@(IsSectionExpanded(BaselineReferenceSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
 
@@ -342,7 +342,7 @@ else
                         <span>Total Hours @EstimateMath.GetHours(GetBaselineTotalHours())</span>
                     </div>
 
-                    @if (IsSectionExpanded("baseline-reference"))
+                    @if (IsSectionExpanded(BaselineReferenceSectionId))
                     {
                         @if (!string.IsNullOrWhiteSpace(SelectedJob.Baseline.ScopeSummary))
                         {
@@ -440,7 +440,7 @@ else
                     }
                 </section>
 
-                <section class="panel">
+                <section id="@JobDevicesElementId" class="panel page-section-anchor">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Progress billing</p>
@@ -448,7 +448,7 @@ else
                         </div>
                         <div class="panel-header-actions">
                             <button class="button button-secondary" type="button" @onclick="AddScheduleValue">Add Line</button>
-                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection("schedule-of-values")'>@(IsSectionExpanded("schedule-of-values") ? "Collapse" : "Expand")</button>
+                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ScheduleOfValuesSectionId)'>@(IsSectionExpanded(ScheduleOfValuesSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
 
@@ -458,7 +458,7 @@ else
                     }
                     else
                     {
-                        @if (IsSectionExpanded("schedule-of-values"))
+                        @if (IsSectionExpanded(ScheduleOfValuesSectionId))
                         {
                             <div class="summary-grid">
                                 <article class="summary-card">
@@ -658,7 +658,7 @@ else
                     }
                 </section>
 
-                <section class="panel">
+                <section id="@TimeEntriesElementId" class="panel page-section-anchor">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Actual labor</p>
@@ -666,7 +666,7 @@ else
                         </div>
                         <div class="panel-header-actions">
                             <button class="button button-secondary" type="button" @onclick="AddTimeEntry">Add Time</button>
-                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection("time-entries")'>@(IsSectionExpanded("time-entries") ? "Collapse" : "Expand")</button>
+                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection(TimeEntriesSectionId)'>@(IsSectionExpanded(TimeEntriesSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
 
@@ -681,7 +681,7 @@ else
                             <span>Total Cost @EstimateMath.GetCurrency(EstimateMath.GetJobActualLaborCost(SelectedJob))</span>
                         </div>
 
-                        @if (IsSectionExpanded("time-entries"))
+                        @if (IsSectionExpanded(TimeEntriesSectionId))
                         {
                             <table class="data-table wide">
                                 <thead>
@@ -732,13 +732,13 @@ else
                     }
                 </section>
 
-                <section class="panel">
+                <section id="@BidDevicesElementId" class="panel page-section-anchor">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Original estimate detail</p>
                             <h3>Bid Devices</h3>
                         </div>
-                        <button class="button button-secondary" type="button" @onclick='() => ToggleSection("bid-devices")'>@(IsSectionExpanded("bid-devices") ? "Collapse" : "Expand")</button>
+                        <button class="button button-secondary" type="button" @onclick='() => ToggleSection(BidDevicesSectionId)'>@(IsSectionExpanded(BidDevicesSectionId) ? "Collapse" : "Expand")</button>
                     </div>
 
                     @if (bidDeviceItems.Count == 0)
@@ -755,7 +755,7 @@ else
                             <span>Sale Variance @EstimateMath.GetCurrency(GetBidDeviceSaleVarianceTotal(bidDeviceTotalItems))</span>
                         </div>
 
-                        @if (IsSectionExpanded("bid-devices"))
+                        @if (IsSectionExpanded(BidDevicesSectionId))
                         {
                             <table class="data-table wide">
                                 <thead>
@@ -877,7 +877,7 @@ else
                     }
                 </section>
 
-                <section class="panel">
+                <section id="@CommitmentsElementId" class="panel page-section-anchor">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Added scope tracking</p>
@@ -885,7 +885,7 @@ else
                         </div>
                         <div class="panel-header-actions">
                             <button class="button button-secondary" type="button" @onclick="AddJobDevice">Add Device</button>
-                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection("job-devices")'>@(IsSectionExpanded("job-devices") ? "Collapse" : "Expand")</button>
+                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection(JobDevicesSectionId)'>@(IsSectionExpanded(JobDevicesSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
 
@@ -902,7 +902,7 @@ else
                             <span>Variance @EstimateMath.GetCurrency(jobDeviceItems.Sum(item => item.ActualCost - item.EstimatedCost))</span>
                         </div>
 
-                        @if (IsSectionExpanded("job-devices"))
+                        @if (IsSectionExpanded(JobDevicesSectionId))
                         {
                             <table class="data-table wide">
                                 <thead>
@@ -956,7 +956,7 @@ else
                     }
                 </section>
 
-                <section class="panel">
+                <section id="@InvoicesElementId" class="panel page-section-anchor">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Invoice tracking</p>
@@ -964,7 +964,7 @@ else
                         </div>
                         <div class="panel-header-actions">
                             <button class="button button-secondary" type="button" @onclick="AddInvoice">Add Invoice</button>
-                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection("invoices")'>@(IsSectionExpanded("invoices") ? "Collapse" : "Expand")</button>
+                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection(InvoicesSectionId)'>@(IsSectionExpanded(InvoicesSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
 
@@ -980,7 +980,7 @@ else
                             <span>Tax / Remainder @EstimateMath.GetCurrency(invoiceItems.Sum(item => JobFinancialMath.GetInvoiceAutoRemainder(SelectedJob, item)))</span>
                         </div>
 
-                        @if (IsSectionExpanded("invoices"))
+                        @if (IsSectionExpanded(InvoicesSectionId))
                         {
                             <div class="field-card-list">
                                 @foreach (var invoice in invoiceItems)
@@ -1056,7 +1056,7 @@ else
                     }
                 </section>
 
-                <section class="panel">
+                <section id="@ChangeOrdersElementId" class="panel page-section-anchor">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Sale adds</p>
@@ -1064,7 +1064,7 @@ else
                         </div>
                         <div class="panel-header-actions">
                             <button class="button button-secondary" type="button" @onclick="AddChangeOrder">Add Change Order</button>
-                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection("change-orders")'>@(IsSectionExpanded("change-orders") ? "Collapse" : "Expand")</button>
+                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ChangeOrdersSectionId)'>@(IsSectionExpanded(ChangeOrdersSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
 
@@ -1080,7 +1080,7 @@ else
                             <span>Approved lines sync into the schedule of values automatically.</span>
                         </div>
 
-                        @if (IsSectionExpanded("change-orders"))
+                        @if (IsSectionExpanded(ChangeOrdersSectionId))
                         {
                             <div class="field-card-list">
                                 @foreach (var changeOrder in SelectedJob.ChangeOrders.OrderByDescending(item => item.ApprovedOn).ThenBy(item => item.Title))
@@ -1150,7 +1150,7 @@ else
                         </div>
                         <div class="panel-header-actions">
                             <button class="button button-secondary" type="button" @onclick="AddCommitment">Add Commitment</button>
-                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection("commitments")'>@(IsSectionExpanded("commitments") ? "Collapse" : "Expand")</button>
+                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection(CommitmentsSectionId)'>@(IsSectionExpanded(CommitmentsSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
 
@@ -1166,7 +1166,7 @@ else
                             <span>Paid @EstimateMath.GetCurrency(SelectedJob.Commitments.Sum(item => item.PaidAmount))</span>
                         </div>
 
-                        @if (IsSectionExpanded("commitments"))
+                        @if (IsSectionExpanded(CommitmentsSectionId))
                         {
                             <table class="data-table wide">
                                 <thead>
@@ -1224,15 +1224,15 @@ else
 
                 <AttachmentManager Attachments="SelectedJob.Attachments" Area="jobs" OwnerId="SelectedJob.Id" />
 
-                <section class="panel">
+                <section id="@ProjectNotesElementId" class="panel page-section-anchor">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Project notes</p>
                             <h3>Notes</h3>
                         </div>
-                        <button class="button button-secondary" type="button" @onclick='() => ToggleSection("project-notes")'>@(IsSectionExpanded("project-notes") ? "Collapse" : "Expand")</button>
+                        <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ProjectNotesSectionId)'>@(IsSectionExpanded(ProjectNotesSectionId) ? "Collapse" : "Expand")</button>
                     </div>
-                    @if (IsSectionExpanded("project-notes"))
+                    @if (IsSectionExpanded(ProjectNotesSectionId))
                     {
                         <label class="full-width">
                             <span>Notes</span>

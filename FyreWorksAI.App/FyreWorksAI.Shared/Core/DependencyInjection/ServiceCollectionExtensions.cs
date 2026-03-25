@@ -10,6 +10,7 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddFyreWorksCore(this IServiceCollection services)
     {
+        services.AddScoped<PageSectionNavigationState>();
         services.AddSingleton<IWorkspaceStorage, TextFileWorkspaceStorage>();
         services.AddSingleton<WorkspaceStore>();
         return services;

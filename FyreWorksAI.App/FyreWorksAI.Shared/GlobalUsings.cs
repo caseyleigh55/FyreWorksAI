@@ -13,5 +13,6 @@ global using FyreWorksAI.Shared.Core.Models.Settings;
 global using FyreWorksAI.Shared.Core.Models.Templates;
 global using FyreWorksAI.Shared.Core.Models.Workspace;
 global using FyreWorksAI.Shared.Core.Services.Attachments;
+global using FyreWorksAI.Shared.Core.Services.Navigation;
 global using FyreWorksAI.Shared.Core.Services.Storage;
 global using FyreWorksAI.Shared.Core.Services.Workspace;

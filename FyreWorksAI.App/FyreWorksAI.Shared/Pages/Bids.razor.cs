@@ -8,14 +8,67 @@ namespace FyreWorksAI.Shared.Pages;
 //******************************//
 //******** Bids******************//
 //******************************//
-public partial class Bids
+public partial class Bids : IDisposable
 {
+    private const string PageSectionNavigationOwnerKey = "bids";
+    private const string ContactBillingSectionId = "contact-billing";
+    private const string PricingSectionId = "pricing";
+    private const string SiteInfoSectionId = "site-info";
+    private const string ExclusionsSectionId = "exclusions";
+    private const string ProposalSectionId = "proposal";
+    private const string FieldLaborSectionId = "field-labor";
+    private const string OfficeScopeSectionId = "office-scope";
+    private const string EngineeringScopeSectionId = "engineering-scope";
+    private const string DemoScopeSectionId = "demo-scope";
+    private const string ComponentsSectionId = "components";
+    private const string WireItemsSectionId = "wire-items";
+    private const string MaterialItemsSectionId = "material-items";
+    private const string BidNotesSectionId = "bid-notes";
+    private const string ContactBillingElementId = "bids-contact-billing-section";
+    private const string PricingElementId = "bids-pricing-section";
+    private const string SiteInfoElementId = "bids-site-info-section";
+    private const string ExclusionsElementId = "bids-exclusions-section";
+    private const string ProposalElementId = "bids-proposal-section";
+    private const string FieldLaborElementId = "bids-field-labor-section";
+    private const string OfficeScopeElementId = "bids-office-scope-section";
+    private const string EngineeringScopeElementId = "bids-engineering-scope-section";
+    private const string DemoScopeElementId = "bids-demo-scope-section";
+    private const string ComponentsElementId = "bids-components-section";
+    private const string WireItemsElementId = "bids-wire-items-section";
+    private const string MaterialItemsElementId = "bids-material-items-section";
+    private const string BidNotesElementId = "bids-notes-section";
 
     [SupplyParameterFromQuery(Name = "selected")]
     public Guid? RequestedBidId { get; set; }
 
+    [Inject]
+    private IJSRuntime JsRuntime { get; set; } = default!;
+
+    [Inject]
+    private PageSectionNavigationState PageSectionNavigationState { get; set; } = default!;
+
+    private static readonly IReadOnlyList<PageSectionNavigationItem> BidPageSectionNavigationItems =
+    [
+        new(ContactBillingSectionId, ContactBillingElementId, "Contact + Billing"),
+        new(PricingSectionId, PricingElementId, "Pricing"),
+        new(SiteInfoSectionId, SiteInfoElementId, "Site Info"),
+        new(ExclusionsSectionId, ExclusionsElementId, "Exclusions"),
+        new(ProposalSectionId, ProposalElementId, "Proposal"),
+        new(FieldLaborSectionId, FieldLaborElementId, "Field Labor"),
+        new(OfficeScopeSectionId, OfficeScopeElementId, "Office Scope"),
+        new(EngineeringScopeSectionId, EngineeringScopeElementId, "Engineering"),
+        new(DemoScopeSectionId, DemoScopeElementId, "Demo Scope"),
+        new(ComponentsSectionId, ComponentsElementId, "Components"),
+        new(WireItemsSectionId, WireItemsElementId, "Wire"),
+        new(MaterialItemsSectionId, MaterialItemsElementId, "Material"),
+        new(BidNotesSectionId, BidNotesElementId, "Notes")
+    ];
+
     private Guid? SelectedBidId { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
+    private string? ActiveMainSectionId { get; set; }
+    private string? PendingSectionElementId { get; set; }
+    private HashSet<string> ExpandedSectionIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<Guid> ExpandedComponentIds { get; } = [];
     private bool IsDirectoryPanelExpanded { get; set; }
 
@@ -27,6 +80,18 @@ public partial class Bids
     {
         await Store.InitializeAsync();
         ApplySelection();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (string.IsNullOrWhiteSpace(PendingSectionElementId))
+        {
+            return;
+        }
+
+        var sectionElementId = PendingSectionElementId;
+        PendingSectionElementId = null;
+        await JsRuntime.InvokeVoidAsync("fyreWorksPageSectionNavigation.scrollToSection", sectionElementId);
     }
 
     protected override void OnParametersSet()
@@ -47,13 +112,28 @@ public partial class Bids
         {
             SelectedBidId = Store.Workspace.Bids.FirstOrDefault()?.Id;
         }
+
+        if (SelectedBid is not null)
+        {
+            ExpandedComponentIds.RemoveWhere(componentId => SelectedBid.Components.All(component => component.Id != componentId));
+        }
+        else
+        {
+            ExpandedComponentIds.Clear();
+            CollapseAllSections();
+        }
+
+        RefreshPageSectionNavigation();
     }
 
     private void SelectBid(Guid bidId)
     {
         SelectedBidId = bidId;
+        CollapseAllSections();
         CloseDirectoryPanel();
+        PendingSectionElementId = null;
         StatusMessage = string.Empty;
+        RefreshPageSectionNavigation();
         NavigationManager.NavigateTo($"/bids?selected={bidId}", replace: true);
     }
 
@@ -64,8 +144,11 @@ public partial class Bids
     {
         var bid = Store.CreateBid();
         SelectedBidId = bid.Id;
+        CollapseAllSections();
         CloseDirectoryPanel();
+        PendingSectionElementId = null;
         StatusMessage = "New bid created.";
+        RefreshPageSectionNavigation();
         await Store.SaveAsync();
         NavigationManager.NavigateTo($"/bids?selected={bid.Id}", replace: true);
     }
@@ -104,7 +187,10 @@ public partial class Bids
         }
 
         SelectedBidId = GetNextBidId();
+        CollapseAllSections();
         ExpandedComponentIds.Clear();
+        PendingSectionElementId = null;
+        RefreshPageSectionNavigation();
         await Store.SaveAsync();
         StatusMessage = "Bid deleted.";
         NavigationManager.NavigateTo(
@@ -173,9 +259,95 @@ public partial class Bids
                     .Select(bid => (Guid?)bid.Id))
             .FirstOrDefault();
 
-    private void AddAdministrativeTask() => SelectedBid?.AdministrativeTasks.Add(new WorkTask { Title = "Administrative Task" });
+    private Task OnPageSectionNavigationRequestedAsync(PageSectionNavigationItem item)
+    {
+        CollapseAllSections();
+        ExpandSection(item.SectionId);
+        PendingSectionElementId = item.ElementId;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private void RefreshPageSectionNavigation()
+    {
+        if (SelectedBid is null)
+        {
+            PageSectionNavigationState.Clear(PageSectionNavigationOwnerKey);
+            return;
+        }
+
+        PageSectionNavigationState.Configure(
+            PageSectionNavigationOwnerKey,
+            BidPageSectionNavigationItems,
+            OnPageSectionNavigationRequestedAsync,
+            ActiveMainSectionId);
+    }
+
+    private void SetActiveMainSection(string? sectionId)
+    {
+        ActiveMainSectionId = sectionId;
+        PageSectionNavigationState.SetActiveSection(PageSectionNavigationOwnerKey, sectionId);
+    }
+
+    private void CollapseAllSections()
+    {
+        ExpandedSectionIds.Clear();
+        SetActiveMainSection(null);
+    }
+
+    private void ExpandSection(string sectionId)
+    {
+        ExpandedSectionIds.Add(sectionId);
+        SetActiveMainSection(sectionId);
+    }
+
+    private void ToggleSection(string sectionId)
+    {
+        if (!ExpandedSectionIds.Add(sectionId))
+        {
+            ExpandedSectionIds.Remove(sectionId);
+            if (string.Equals(ActiveMainSectionId, sectionId, StringComparison.OrdinalIgnoreCase))
+            {
+                SetActiveMainSection(null);
+            }
+
+            return;
+        }
+
+        SetActiveMainSection(sectionId);
+    }
+
+    private bool IsSectionExpanded(string sectionId) =>
+        ExpandedSectionIds.Contains(sectionId);
+
+    private static string GetLinkedJobNavigationLabel(JobRecord job) =>
+        string.IsNullOrWhiteSpace(job.JobNumber)
+            ? "To Job"
+            : $"To {job.JobNumber.Trim()}";
+
+    private void AddAdministrativeTask()
+    {
+        if (SelectedBid is null)
+        {
+            return;
+        }
+
+        SelectedBid.AdministrativeTasks.Add(new WorkTask { Title = "Administrative Task" });
+        ExpandSection(OfficeScopeSectionId);
+    }
+
     private void RemoveAdministrativeTask(Guid taskId) => SelectedBid?.AdministrativeTasks.RemoveAll(task => task.Id == taskId);
-    private void AddEngineeringTask() => SelectedBid?.EngineeringTasks.Add(new WorkTask { Title = "Engineering Task" });
+
+    private void AddEngineeringTask()
+    {
+        if (SelectedBid is null)
+        {
+            return;
+        }
+
+        SelectedBid.EngineeringTasks.Add(new WorkTask { Title = "Engineering Task" });
+        ExpandSection(EngineeringScopeSectionId);
+    }
+
     private void RemoveEngineeringTask(Guid taskId) => SelectedBid?.EngineeringTasks.RemoveAll(task => task.Id == taskId);
 
     private void AddComponent()
@@ -193,6 +365,7 @@ public partial class Bids
             TestMinutes = 0m
         };
         SelectedBid.Components.Add(component);
+        ExpandSection(ComponentsSectionId);
         ExpandedComponentIds.Add(component.Id);
         RefreshFieldLaborMix();
     }
@@ -210,6 +383,7 @@ public partial class Bids
         };
 
         SelectedBid.DemoItems.Add(demoItem);
+        ExpandSection(DemoScopeSectionId);
         RefreshFieldLaborMix();
     }
 
@@ -279,8 +453,27 @@ public partial class Bids
         RefreshFieldLaborMix();
     }
 
-    private void AddWire() => AddMaterialLine(BidMaterialKind.Wire, "Wire", "Wire Item");
-    private void AddMaterial() => AddMaterialLine(BidMaterialKind.Material, "Material", "Material Item");
+    private void AddWire()
+    {
+        if (SelectedBid is null)
+        {
+            return;
+        }
+
+        AddMaterialLine(BidMaterialKind.Wire, "Wire", "Wire Item");
+        ExpandSection(WireItemsSectionId);
+    }
+
+    private void AddMaterial()
+    {
+        if (SelectedBid is null)
+        {
+            return;
+        }
+
+        AddMaterialLine(BidMaterialKind.Material, "Material", "Material Item");
+        ExpandSection(MaterialItemsSectionId);
+    }
 
     private void AddMaterialLine(BidMaterialKind kind, string category, string description)
     {
@@ -355,4 +548,9 @@ public partial class Bids
     }
 
     private static Guid? ParseNullableGuid(string? value) => Guid.TryParse(value, out var parsed) ? parsed : null;
+
+    public void Dispose()
+    {
+        PageSectionNavigationState.Clear(PageSectionNavigationOwnerKey);
+    }
 }

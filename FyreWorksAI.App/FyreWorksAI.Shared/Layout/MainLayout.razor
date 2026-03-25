@@ -1,19 +1,35 @@
 @inherits LayoutComponentBase
 
-<div class="shell">
+<div class="shell @(PageSectionNavigationState.HasItems ? "shell-with-page-sections" : null)">
     <header class="shell-topbar">
         <div class="topbar-brand">
             <p class="eyebrow">FyreWorks</p>
             <h1>Operations Hub</h1>
         </div>
-        <nav class="shell-nav">
-            <NavLink href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
-            <NavLink href="/bids">Bids</NavLink>
-            <NavLink href="/jobs">Jobs</NavLink>
-            <NavLink href="/service">Service</NavLink>
-            <NavLink href="/templates">Templates</NavLink>
-            <NavLink href="/settings">Settings</NavLink>
-        </nav>
+        <div class="topbar-center">
+            <nav class="shell-nav">
+                <NavLink href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
+                <NavLink href="/bids">Bids</NavLink>
+                <NavLink href="/jobs">Jobs</NavLink>
+                <NavLink href="/service">Service</NavLink>
+                <NavLink href="/templates">Templates</NavLink>
+                <NavLink href="/settings">Settings</NavLink>
+            </nav>
+
+            @if (PageSectionNavigationState.HasItems)
+            {
+                <nav class="shell-page-section-nav" aria-label="Page sections">
+                    @foreach (var item in PageSectionNavigationState.NavigationItems)
+                    {
+                        <button class="shell-page-section-link @(PageSectionNavigationState.ActiveSectionId == item.SectionId ? "shell-page-section-link-active" : null)"
+                                type="button"
+                                @onclick="() => NavigateToSectionAsync(item)">
+                            @item.Label
+                        </button>
+                    }
+                </nav>
+            }
+        </div>
         <div class="header-badge">
             <span>Text file storage active</span>
         </div>
