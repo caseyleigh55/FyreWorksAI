@@ -1,4 +1,7 @@
-using FyreWorksAI.Shared;
+using FyreWorksAI.Infrastructure;
+using FyreWorksAI.Shared.Core.DependencyInjection;
+using FyreWorksAI.Shared.Core.Services.Attachments;
+using FyreWorksAI.Shared.Core.Services.Storage;
 
 namespace FyreWorksAI;
 

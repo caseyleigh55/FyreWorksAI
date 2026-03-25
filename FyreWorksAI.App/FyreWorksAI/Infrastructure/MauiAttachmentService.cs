@@ -1,34 +1,10 @@
-using System.Diagnostics;
-using FyreWorksAI.Shared;
+using FyreWorksAI.Shared.Core.Services.Attachments;
 
-namespace FyreWorksAI;
+namespace FyreWorksAI.Infrastructure;
 
-public sealed class MauiStoragePathResolver : IStoragePathResolver
-{
-    public string GetRootDirectory() =>
-        Path.Combine(FileSystem.Current.AppDataDirectory, "FyreWorksAI");
-}
-
-public sealed class MauiWorkspaceLocationService : IWorkspaceLocationService
-{
-    public bool SupportsOpeningDirectories => true;
-
-    public Task OpenDirectoryAsync(string fullPath)
-    {
-        if (string.IsNullOrWhiteSpace(fullPath))
-        {
-            return Task.CompletedTask;
-        }
-
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = fullPath,
-            UseShellExecute = true
-        });
-
-        return Task.CompletedTask;
-    }
-}
+//******************************//
+//****** MAUI Attachments ******//
+//******************************//
 
 public sealed class MauiAttachmentService : IAttachmentService
 {

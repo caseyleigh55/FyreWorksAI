@@ -22,6 +22,25 @@ else
         .ThenBy(item => item.SourceSection)
         .ThenBy(item => item.Description)
         .ToList() ?? [];
+    var officeBidDeviceItems = bidDeviceItems
+        .Where(item => JobCostCodes.Normalize(item.CategoryCode) is JobCostCodes.Admin or JobCostCodes.Engineering)
+        .ToList();
+    var componentBidDeviceItems = bidDeviceItems
+        .Where(item => JobCostCodes.Normalize(item.CategoryCode) == JobCostCodes.Components)
+        .ToList();
+    var wireBidDeviceItems = bidDeviceItems
+        .Where(item => JobCostCodes.Normalize(item.CategoryCode) == JobCostCodes.Wire)
+        .ToList();
+    var materialBidDeviceItems = bidDeviceItems
+        .Where(item => JobCostCodes.Normalize(item.CategoryCode) == JobCostCodes.Material)
+        .ToList();
+    var groupedBidDeviceItems = officeBidDeviceItems
+        .Concat(componentBidDeviceItems)
+        .Concat(wireBidDeviceItems)
+        .Concat(materialBidDeviceItems)
+        .DistinctBy(item => item.Id)
+        .ToList();
+    var bidDeviceTotalItems = groupedBidDeviceItems.Count > 0 ? groupedBidDeviceItems : bidDeviceItems;
     var jobDeviceItems = SelectedJob?.JobDevices
         .OrderBy(item => GetDeviceSortOrder(item.CategoryCode))
         .ThenBy(item => item.Description)
@@ -164,9 +183,9 @@ else
 
                 <section class="summary-grid job-summary-grid">
                     <article class="summary-card">
-                        <p class="eyebrow">Total Revenue</p>
+                        <p class="eyebrow">Total Sale</p>
                         <h3>@EstimateMath.GetCurrency(EstimateMath.GetJobRevenue(SelectedJob))</h3>
-                        <p>Original contract plus approved change orders.</p>
+                        <p>Original contract sale plus approved change orders.</p>
                     </article>
                     <article class="summary-card">
                         <p class="eyebrow">Estimated Cost</p>
@@ -318,11 +337,9 @@ else
                     </div>
 
                     <div class="stats-inline">
-                        <span>Revenue @EstimateMath.GetCurrency(SelectedJob.Baseline.OriginalRevenue)</span>
                         <span>Cost @EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedTotalCost)</span>
-                        <span>Field Hours @EstimateMath.GetHours(SelectedJob.Baseline.EstimatedFieldHours)</span>
-                        <span>Admin Cost @EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedAdminCost)</span>
-                        <span>Engineering Cost @EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedEngineeringCost)</span>
+                        <span>Sale @EstimateMath.GetCurrency(SelectedJob.Baseline.OriginalRevenue)</span>
+                        <span>Total Hours @EstimateMath.GetHours(GetBaselineTotalHours())</span>
                     </div>
 
                     @if (IsSectionExpanded("baseline-reference"))
@@ -334,24 +351,24 @@ else
 
                         <div class="summary-grid">
                             <article class="summary-card">
-                                <p class="eyebrow">Admin + Engineering</p>
-                                <h3>@EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedAdminCost + SelectedJob.Baseline.EstimatedEngineeringCost)</h3>
-                                <p>Estimated office and engineering cost from the original bid.</p>
+                                <p class="eyebrow">Admin / Eng</p>
+                                <h3>Cost @EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedAdminCost + SelectedJob.Baseline.EstimatedEngineeringCost)</h3>
+                                <p>Sale @EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedAdminSale + SelectedJob.Baseline.EstimatedEngineeringSale)</p>
                             </article>
                             <article class="summary-card">
-                                <p class="eyebrow">Materials</p>
-                                <h3>@EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedComponentCost + SelectedJob.Baseline.EstimatedWireCost + SelectedJob.Baseline.EstimatedMaterialOnlyCost)</h3>
-                                <p>Estimated component, wire, and material cost from the bid.</p>
+                                <p class="eyebrow">Material</p>
+                                <h3>Cost @EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedComponentCost + SelectedJob.Baseline.EstimatedWireCost + SelectedJob.Baseline.EstimatedMaterialOnlyCost)</h3>
+                                <p>Sale @EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedComponentSale + SelectedJob.Baseline.EstimatedWireSale + SelectedJob.Baseline.EstimatedMaterialOnlySale)</p>
                             </article>
                             <article class="summary-card">
                                 <p class="eyebrow">Field Labor</p>
-                                <h3>@EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedInstallCost + SelectedJob.Baseline.EstimatedDemoCost + SelectedJob.Baseline.EstimatedTrimCost + SelectedJob.Baseline.EstimatedTestCost)</h3>
-                                <p>Estimated install, demo, trim, and test labor cost.</p>
+                                <h3>Cost @EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedInstallCost + SelectedJob.Baseline.EstimatedDemoCost + SelectedJob.Baseline.EstimatedTrimCost + SelectedJob.Baseline.EstimatedTestCost)</h3>
+                                <p>Sale @EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedInstallSale + SelectedJob.Baseline.EstimatedDemoSale + SelectedJob.Baseline.EstimatedTrimSale + SelectedJob.Baseline.EstimatedTestSale)</p>
                             </article>
                             <article class="summary-card">
-                                <p class="eyebrow">Bid Devices</p>
-                                <h3>@bidDeviceItems.Count</h3>
-                                <p>Original bid items ready for estimated-versus-actual cost tracking.</p>
+                                <p class="eyebrow">Bid Components</p>
+                                <h3>@GetBidComponentCount()</h3>
+                                <p>Original bid components available for cost tracking.</p>
                             </article>
                         </div>
 
@@ -363,6 +380,7 @@ else
                                     <th>Used Hours</th>
                                     <th>Remaining Hours</th>
                                     <th>Estimated Cost</th>
+                                    <th>Estimated Sale</th>
                                     <th>Actual Cost</th>
                                 </tr>
                             </thead>
@@ -380,13 +398,45 @@ else
                                             <span style="@(remainingHours < 0m ? "color: var(--danger);" : null)">@EstimateMath.GetHours(remainingHours)</span>
                                         </td>
                                         <td>@EstimateMath.GetCurrency(GetBaselineCostForCode(costCode))</td>
+                                        <td>@EstimateMath.GetCurrency(GetBaselineSaleForCode(costCode))</td>
                                         <td>@EstimateMath.GetCurrency(GetActualCostForCode(costCode))</td>
                                     </tr>
-                                }
+
+                                        @if (costCode == JobCostCodes.Engineering)
+                                        {
+                                            <tr class="sov-total-row">
+                                                <td><p class="eyebrow">Office Phase Totals</p></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetHours(GetBaselineHoursTotal(BaselineOfficePhaseCodes))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetHours(GetActualHoursTotal(BaselineOfficePhaseCodes))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetHours(GetRemainingHoursTotal(BaselineOfficePhaseCodes))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBaselineCostTotal(BaselineOfficePhaseCodes))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBaselineSaleTotal(BaselineOfficePhaseCodes))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetActualCostTotal(BaselineOfficePhaseCodes))</span></td>
+                                            </tr>
+                                        }
+                                    }
+                                <tr class="sov-total-row">
+                                    <td><p class="eyebrow">Field Phase Totals</p></td>
+                                    <td><span class="compact-total-value">@EstimateMath.GetHours(GetBaselineHoursTotal(BaselineFieldPhaseCodes))</span></td>
+                                    <td><span class="compact-total-value">@EstimateMath.GetHours(GetActualHoursTotal(BaselineFieldPhaseCodes))</span></td>
+                                    <td><span class="compact-total-value">@EstimateMath.GetHours(GetRemainingHoursTotal(BaselineFieldPhaseCodes))</span></td>
+                                    <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBaselineCostTotal(BaselineFieldPhaseCodes))</span></td>
+                                    <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBaselineSaleTotal(BaselineFieldPhaseCodes))</span></td>
+                                    <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetActualCostTotal(BaselineFieldPhaseCodes))</span></td>
+                                </tr>
+                                <tr class="sov-total-row">
+                                    <td><strong>All Phase Totals</strong></td>
+                                    <td>@EstimateMath.GetHours(GetBaselineHoursTotal(BaselinePhaseCodes))</td>
+                                    <td>@EstimateMath.GetHours(GetActualHoursTotal(BaselinePhaseCodes))</td>
+                                    <td>@EstimateMath.GetHours(GetRemainingHoursTotal(BaselinePhaseCodes))</td>
+                                    <td>@EstimateMath.GetCurrency(GetBaselineCostTotal(BaselinePhaseCodes))</td>
+                                    <td>@EstimateMath.GetCurrency(GetBaselineSaleTotal(BaselinePhaseCodes))</td>
+                                    <td>@EstimateMath.GetCurrency(GetActualCostTotal(BaselinePhaseCodes))</td>
+                                </tr>
                             </tbody>
                         </table>
 
-                        <p class="muted">Bid devices below compare each original estimated cost against the actual cost you assign and tie back to invoice references.</p>
+                        <p class="muted">Bid devices below compare the original estimated cost and estimated sale against the actual cost you assign and tie back to invoice references.</p>
                     }
                 </section>
 
@@ -404,29 +454,22 @@ else
 
                     @if (SelectedJob.ScheduleOfValues.Count == 0)
                     {
-                        <p class="muted">Track scheduled value, billed amounts, and collections by billing line.</p>
+                        <p class="muted">Track bid sale references, total values, billed amounts, and collections by billing line.</p>
                     }
                     else
                     {
-                        <div class="stats-inline">
-                            <span>Current Contract @EstimateMath.GetCurrency(EstimateMath.GetJobRevenue(SelectedJob))</span>
-                            <span>Scheduled Value @EstimateMath.GetCurrency(scheduleValueItems.Sum(item => item.ScheduledValue))</span>
-                            <span>Billed To Date @EstimateMath.GetCurrency(EstimateMath.GetJobBilledRevenue(SelectedJob))</span>
-                            <span>Remaining To Bill @EstimateMath.GetCurrency(scheduleValueItems.Sum(item => item.RemainingToBill))</span>
-                        </div>
-
                         @if (IsSectionExpanded("schedule-of-values"))
                         {
                             <div class="summary-grid">
                                 <article class="summary-card">
-                                    <p class="eyebrow">Current Contract</p>
+                                    <p class="eyebrow">Sale Contract</p>
                                     <h3>@EstimateMath.GetCurrency(EstimateMath.GetJobRevenue(SelectedJob))</h3>
-                                    <p>Original contract plus approved change orders.</p>
+                                    <p>Original contract sale plus approved change orders.</p>
                                 </article>
                                 <article class="summary-card">
-                                    <p class="eyebrow">Scheduled Value</p>
+                                    <p class="eyebrow">Total Value</p>
                                     <h3>@EstimateMath.GetCurrency(scheduleValueItems.Sum(item => item.ScheduledValue))</h3>
-                                    <p>@EstimateMath.GetCurrency(scheduleValueItems.Sum(item => item.ScheduledValue) - EstimateMath.GetJobRevenue(SelectedJob)) variance to contract.</p>
+                                    <p>@EstimateMath.GetCurrency(scheduleValueItems.Sum(item => item.ScheduledValue) - EstimateMath.GetJobRevenue(SelectedJob)) variance to sale contract.</p>
                                 </article>
                                 <article class="summary-card">
                                     <p class="eyebrow">Billed To Date</p>
@@ -436,173 +479,180 @@ else
                                 <article class="summary-card">
                                     <p class="eyebrow">Remaining To Bill</p>
                                     <h3>@EstimateMath.GetCurrency(scheduleValueItems.Sum(item => item.RemainingToBill))</h3>
-                                    <p>Bid sale references seed each line's contract allocation.</p>
+                                    <p>Bid sale references stay visible beside each line's total value.</p>
                                 </article>
                             </div>
 
-                            <table class="data-table wide">
+                            <div class="field-card-list">
+                                @foreach (var item in scheduleValueItems)
+                                {
+                                    var isExpanded = IsScheduleValueExpanded(item.Id);
+                                    var isApprovedChangeOrder = IsScheduleValueChangeOrderApproved(item);
+
+                                    <article class="field-card @(isExpanded ? "field-card-expanded" : "field-card-collapsed")" style="@(item.IsChangeOrderLine && !isApprovedChangeOrder ? "opacity: 0.68;" : null)" @key="item.Id">
+                                        <div class="field-card-summary-row">
+                                            <button class="field-card-summary-button" type="button" @onclick="() => ToggleScheduleValueExpanded(item.Id)">
+                                                <strong>@item.Description</strong>
+                                                <span>@JobCostCodes.GetLabel(item.CategoryCode)</span>
+                                                @if (!item.IsChangeOrderLine)
+                                                {
+                                                    <span>Bid Sale Ref @EstimateMath.GetCurrency(item.ReferenceValue)</span>
+                                                }
+                                                <span>Total Value @EstimateMath.GetCurrency(item.ScheduledValue)</span>
+                                                <span>% Of Contract @EstimateMath.GetPercent(item.PercentageOfTotal / 100m)</span>
+                                                <span>Billed @EstimateMath.GetCurrency(item.BilledToDate)</span>
+                                                <span>Paid @EstimateMath.GetCurrency(item.PaidToDate)</span>
+                                                <span>Linked Commit % @EstimateMath.GetPercent(GetLinkedCommitmentPaidPercent(item) / 100m)</span>
+                                            </button>
+                                            <div class="field-card-summary-actions">
+                                                <span class="pill">
+                                                    @(item.IsChangeOrderLine
+                                                        ? (isApprovedChangeOrder ? "Approved" : "Unapproved")
+                                                        : (isExpanded ? "Expanded" : "Collapsed"))
+                                                </span>
+                                                @if (!item.IsChangeOrderLine)
+                                                {
+                                                    <button class="text-button danger" type="button" @onclick="() => RemoveScheduleValue(item.Id)">Remove</button>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        @if (isExpanded)
+                                        {
+                                            <table class="data-table compact-table sov-line-editor-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Line</th>
+                                                        <th>Category</th>
+                                                        <th>@(item.IsChangeOrderLine ? "Status" : "Bid Sale Ref")</th>
+                                                        <th>Total Value</th>
+                                                        <th>% Of Contract</th>
+                                                        <th>Billed</th>
+                                                        <th>Paid</th>
+                                                        <th>% Of SOV Paid</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr>
+                                                        <td><input @bind="item.Description" disabled="@item.IsChangeOrderLine" /></td>
+                                                        <td>
+                                                            <select @bind="item.CategoryCode" disabled="@item.IsChangeOrderLine" @bind:after="@(() => OnScheduleValueCategoryChanged(item))">
+                                                                @foreach (var categoryCode in JobCostCodes.ScheduleValueCodes)
+                                                                {
+                                                                    <option value="@categoryCode">@JobCostCodes.GetLabel(categoryCode)</option>
+                                                                }
+                                                            </select>
+                                                        </td>
+                                                        <td>
+                                                            <span class="compact-readonly-value">@(item.IsChangeOrderLine ? (isApprovedChangeOrder ? "Approved" : "Unapproved") : EstimateMath.GetCurrency(item.ReferenceValue))</span>
+                                                        </td>
+                                                        <td>
+                                                            <span class="compact-readonly-value">@EstimateMath.GetCurrency(item.ScheduledValue)</span>
+                                                        </td>
+                                                        <td>
+                                                            <span class="compact-readonly-value">@EstimateMath.GetPercent(item.PercentageOfTotal / 100m)</span>
+                                                        </td>
+                                                        <td>
+                                                            <span class="compact-readonly-value">@EstimateMath.GetCurrency(item.BilledToDate)</span>
+                                                        </td>
+                                                        <td>
+                                                            <span class="compact-readonly-value">@EstimateMath.GetCurrency(item.PaidToDate)</span>
+                                                        </td>
+                                                        <td>
+                                                            <span class="compact-readonly-value">@EstimateMath.GetPercent(JobFinancialMath.GetScheduleValuePaidPercent(item) / 100m)</span>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+
+                                            <label class="full-width">
+                                                <span>Notes</span>
+                                                <textarea class="notes-field notes-field-compact" rows="1" @bind="item.Notes"></textarea>
+                                            </label>
+
+                                            <div class="sov-subline-panel">
+                                                <div class="panel-header minor">
+                                                    <div>
+                                                        <p class="eyebrow">Progress Entries</p>
+                                                        <h4>@item.Description</h4>
+                                                    </div>
+                                                    <button class="button button-secondary" type="button" @onclick="() => AddScheduleValueSubLine(item)">Add Subline</button>
+                                                </div>
+
+                                                @if (item.SubLines.Count == 0)
+                                                {
+                                                    <p class="muted">Add progress entries here to track multiple billings and payments against this SOV line.</p>
+                                                }
+                                                else
+                                                {
+                                                    <table class="data-table compact-table">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Description</th>
+                                                                <th>Linked Commitment</th>
+                                                                <th>Line Value</th>
+                                                                <th>Billed</th>
+                                                                <th>Paid</th>
+                                                                <th>% Of Line</th>
+                                                                <th>Notes</th>
+                                                                <th></th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var subLine in item.SubLines)
+                                                            {
+                                                                <tr @key="subLine.Id">
+                                                                    <td><input @bind="subLine.Description" @bind:after="@SyncJobFinancials" /></td>
+                                                                    <td><span>@GetScheduleValueSubLineLinkLabel(subLine)</span></td>
+                                                                    <td><input type="number" step="0.01" value="@GetCurrencyInputValue(subLine.LineValue)" @oninput="args => OnScheduleValueSubLineLineValueChanged(item, subLine, args)" /></td>
+                                                                    <td><input type="number" step="0.01" @bind="subLine.BilledAmount" @bind:event="oninput" @bind:after="@SyncJobFinancials" /></td>
+                                                                    <td><input type="number" step="0.01" @bind="subLine.PaidAmount" @bind:event="oninput" @bind:after="@SyncJobFinancials" /></td>
+                                                                    <td>@EstimateMath.GetPercent(GetScheduleValueSubLinePaidPercent(subLine) / 100m)</td>
+                                                                    <td><textarea class="notes-field notes-field-compact" rows="1" @bind="subLine.Notes"></textarea></td>
+                                                                    <td>
+                                                                        @if (subLine.IsAutoGenerated)
+                                                                        {
+                                                                            <span class="muted small">Auto</span>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <button class="text-button danger" type="button" @onclick="() => RemoveScheduleValueSubLine(item, subLine.Id)">Remove</button>
+                                                                        }
+                                                                    </td>
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                }
+                                            </div>
+                                        }
+                                    </article>
+                                }
+                            </div>
+
+                            <table class="data-table compact-table">
                                 <thead>
                                     <tr>
-                                        <th>Line</th>
-                                        <th>Category</th>
+                                        <th>Total Type</th>
                                         <th>Bid Sale Ref</th>
+                                        <th>Total Value</th>
                                         <th>% Of Contract</th>
                                         <th>Billed</th>
                                         <th>Paid</th>
                                         <th>% Of SOV Paid</th>
-                                        <th>Linked Commit %</th>
-                                        <th>Notes</th>
-                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var item in scheduleValueItems)
-                                    {
-                                        var isExpanded = IsScheduleValueExpanded(item.Id);
-
-                                        <tr @key="item.Id">
-                                            <td>
-                                                <div class="sov-line-cell">
-                                                    <button class="text-button" type="button" @onclick="() => ToggleScheduleValueExpanded(item.Id)">
-                                                        @(isExpanded ? "Hide" : "Show")
-                                                    </button>
-                                                    <input @bind="item.Description" disabled="@item.IsChangeOrderLine" />
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <select @bind="item.CategoryCode" disabled="@item.IsChangeOrderLine" @bind:after="@(() => OnScheduleValueCategoryChanged(item))">
-                                                    @foreach (var categoryCode in JobCostCodes.ScheduleValueCodes)
-                                                    {
-                                                        <option value="@categoryCode">@JobCostCodes.GetLabel(categoryCode)</option>
-                                                    }
-                                                </select>
-                                            </td>
-                                            <td>
-                                                @if (item.IsChangeOrderLine)
-                                                {
-                                                    <div class="input-shell value-pill">
-                                                        <span class="input-prefix">$</span>
-                                                        <span>@EstimateMath.GetCurrency(item.ReferenceValue)</span>
-                                                    </div>
-                                                }
-                                                else
-                                                {
-                                                    <input type="number" step="0.01" @bind="item.ReferenceValue" @bind:event="oninput" @bind:after="@(() => OnScheduleValueReferenceChanged(item))" />
-                                                }
-                                            </td>
-                                            <td><input type="number" step="0.01" @bind="item.PercentageOfTotal" @bind:event="oninput" @bind:after="@(() => OnScheduleValuePercentageChanged(item))" /></td>
-                                            <td>
-                                                <div class="input-shell value-pill">
-                                                    <span class="input-prefix">$</span>
-                                                    <span>@EstimateMath.GetCurrency(item.BilledToDate)</span>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div class="input-shell value-pill">
-                                                    <span class="input-prefix">$</span>
-                                                    <span>@EstimateMath.GetCurrency(item.PaidToDate)</span>
-                                                </div>
-                                            </td>
-                                            <td>@EstimateMath.GetPercent(JobFinancialMath.GetScheduleValuePaidPercent(item) / 100m)</td>
-                                            <td>@EstimateMath.GetPercent(GetLinkedCommitmentPaidPercent(item) / 100m)</td>
-                                            <td><textarea class="notes-field notes-field-compact" rows="1" @bind="item.Notes"></textarea></td>
-                                            <td>
-                                                @if (item.IsChangeOrderLine)
-                                                {
-                                                    <span class="muted small">Via CO</span>
-                                                }
-                                                else
-                                                {
-                                                    <button class="text-button danger" type="button" @onclick="() => RemoveScheduleValue(item.Id)">Remove</button>
-                                                }
-                                            </td>
-                                        </tr>
-
-                                        @if (isExpanded)
-                                        {
-                                            <tr class="sov-subline-shell" @key="@($"{item.Id}-details")">
-                                                <td colspan="10">
-                                                    <div class="sov-subline-panel">
-                                                        <div class="panel-header minor">
-                                                            <div>
-                                                                <p class="eyebrow">Progress Entries</p>
-                                                                <h4>@item.Description</h4>
-                                                            </div>
-                                                            <button class="button button-secondary" type="button" @onclick="() => AddScheduleValueSubLine(item)">Add Subline</button>
-                                                        </div>
-
-                                                        @if (item.SubLines.Count == 0)
-                                                        {
-                                                            <p class="muted">Add progress entries here to track multiple billings and payments against this SOV line.</p>
-                                                        }
-                                                        else
-                                                        {
-                                                            <table class="data-table compact-table">
-                                                                <thead>
-                                                                    <tr>
-                                                                        <th>Description</th>
-                                                                        <th>Linked Commitment</th>
-                                                                        <th>Billed</th>
-                                                                        <th>Paid</th>
-                                                                        <th>% Of Line</th>
-                                                                        <th>Notes</th>
-                                                                        <th></th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    @foreach (var subLine in item.SubLines)
-                                                                    {
-                                                                        <tr @key="subLine.Id">
-                                                                            <td><input @bind="subLine.Description" @bind:after="@SyncJobFinancials" /></td>
-                                                                            <td>
-                                                                                @if (subLine.LinkedCommitmentId is null)
-                                                                                {
-                                                                                    <span class="muted small">Manual</span>
-                                                                                }
-                                                                                else
-                                                                                {
-                                                                                    <span>@GetScheduleValueSubLineCommitmentLabel(subLine.LinkedCommitmentId)</span>
-                                                                                }
-                                                                            </td>
-                                                                            <td><input type="number" step="0.01" @bind="subLine.BilledAmount" @bind:event="oninput" @bind:after="@SyncJobFinancials" /></td>
-                                                                            <td><input type="number" step="0.01" @bind="subLine.PaidAmount" @bind:event="oninput" @bind:after="@SyncJobFinancials" /></td>
-                                                                            <td>@EstimateMath.GetPercent(GetScheduleValueSubLinePaidPercent(item, subLine) / 100m)</td>
-                                                                            <td><textarea class="notes-field notes-field-compact" rows="1" @bind="subLine.Notes"></textarea></td>
-                                                                            <td>
-                                                                                @if (subLine.LinkedCommitmentId is not null && subLine.IsAutoGenerated)
-                                                                                {
-                                                                                    <span class="muted small">Via commitment</span>
-                                                                                }
-                                                                                else
-                                                                                {
-                                                                                    <button class="text-button danger" type="button" @onclick="() => RemoveScheduleValueSubLine(item, subLine.Id)">Remove</button>
-                                                                                }
-                                                                            </td>
-                                                                        </tr>
-                                                                    }
-                                                                </tbody>
-                                                            </table>
-                                                        }
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        }
-                                    }
-                                </tbody>
-                                <tfoot>
                                     <tr class="sov-total-row">
                                         <td><strong>Totals</strong></td>
-                                        <td></td>
                                         <td>@EstimateMath.GetCurrency(GetScheduleValueReferenceTotal(scheduleValueItems))</td>
+                                        <td>@EstimateMath.GetCurrency(scheduleValueItems.Sum(item => item.ScheduledValue))</td>
                                         <td><span style="@GetScheduleValuePercentTotalStyle(scheduleValueItems)">@EstimateMath.GetPercent(GetScheduleValuePercentTotal(scheduleValueItems) / 100m)</span></td>
                                         <td>@EstimateMath.GetCurrency(GetScheduleValueBilledTotal(scheduleValueItems))</td>
                                         <td>@EstimateMath.GetCurrency(GetScheduleValuePaidTotal(scheduleValueItems))</td>
                                         <td>@EstimateMath.GetPercent(GetScheduleValuePaidPercentTotal(scheduleValueItems) / 100m)</td>
-                                        <td></td>
-                                        <td></td>
-                                        <td></td>
                                     </tr>
-                                </tfoot>
+                                </tbody>
                             </table>
                         }
                     }
@@ -640,6 +690,7 @@ else
                                         <th>Crew Member</th>
                                         <th>Phase</th>
                                         <th>Hours</th>
+                                        <th>Hours Remaining</th>
                                         <th>Rate</th>
                                         <th>Overnight</th>
                                         <th>Notes</th>
@@ -660,14 +711,15 @@ else
                                                 </select>
                                             </td>
                                             <td>
-                                                <select @bind="entry.CostCode" @bind:after="@(() => NormalizeTimeEntry(entry))">
+                                                <select @bind="entry.CostCode" @bind:after="@(() => OnTimeEntryCostCodeChanged(entry))">
                                                     @foreach (var costCode in JobCostCodes.TimeEntryCodes)
                                                     {
                                                         <option value="@costCode">@JobCostCodes.GetLabel(costCode)</option>
                                                     }
                                                 </select>
                                             </td>
-                                            <td><input type="number" step="0.25" @bind="entry.Hours" @bind:event="oninput" @bind:after="@(() => NormalizeTimeEntry(entry))" /></td>
+                                            <td><input type="number" step="0.25" value="@GetTimeEntryHoursInputValue(entry)" @oninput="args => OnTimeEntryHoursChanged(entry, args)" /></td>
+                                            <td><span style="@GetTimeEntryRemainingHoursStyle(entry)">@GetTimeEntryRemainingHoursDisplay(entry)</span></td>
                                             <td><input type="number" step="0.01" @bind="entry.HourlyRate" @bind:event="oninput" @bind:after="@(() => NormalizeTimeEntry(entry))" /></td>
                                             <td><input type="checkbox" @bind="entry.IsOvernight" @bind:after="@(() => OnTimeEntryOvernightChanged(entry))" disabled="@IsTimeEntryOvernightLocked(entry)" /></td>
                                             <td><textarea class="notes-field notes-field-compact" rows="1" @bind="entry.Notes"></textarea></td>
@@ -696,9 +748,11 @@ else
                     else
                     {
                         <div class="stats-inline">
-                            <span>Estimated @EstimateMath.GetCurrency(bidDeviceItems.Sum(item => item.EstimatedCost))</span>
-                            <span>Actual @EstimateMath.GetCurrency(bidDeviceItems.Sum(item => item.ActualCost))</span>
-                            <span>Variance @EstimateMath.GetCurrency(bidDeviceItems.Sum(item => item.ActualCost - item.EstimatedCost))</span>
+                            <span>Est. Cost @EstimateMath.GetCurrency(GetBidDeviceEstimatedCostTotal(bidDeviceTotalItems))</span>
+                            <span>Est. Sale @EstimateMath.GetCurrency(GetBidDeviceEstimatedSaleTotal(bidDeviceTotalItems))</span>
+                            <span>Actual Cost @EstimateMath.GetCurrency(GetBidDeviceActualCostTotal(bidDeviceTotalItems))</span>
+                            <span>Cost Variance @EstimateMath.GetCurrency(GetBidDeviceCostVarianceTotal(bidDeviceTotalItems))</span>
+                            <span>Sale Variance @EstimateMath.GetCurrency(GetBidDeviceSaleVarianceTotal(bidDeviceTotalItems))</span>
                         </div>
 
                         @if (IsSectionExpanded("bid-devices"))
@@ -712,6 +766,7 @@ else
                                         <th>Unit</th>
                                         <th>Hours</th>
                                         <th>Est. Unit Cost</th>
+                                        <th>Est. Sale</th>
                                         <th>Actual Unit Cost</th>
                                         <th>Invoice Ref</th>
                                         <th>Notes</th>
@@ -727,6 +782,7 @@ else
                                             <td>@item.UnitLabel</td>
                                             <td>@EstimateMath.GetHours(item.EstimatedHours)</td>
                                             <td>@EstimateMath.GetCurrency(item.EstimatedUnitCost)</td>
+                                            <td>@EstimateMath.GetCurrency(item.EstimatedUnitSale)</td>
                                             <td><input type="number" step="0.01" value="@item.ActualUnitCost" @oninput="args => OnBidDeviceActualCostChanged(item, args)" /></td>
                                             <td>
                                                 <select value="@(item.InvoiceId?.ToString() ?? string.Empty)" @onchange="args => OnBidDeviceInvoiceChanged(item, args)">
@@ -738,6 +794,81 @@ else
                                                 </select>
                                             </td>
                                             <td><textarea class="notes-field notes-field-compact" rows="1" @bind="item.Notes"></textarea></td>
+                                        </tr>
+
+                                        @if (officeBidDeviceItems.LastOrDefault()?.Id == item.Id)
+                                        {
+                                            <tr class="sov-total-row">
+                                                <td colspan="2"><p class="eyebrow">Admin / Eng Total</p></td>
+                                                <td><span class="compact-total-value">@GetBidDeviceQuantityTotal(officeBidDeviceItems)</span></td>
+                                                <td></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetHours(GetBidDeviceHoursTotal(officeBidDeviceItems))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedCostTotal(officeBidDeviceItems))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedSaleTotal(officeBidDeviceItems))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceActualCostTotal(officeBidDeviceItems))</span></td>
+                                                <td></td>
+                                                <td></td>
+                                            </tr>
+                                        }
+
+                                        @if (componentBidDeviceItems.LastOrDefault()?.Id == item.Id)
+                                        {
+                                            <tr class="sov-total-row">
+                                                <td colspan="2"><p class="eyebrow">Component Total</p></td>
+                                                <td><span class="compact-total-value">@GetBidDeviceQuantityTotal(componentBidDeviceItems)</span></td>
+                                                <td></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetHours(GetBidDeviceHoursTotal(componentBidDeviceItems))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedCostTotal(componentBidDeviceItems))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedSaleTotal(componentBidDeviceItems))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceActualCostTotal(componentBidDeviceItems))</span></td>
+                                                <td></td>
+                                                <td></td>
+                                            </tr>
+                                        }
+
+                                        @if (wireBidDeviceItems.LastOrDefault()?.Id == item.Id)
+                                        {
+                                            <tr class="sov-total-row">
+                                                <td colspan="2"><p class="eyebrow">Wire Total</p></td>
+                                                <td><span class="compact-total-value">@GetBidDeviceQuantityTotal(wireBidDeviceItems)</span></td>
+                                                <td></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetHours(GetBidDeviceHoursTotal(wireBidDeviceItems))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedCostTotal(wireBidDeviceItems))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedSaleTotal(wireBidDeviceItems))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceActualCostTotal(wireBidDeviceItems))</span></td>
+                                                <td></td>
+                                                <td></td>
+                                            </tr>
+                                        }
+
+                                        @if (materialBidDeviceItems.LastOrDefault()?.Id == item.Id)
+                                        {
+                                            <tr class="sov-total-row">
+                                                <td colspan="2"><p class="eyebrow">Material Total</p></td>
+                                                <td><span class="compact-total-value">@GetBidDeviceQuantityTotal(materialBidDeviceItems)</span></td>
+                                                <td></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetHours(GetBidDeviceHoursTotal(materialBidDeviceItems))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedCostTotal(materialBidDeviceItems))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedSaleTotal(materialBidDeviceItems))</span></td>
+                                                <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceActualCostTotal(materialBidDeviceItems))</span></td>
+                                                <td></td>
+                                                <td></td>
+                                            </tr>
+                                        }
+                                    }
+
+                                    @if (bidDeviceTotalItems.Count > 0)
+                                    {
+                                        <tr class="sov-total-row">
+                                            <td colspan="2"><strong>All Bid Device Totals</strong></td>
+                                            <td>@GetBidDeviceQuantityTotal(bidDeviceTotalItems)</td>
+                                            <td></td>
+                                            <td>@EstimateMath.GetHours(GetBidDeviceHoursTotal(bidDeviceTotalItems))</td>
+                                            <td>@EstimateMath.GetCurrency(GetBidDeviceEstimatedCostTotal(bidDeviceTotalItems))</td>
+                                            <td>@EstimateMath.GetCurrency(GetBidDeviceEstimatedSaleTotal(bidDeviceTotalItems))</td>
+                                            <td>@EstimateMath.GetCurrency(GetBidDeviceActualCostTotal(bidDeviceTotalItems))</td>
+                                            <td></td>
+                                            <td></td>
                                         </tr>
                                     }
                                 </tbody>
@@ -766,6 +897,7 @@ else
                     {
                         <div class="stats-inline">
                             <span>Estimated @EstimateMath.GetCurrency(jobDeviceItems.Sum(item => item.EstimatedCost))</span>
+                            <span>Est. Sale @EstimateMath.GetCurrency(jobDeviceItems.Sum(item => item.EstimatedSale))</span>
                             <span>Actual @EstimateMath.GetCurrency(jobDeviceItems.Sum(item => item.ActualCost))</span>
                             <span>Variance @EstimateMath.GetCurrency(jobDeviceItems.Sum(item => item.ActualCost - item.EstimatedCost))</span>
                         </div>
@@ -780,6 +912,7 @@ else
                                         <th>Qty</th>
                                         <th>Unit</th>
                                         <th>Est. Unit Cost</th>
+                                        <th>Est. Sale</th>
                                         <th>Actual Unit Cost</th>
                                         <th>Invoice Ref</th>
                                         <th>Notes</th>
@@ -802,6 +935,7 @@ else
                                             <td><input type="number" step="0.01" @bind="item.Quantity" @bind:event="oninput" @bind:after="@(() => NormalizeJobDevice(item))" /></td>
                                             <td><input @bind="item.UnitLabel" @bind:after="@(() => NormalizeJobDevice(item))" /></td>
                                             <td><input type="number" step="0.01" value="@item.EstimatedUnitCost" @oninput="args => OnJobDeviceEstimatedCostChanged(item, args)" /></td>
+                                            <td><input type="number" step="0.01" value="@item.EstimatedUnitSale" @oninput="args => OnJobDeviceEstimatedSaleChanged(item, args)" /></td>
                                             <td><input type="number" step="0.01" value="@item.ActualUnitCost" @oninput="args => OnJobDeviceActualCostChanged(item, args)" /></td>
                                             <td>
                                                 <select value="@(item.InvoiceId?.ToString() ?? string.Empty)" @onchange="args => OnJobDeviceInvoiceChanged(item, args)">
@@ -925,7 +1059,7 @@ else
                 <section class="panel">
                     <div class="panel-header">
                         <div>
-                            <p class="eyebrow">Revenue adds</p>
+                            <p class="eyebrow">Sale adds</p>
                             <h3>Change Orders</h3>
                         </div>
                         <div class="panel-header-actions">
@@ -936,12 +1070,12 @@ else
 
                     @if (SelectedJob.ChangeOrders.Count == 0)
                     {
-                        <p class="muted">Add approved or pending scope changes that affect job revenue and projected cost.</p>
+                        <p class="muted">Add approved or pending scope changes that affect job sale and projected cost.</p>
                     }
                     else
                     {
                         <div class="stats-inline">
-                            <span>Approved Revenue @EstimateMath.GetCurrency(EstimateMath.GetJobApprovedChangeOrderRevenue(SelectedJob))</span>
+                            <span>Approved Sale @EstimateMath.GetCurrency(EstimateMath.GetJobApprovedChangeOrderRevenue(SelectedJob))</span>
                             <span>Approved Cost @EstimateMath.GetCurrency(EstimateMath.GetJobApprovedChangeOrderCost(SelectedJob))</span>
                             <span>Approved lines sync into the schedule of values automatically.</span>
                         </div>
@@ -958,8 +1092,8 @@ else
                                             <button class="field-card-summary-button" type="button" @onclick="() => ToggleChangeOrderExpanded(changeOrder.Id)">
                                                 <strong>@GetChangeOrderLabel(changeOrder)</strong>
                                                 <span>@(changeOrder.Approved ? "Approved" : "Pending")</span>
-                                                <span>Revenue @EstimateMath.GetCurrency(changeOrder.RevenueAmount)</span>
                                                 <span>Cost @EstimateMath.GetCurrency(changeOrder.EstimatedCostImpact)</span>
+                                                <span>Sale @EstimateMath.GetCurrency(changeOrder.RevenueAmount)</span>
                                             </button>
                                             <div class="field-card-summary-actions">
                                                 <span class="pill">@((isExpanded ? "Expanded" : "Collapsed"))</span>
@@ -979,12 +1113,12 @@ else
                                                     <input @bind="changeOrder.Title" @bind:after="@SyncJobFinancials" />
                                                 </label>
                                                 <label>
-                                                    <span>Revenue</span>
-                                                    <input type="number" step="0.01" @bind="changeOrder.RevenueAmount" @bind:event="oninput" @bind:after="@SyncJobFinancials" />
+                                                    <span>Cost</span>
+                                                    <input type="number" step="0.01" @bind="changeOrder.EstimatedCostImpact" @bind:event="oninput" @bind:after="@SyncJobFinancials" />
                                                 </label>
                                                 <label>
-                                                    <span>Cost Impact</span>
-                                                    <input type="number" step="0.01" @bind="changeOrder.EstimatedCostImpact" @bind:event="oninput" @bind:after="@SyncJobFinancials" />
+                                                    <span>Sale</span>
+                                                    <input type="number" step="0.01" @bind="changeOrder.RevenueAmount" @bind:event="oninput" @bind:after="@SyncJobFinancials" />
                                                 </label>
                                             </div>
 
@@ -1062,7 +1196,7 @@ else
                                                     <option value="">Not linked</option>
                                                     @foreach (var item in scheduleValueItems)
                                                     {
-                                                        <option value="@item.Id">@item.Description</option>
+                                                        <option value="@item.Id">@GetCommitmentScheduleValueLabel(item)</option>
                                                     }
                                                 </select>
                                             </td>
@@ -1111,848 +1245,3 @@ else
     </section>
 }
 
-@code {
-    [SupplyParameterFromQuery(Name = "selected")]
-    public Guid? RequestedJobId { get; set; }
-
-    private Guid? SelectedJobId { get; set; }
-    private string StatusMessage { get; set; } = string.Empty;
-    private static readonly IReadOnlyList<string> TimeEntryLaborClasses =
-    [
-        nameof(PersonnelType.Journeyman),
-        nameof(PersonnelType.Apprentice),
-        JobCostCodes.Admin,
-        JobCostCodes.Engineering
-    ];
-    private HashSet<string> ExpandedSectionIds { get; } = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "project-contacts",
-        "client-facing",
-        "baseline-reference",
-        "schedule-of-values",
-        "time-entries",
-        "bid-devices",
-        "job-devices",
-        "invoices",
-        "change-orders",
-        "commitments",
-        "project-notes"
-    };
-    private HashSet<Guid> ExpandedInvoiceIds { get; } = [];
-    private HashSet<Guid> ExpandedChangeOrderIds { get; } = [];
-    private HashSet<Guid> ExpandedScheduleValueIds { get; } = [];
-    private bool IsDirectoryPanelExpanded { get; set; }
-
-    private JobRecord? SelectedJob =>
-        SelectedJobId is null
-            ? null
-            : Store.Workspace.Jobs.FirstOrDefault(job => job.Id == SelectedJobId.Value);
-
-    private ClientRecord? CurrentClient =>
-        SelectedJob is null
-            ? null
-            : Store.GetClient(SelectedJob.ClientId);
-
-    private BidRecord? CurrentSourceBid =>
-        SelectedJob is null || SelectedJob.SourceBidId is null
-            ? null
-            : Store.Workspace.Bids.FirstOrDefault(bid => bid.Id == SelectedJob.SourceBidId.Value);
-
-    private LaborTemplate? CurrentJobTemplate =>
-        SelectedJob is null
-            ? null
-            : ResolveJobTemplate(SelectedJob);
-
-    protected override async Task OnInitializedAsync()
-    {
-        await Store.InitializeAsync();
-        ApplySelection();
-    }
-
-    protected override void OnParametersSet()
-    {
-        if (Store.IsInitialized)
-        {
-            ApplySelection();
-        }
-    }
-
-    private void ApplySelection()
-    {
-        if (RequestedJobId is not null && Store.Workspace.Jobs.Any(job => job.Id == RequestedJobId.Value))
-        {
-            SelectedJobId = RequestedJobId;
-        }
-        else if (SelectedJobId is null || Store.Workspace.Jobs.All(job => job.Id != SelectedJobId.Value))
-        {
-            SelectedJobId = Store.Workspace.Jobs.FirstOrDefault()?.Id;
-        }
-
-        if (SelectedJob is not null)
-        {
-            Store.SyncJobFinancials(SelectedJob);
-            ExpandedInvoiceIds.RemoveWhere(invoiceId => SelectedJob.Invoices.All(item => item.Id != invoiceId));
-            ExpandedChangeOrderIds.RemoveWhere(changeOrderId => SelectedJob.ChangeOrders.All(item => item.Id != changeOrderId));
-            ExpandedScheduleValueIds.RemoveWhere(scheduleValueId => SelectedJob.ScheduleOfValues.All(item => item.Id != scheduleValueId));
-            foreach (var entry in SelectedJob.TimeEntries)
-            {
-                NormalizeTimeEntry(entry);
-            }
-        }
-    }
-
-    private void SelectJob(Guid jobId)
-    {
-        SelectedJobId = jobId;
-        CloseDirectoryPanel();
-        StatusMessage = string.Empty;
-        NavigationManager.NavigateTo($"/jobs?selected={jobId}", replace: true);
-    }
-
-    private void NavigateToBid(Guid bidId) =>
-        NavigationManager.NavigateTo($"/bids?selected={bidId}");
-
-    private async Task CreateJobAsync()
-    {
-        var job = Store.CreateBlankJob();
-        SelectedJobId = job.Id;
-        CloseDirectoryPanel();
-        StatusMessage = "New job created.";
-        await Store.SaveAsync();
-        NavigationManager.NavigateTo($"/jobs?selected={job.Id}", replace: true);
-    }
-
-    private void CreateClientForJob()
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        var client = Store.CreateClient();
-        SelectedJob.ClientId = client.Id;
-        StatusMessage = "New client linked to the job.";
-    }
-
-    private async Task SaveAsync()
-    {
-        if (SelectedJob is not null)
-        {
-            Store.SyncJobFinancials(SelectedJob);
-        }
-
-        await Store.SaveAsync();
-        StatusMessage = "Job saved.";
-    }
-
-    private async Task DeleteJobAsync()
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        var deletedJobId = SelectedJob.Id;
-        if (!Store.DeleteJob(deletedJobId))
-        {
-            return;
-        }
-
-        SelectedJobId = GetNextJobId();
-        await Store.SaveAsync();
-        StatusMessage = "Job deleted.";
-        NavigationManager.NavigateTo(
-            SelectedJobId is null ? "/jobs" : $"/jobs?selected={SelectedJobId}",
-            replace: true);
-    }
-
-    private async Task ExportAsync()
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        Store.SyncJobFinancials(SelectedJob);
-        var path = await Store.ExportJobCostReportAsync(SelectedJob);
-        await Store.SaveAsync();
-        StatusMessage = $"Job cost export created at {path}.";
-    }
-
-    private async Task OnClientChanged(ChangeEventArgs args)
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        SelectedJob.ClientId = ParseNullableGuid(args.Value?.ToString());
-        await Task.CompletedTask;
-    }
-
-    private Guid? GetNextJobId() =>
-        Store.Workspace.Jobs
-            .Where(job => job.IsActive)
-            .OrderBy(job => job.ProjectName)
-            .Select(job => (Guid?)job.Id)
-            .Concat(
-                Store.Workspace.Jobs
-                    .Where(job => !job.IsActive)
-                    .OrderByDescending(job => job.CreatedOn)
-                    .Select(job => (Guid?)job.Id))
-            .FirstOrDefault();
-
-    private decimal GetBaselineCostForCode(string costCode) =>
-        JobCostCodes.Normalize(costCode) switch
-        {
-            JobCostCodes.Admin => SelectedJob?.Baseline.EstimatedAdminCost ?? 0m,
-            JobCostCodes.Engineering => SelectedJob?.Baseline.EstimatedEngineeringCost ?? 0m,
-            JobCostCodes.Install => SelectedJob?.Baseline.EstimatedInstallCost ?? 0m,
-            JobCostCodes.Demo => SelectedJob?.Baseline.EstimatedDemoCost ?? 0m,
-            JobCostCodes.Trim => SelectedJob?.Baseline.EstimatedTrimCost ?? 0m,
-            JobCostCodes.Test => SelectedJob?.Baseline.EstimatedTestCost ?? 0m,
-            _ => 0m
-        };
-
-    private decimal GetActualCostForCode(string costCode) =>
-        SelectedJob is null
-            ? 0m
-            : JobFinancialMath.GetJobActualCost(SelectedJob, costCode);
-
-    private string GetBidDeviceTypeLabel(JobBaselineLineItem item) =>
-        string.IsNullOrWhiteSpace(item.SourceSection)
-            ? JobCostCodes.GetLabel(item.CategoryCode)
-            : item.SourceSection;
-
-    private int GetDeviceSortOrder(string? categoryCode) =>
-        JobCostCodes.Normalize(categoryCode) switch
-        {
-            JobCostCodes.Admin => 0,
-            JobCostCodes.Engineering => 1,
-            JobCostCodes.Components => 2,
-            JobCostCodes.Wire => 3,
-            JobCostCodes.Material => 4,
-            JobCostCodes.Demo => 5,
-            JobCostCodes.Install => 6,
-            JobCostCodes.Trim => 7,
-            JobCostCodes.Test => 8,
-            _ => 9
-        };
-
-    private int GetScheduleValueSortOrder(ScheduleValueItem item) =>
-        JobCostCodes.Normalize(item.CategoryCode) switch
-        {
-            JobCostCodes.Admin => 0,
-            JobCostCodes.Engineering => 1,
-            JobCostCodes.AdminEngineering => 2,
-            JobCostCodes.Materials => 3,
-            JobCostCodes.Install => 4,
-            JobCostCodes.Demo => 5,
-            JobCostCodes.Trim => 6,
-            JobCostCodes.Test => 7,
-            JobCostCodes.ChangeOrder => 8,
-            _ => 9
-        };
-
-    private void ToggleSection(string sectionId)
-    {
-        if (!ExpandedSectionIds.Add(sectionId))
-        {
-            ExpandedSectionIds.Remove(sectionId);
-        }
-    }
-
-    private void ToggleDirectoryPanel() =>
-        IsDirectoryPanelExpanded = !IsDirectoryPanelExpanded;
-
-    private void CloseDirectoryPanel() =>
-        IsDirectoryPanelExpanded = false;
-
-    private bool IsSectionExpanded(string sectionId) =>
-        ExpandedSectionIds.Contains(sectionId);
-
-    private string GetInvoiceLabel(JobInvoiceRecord invoice)
-    {
-        if (!string.IsNullOrWhiteSpace(invoice.ReferenceNumber))
-        {
-            return invoice.ReferenceNumber;
-        }
-
-        if (!string.IsNullOrWhiteSpace(invoice.InvoiceNumber))
-        {
-            return invoice.InvoiceNumber;
-        }
-
-        if (!string.IsNullOrWhiteSpace(invoice.Vendor))
-        {
-            return $"{invoice.Vendor} {invoice.InvoiceDate:MM/dd/yyyy}";
-        }
-
-        return $"Invoice {invoice.InvoiceDate:MM/dd/yyyy}";
-    }
-
-    private void ToggleInvoiceExpanded(Guid invoiceId)
-    {
-        if (!ExpandedInvoiceIds.Add(invoiceId))
-        {
-            ExpandedInvoiceIds.Remove(invoiceId);
-        }
-    }
-
-    private bool IsInvoiceExpanded(Guid invoiceId) =>
-        ExpandedInvoiceIds.Contains(invoiceId);
-
-    private string GetChangeOrderLabel(ChangeOrderRecord changeOrder) =>
-        string.IsNullOrWhiteSpace(changeOrder.Title) ? "Change Order" : changeOrder.Title.Trim();
-
-    private void ToggleChangeOrderExpanded(Guid changeOrderId)
-    {
-        if (!ExpandedChangeOrderIds.Add(changeOrderId))
-        {
-            ExpandedChangeOrderIds.Remove(changeOrderId);
-        }
-    }
-
-    private bool IsChangeOrderExpanded(Guid changeOrderId) =>
-        ExpandedChangeOrderIds.Contains(changeOrderId);
-
-    private LaborTemplate? ResolveJobTemplate(JobRecord job)
-    {
-        if (job.SourceBidId is not null)
-        {
-            var sourceBid = Store.Workspace.Bids.FirstOrDefault(item => item.Id == job.SourceBidId.Value);
-            var sourceTemplate = Store.GetTemplate(sourceBid?.TemplateId);
-            if (sourceTemplate is not null)
-            {
-                return sourceTemplate;
-            }
-        }
-
-        return Store.GetTemplate(Store.Workspace.Settings.DefaultTemplateId)
-            ?? Store.Workspace.Templates.FirstOrDefault(template => !template.IsArchived)
-            ?? Store.Workspace.Templates.FirstOrDefault();
-    }
-
-    private string GetTimeEntryLaborLabel(string laborClass) =>
-        NormalizeTimeEntryLaborClass(laborClass) switch
-        {
-            JobCostCodes.Admin => "Administrative",
-            JobCostCodes.Engineering => "Engineering",
-            _ => NormalizeTimeEntryLaborClass(laborClass)
-        };
-
-    private string NormalizeTimeEntryLaborClass(string? value, string? costCode = null)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return GetDefaultLaborClassForCostCode(costCode);
-        }
-
-        return value.Trim().ToLowerInvariant() switch
-        {
-            "journeyman" or "technician" => nameof(PersonnelType.Journeyman),
-            "apprentice" => nameof(PersonnelType.Apprentice),
-            "admin" or "administrative" => JobCostCodes.Admin,
-            "engineering" => JobCostCodes.Engineering,
-            _ => GetDefaultLaborClassForCostCode(costCode)
-        };
-    }
-
-    private string GetDefaultLaborClassForCostCode(string? costCode) =>
-        JobCostCodes.Normalize(costCode) switch
-        {
-            JobCostCodes.Admin => JobCostCodes.Admin,
-            JobCostCodes.Engineering => JobCostCodes.Engineering,
-            _ => nameof(PersonnelType.Journeyman)
-        };
-
-    private bool IsTimeEntryOvernightLocked(JobTimeEntry entry) =>
-        NormalizeTimeEntryLaborClass(entry.CrewMember, entry.CostCode) is JobCostCodes.Admin or JobCostCodes.Engineering;
-
-    private decimal GetDefaultTimeEntryRate(JobTimeEntry entry)
-    {
-        var template = CurrentJobTemplate;
-        var laborClass = NormalizeTimeEntryLaborClass(entry.CrewMember, entry.CostCode);
-
-        return laborClass switch
-        {
-            nameof(PersonnelType.Journeyman) => entry.IsOvernight
-                ? template?.JourneymanOvernightBilledRate ?? EstimateMath.RoundCurrency(Store.Workspace.Settings.FieldLaborRate * 1.5m)
-                : template?.JourneymanRegularBilledRate ?? Store.Workspace.Settings.FieldLaborRate,
-            nameof(PersonnelType.Apprentice) => entry.IsOvernight
-                ? template?.ApprenticeOvernightBilledRate ?? EstimateMath.RoundCurrency(Store.Workspace.Settings.FieldLaborRate * 1.5m)
-                : template?.ApprenticeRegularBilledRate ?? Store.Workspace.Settings.FieldLaborRate,
-            JobCostCodes.Admin => template?.AdminBilledRate ?? Store.Workspace.Settings.AdminLaborRate,
-            JobCostCodes.Engineering => template?.EngineeringBilledRate ?? Store.Workspace.Settings.EngineeringLaborRate,
-            _ => template?.JourneymanRegularBilledRate ?? Store.Workspace.Settings.FieldLaborRate
-        };
-    }
-
-    private void ApplyTimeEntryTemplateRate(JobTimeEntry entry)
-    {
-        entry.CrewMember = NormalizeTimeEntryLaborClass(entry.CrewMember, entry.CostCode);
-        if (IsTimeEntryOvernightLocked(entry))
-        {
-            entry.IsOvernight = false;
-        }
-
-        entry.HourlyRate = EstimateMath.RoundCurrency(Math.Max(0m, GetDefaultTimeEntryRate(entry)));
-    }
-
-    private void OnTimeEntryLaborTypeChanged(JobTimeEntry entry) =>
-        ApplyTimeEntryTemplateRate(entry);
-
-    private void OnTimeEntryOvernightChanged(JobTimeEntry entry)
-    {
-        if (IsTimeEntryOvernightLocked(entry))
-        {
-            entry.IsOvernight = false;
-        }
-
-        ApplyTimeEntryTemplateRate(entry);
-    }
-
-    private void AddTimeEntry()
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        var entry = new JobTimeEntry
-        {
-            CrewMember = nameof(PersonnelType.Journeyman),
-            CostCode = JobCostCodes.Install
-        };
-
-        ApplyTimeEntryTemplateRate(entry);
-        SelectedJob.TimeEntries.Add(entry);
-        ExpandedSectionIds.Add("time-entries");
-    }
-
-    private void RemoveTimeEntry(Guid entryId) =>
-        SelectedJob?.TimeEntries.RemoveAll(entry => entry.Id == entryId);
-
-    private void NormalizeTimeEntry(JobTimeEntry entry)
-    {
-        entry.CostCode = JobCostCodes.Normalize(entry.CostCode);
-        var normalizedCrewMember = NormalizeTimeEntryLaborClass(entry.CrewMember, entry.CostCode);
-        var shouldApplyTemplateRate = entry.HourlyRate <= 0m || !string.Equals(entry.CrewMember, normalizedCrewMember, StringComparison.OrdinalIgnoreCase);
-        entry.CrewMember = normalizedCrewMember;
-        if (IsTimeEntryOvernightLocked(entry))
-        {
-            entry.IsOvernight = false;
-        }
-
-        entry.Hours = EstimateMath.RoundHours(Math.Max(0m, entry.Hours));
-        entry.HourlyRate = EstimateMath.RoundCurrency(Math.Max(0m, entry.HourlyRate));
-        if (shouldApplyTemplateRate)
-        {
-            ApplyTimeEntryTemplateRate(entry);
-        }
-    }
-
-    private void OnBidDeviceActualCostChanged(JobBaselineLineItem item, ChangeEventArgs args) =>
-        item.ActualUnitCost = ParseCurrencyValue(args.Value?.ToString());
-
-    private void OnBidDeviceInvoiceChanged(JobBaselineLineItem item, ChangeEventArgs args) =>
-        item.InvoiceId = ParseNullableGuid(args.Value?.ToString());
-
-    private void AddJobDevice()
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        var item = new JobDeviceItem
-        {
-            Description = "Added Device",
-            CategoryCode = JobCostCodes.Material,
-            Quantity = 1m
-        };
-
-        NormalizeJobDevice(item);
-        SelectedJob.JobDevices.Add(item);
-        ExpandedSectionIds.Add("job-devices");
-    }
-
-    private void RemoveJobDevice(Guid itemId) =>
-        SelectedJob?.JobDevices.RemoveAll(item => item.Id == itemId);
-
-    private void NormalizeJobDevice(JobDeviceItem item)
-    {
-        item.CategoryCode = JobCostCodes.Normalize(item.CategoryCode);
-        item.Description = string.IsNullOrWhiteSpace(item.Description) ? "Job Device" : item.Description.Trim();
-        item.Quantity = item.Quantity <= 0m ? 1m : item.Quantity;
-        item.UnitLabel = string.IsNullOrWhiteSpace(item.UnitLabel) ? "ea" : item.UnitLabel.Trim();
-        item.EstimatedUnitCost = EstimateMath.RoundCurrency(Math.Max(0m, item.EstimatedUnitCost));
-        item.ActualUnitCost = EstimateMath.RoundCurrency(Math.Max(0m, item.ActualUnitCost));
-    }
-
-    private void OnJobDeviceEstimatedCostChanged(JobDeviceItem item, ChangeEventArgs args) =>
-        item.EstimatedUnitCost = ParseCurrencyValue(args.Value?.ToString());
-
-    private void OnJobDeviceActualCostChanged(JobDeviceItem item, ChangeEventArgs args) =>
-        item.ActualUnitCost = ParseCurrencyValue(args.Value?.ToString());
-
-    private void OnJobDeviceInvoiceChanged(JobDeviceItem item, ChangeEventArgs args) =>
-        item.InvoiceId = ParseNullableGuid(args.Value?.ToString());
-
-    private void AddInvoice()
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        var invoice = new JobInvoiceRecord
-        {
-            InvoiceDate = DateTime.Today
-        };
-
-        SelectedJob.Invoices.Add(invoice);
-        ExpandedSectionIds.Add("invoices");
-        ExpandedInvoiceIds.Add(invoice.Id);
-    }
-
-    private void NormalizeInvoice(JobInvoiceRecord invoice)
-    {
-        invoice.ReferenceNumber = invoice.ReferenceNumber?.Trim() ?? string.Empty;
-        invoice.Vendor = invoice.Vendor?.Trim() ?? string.Empty;
-        invoice.InvoiceNumber = invoice.InvoiceNumber?.Trim() ?? string.Empty;
-        invoice.Notes = invoice.Notes?.Trim() ?? string.Empty;
-        invoice.InvoiceTotal = EstimateMath.RoundCurrency(Math.Max(0m, invoice.InvoiceTotal));
-        invoice.Attachments ??= [];
-    }
-
-    private void RemoveInvoice(Guid invoiceId)
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        var invoice = SelectedJob.Invoices.FirstOrDefault(item => item.Id == invoiceId);
-        if (invoice is null)
-        {
-            return;
-        }
-
-        foreach (var attachment in invoice.Attachments.ToList())
-        {
-            Store.RemoveAttachment(invoice.Attachments, attachment);
-        }
-
-        foreach (var item in SelectedJob.Baseline.LineItems.Where(item => item.InvoiceId == invoiceId))
-        {
-            item.InvoiceId = null;
-        }
-
-        foreach (var item in SelectedJob.JobDevices.Where(item => item.InvoiceId == invoiceId))
-        {
-            item.InvoiceId = null;
-        }
-
-        SelectedJob.Invoices.RemoveAll(item => item.Id == invoiceId);
-        ExpandedInvoiceIds.Remove(invoiceId);
-    }
-
-    private string GetInvoiceAttachmentArea()
-    {
-        if (SelectedJob is null)
-        {
-            return "jobs";
-        }
-
-        return Path.Combine("jobs", SelectedJob.Id.ToString("N"), "invoices");
-    }
-
-    private void AddChangeOrder()
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        var changeOrder = new ChangeOrderRecord { Title = "Change Order" };
-        SelectedJob.ChangeOrders.Add(changeOrder);
-        ExpandedSectionIds.Add("change-orders");
-        ExpandedChangeOrderIds.Add(changeOrder.Id);
-        SyncJobFinancials();
-    }
-
-    private void RemoveChangeOrder(Guid changeOrderId)
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        var changeOrder = SelectedJob.ChangeOrders.FirstOrDefault(item => item.Id == changeOrderId);
-        if (changeOrder is null)
-        {
-            return;
-        }
-
-        foreach (var attachment in changeOrder.Attachments.ToList())
-        {
-            Store.RemoveAttachment(changeOrder.Attachments, attachment);
-        }
-
-        SelectedJob.ChangeOrders.RemoveAll(item => item.Id == changeOrderId);
-        ExpandedChangeOrderIds.Remove(changeOrderId);
-        SyncJobFinancials();
-    }
-
-    private string GetChangeOrderAttachmentArea(Guid changeOrderId)
-    {
-        if (SelectedJob is null)
-        {
-            return "jobs";
-        }
-
-        return Path.Combine("jobs", SelectedJob.Id.ToString("N"), "change-orders", changeOrderId.ToString("N"));
-    }
-
-    private void AddScheduleValue()
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        var item = new ScheduleValueItem
-        {
-            Description = "Billing Line",
-            CategoryCode = JobCostCodes.Other,
-            IsPercentageManual = true
-        };
-
-        SelectedJob.ScheduleOfValues.Add(item);
-
-        ExpandedSectionIds.Add("schedule-of-values");
-        ExpandedScheduleValueIds.Add(item.Id);
-        SyncJobFinancials();
-    }
-
-    private void RemoveScheduleValue(Guid itemId)
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        foreach (var commitment in SelectedJob.Commitments.Where(commitment => commitment.ScheduleValueItemId == itemId))
-        {
-            commitment.ScheduleValueItemId = null;
-            commitment.CommittedAmount = 0m;
-        }
-
-        SelectedJob.ScheduleOfValues.RemoveAll(item => item.Id == itemId);
-        ExpandedScheduleValueIds.Remove(itemId);
-        SyncJobFinancials();
-    }
-
-    private void ToggleScheduleValueExpanded(Guid itemId)
-    {
-        if (!ExpandedScheduleValueIds.Add(itemId))
-        {
-            ExpandedScheduleValueIds.Remove(itemId);
-        }
-    }
-
-    private bool IsScheduleValueExpanded(Guid itemId) =>
-        ExpandedScheduleValueIds.Contains(itemId);
-
-    private void AddScheduleValueSubLine(ScheduleValueItem item)
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        item.SubLines.Add(new ScheduleValueSubLine
-        {
-            Description = $"{item.Description} Progress"
-        });
-
-        ExpandedScheduleValueIds.Add(item.Id);
-        SyncJobFinancials();
-    }
-
-    private void RemoveScheduleValueSubLine(ScheduleValueItem item, Guid subLineId)
-    {
-        item.SubLines.RemoveAll(subLine => subLine.Id == subLineId);
-        SyncJobFinancials();
-    }
-
-    private decimal GetScheduleValueReferenceAmount(string categoryCode) =>
-        SelectedJob is null
-            ? 0m
-            : JobFinancialMath.GetBaselineScheduledRevenue(SelectedJob.Baseline, categoryCode);
-
-    private void OnScheduleValueReferenceChanged(ScheduleValueItem item)
-    {
-        item.ReferenceValue = EstimateMath.RoundCurrency(Math.Max(0m, item.ReferenceValue));
-        SyncJobFinancials();
-    }
-
-    private void OnScheduleValuePercentageChanged(ScheduleValueItem item)
-    {
-        item.IsPercentageManual = true;
-        item.PercentageOfTotal = EstimateMath.RoundCurrency(Math.Max(0m, item.PercentageOfTotal));
-        SyncJobFinancials();
-    }
-
-    private void OnScheduleValueCategoryChanged(ScheduleValueItem item)
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        item.CategoryCode = JobCostCodes.Normalize(item.CategoryCode);
-        if (string.IsNullOrWhiteSpace(item.Description) ||
-            item.IsAutoGenerated ||
-            string.Equals(item.Description, "Billing Line", StringComparison.OrdinalIgnoreCase))
-        {
-            item.Description = JobCostCodes.GetLabel(item.CategoryCode);
-        }
-
-        if (!item.IsChangeOrderLine)
-        {
-            item.ReferenceValue = GetScheduleValueReferenceAmount(item.CategoryCode);
-        }
-
-        item.IsPercentageManual = false;
-        SyncJobFinancials();
-    }
-
-    private decimal GetScheduleValueReferenceTotal(IEnumerable<ScheduleValueItem> items) =>
-        EstimateMath.RoundCurrency(items.Sum(item => item.ReferenceValue));
-
-    private decimal GetScheduleValuePercentTotal(IEnumerable<ScheduleValueItem> items) =>
-        EstimateMath.RoundCurrency(items.Sum(item => item.PercentageOfTotal));
-
-    private decimal GetScheduleValueBilledTotal(IEnumerable<ScheduleValueItem> items) =>
-        EstimateMath.RoundCurrency(items.Sum(item => item.BilledToDate));
-
-    private decimal GetScheduleValuePaidTotal(IEnumerable<ScheduleValueItem> items) =>
-        EstimateMath.RoundCurrency(items.Sum(item => item.PaidToDate));
-
-    private decimal GetScheduleValuePaidPercentTotal(IEnumerable<ScheduleValueItem> items)
-    {
-        var scheduledTotal = EstimateMath.RoundCurrency(items.Sum(item => item.ScheduledValue));
-        var paidTotal = GetScheduleValuePaidTotal(items);
-        return scheduledTotal <= 0m
-            ? 0m
-            : EstimateMath.RoundCurrency((paidTotal / scheduledTotal) * 100m);
-    }
-
-    private string? GetScheduleValuePercentTotalStyle(IEnumerable<ScheduleValueItem> items)
-    {
-        var totalPercent = GetScheduleValuePercentTotal(items);
-        return Math.Abs(totalPercent - 100m) > 0.05m
-            ? "color: var(--danger);"
-            : null;
-    }
-
-    private decimal GetScheduleValueSubLinePaidPercent(ScheduleValueItem item, ScheduleValueSubLine subLine) =>
-        item.ScheduledValue <= 0m
-            ? 0m
-            : EstimateMath.RoundCurrency((subLine.PaidAmount / item.ScheduledValue) * 100m);
-
-    private decimal GetLinkedCommitmentPaidPercent(ScheduleValueItem item) =>
-        SelectedJob is null
-            ? 0m
-            : JobFinancialMath.GetLinkedCommitmentPaidPercent(SelectedJob, item.Id, item.ScheduledValue);
-
-    private string GetScheduleValueSubLineCommitmentLabel(Guid? commitmentId)
-    {
-        if (SelectedJob is null || commitmentId is null)
-        {
-            return "Not linked";
-        }
-
-        var commitment = SelectedJob.Commitments.FirstOrDefault(item => item.Id == commitmentId.Value);
-        if (commitment is null)
-        {
-            return "Not linked";
-        }
-
-        if (!string.IsNullOrWhiteSpace(commitment.CommitmentNumber))
-        {
-            return commitment.CommitmentNumber;
-        }
-
-        if (!string.IsNullOrWhiteSpace(commitment.Vendor))
-        {
-            return commitment.Vendor;
-        }
-
-        return string.IsNullOrWhiteSpace(commitment.Description) ? "Linked commitment" : commitment.Description;
-    }
-
-    private void AddCommitment()
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        SelectedJob.Commitments.Add(new CommitmentRecord
-        {
-            Vendor = "Vendor",
-            ScheduleValueItemId = SelectedJob.ScheduleOfValues.FirstOrDefault()?.Id
-        });
-
-        ExpandedSectionIds.Add("commitments");
-        var firstScheduleValueId = SelectedJob.ScheduleOfValues.FirstOrDefault()?.Id;
-        if (firstScheduleValueId is not null)
-        {
-            ExpandedScheduleValueIds.Add(firstScheduleValueId.Value);
-        }
-        SyncJobFinancials();
-    }
-
-    private void OnCommitmentScheduleValueChanged(CommitmentRecord commitment, ChangeEventArgs args)
-    {
-        commitment.ScheduleValueItemId = ParseNullableGuid(args.Value?.ToString());
-        if (commitment.ScheduleValueItemId is null)
-        {
-            commitment.CommittedAmount = 0m;
-        }
-        else
-        {
-            ExpandedScheduleValueIds.Add(commitment.ScheduleValueItemId.Value);
-        }
-
-        SyncJobFinancials();
-    }
-
-    private void RemoveCommitment(Guid commitmentId)
-    {
-        SelectedJob?.Commitments.RemoveAll(commitment => commitment.Id == commitmentId);
-        SyncJobFinancials();
-    }
-
-    private void SyncJobFinancials()
-    {
-        if (SelectedJob is null)
-        {
-            return;
-        }
-
-        Store.SyncJobFinancials(SelectedJob);
-    }
-
-    private static decimal ParseCurrencyValue(string? value)
-    {
-        var parsedValue = decimal.TryParse(value, out var parsed) ? parsed : 0m;
-        return EstimateMath.RoundCurrency(Math.Max(0m, parsedValue));
-    }
-
-    private static Guid? ParseNullableGuid(string? value) =>
-        Guid.TryParse(value, out var parsed) ? parsed : null;
-}

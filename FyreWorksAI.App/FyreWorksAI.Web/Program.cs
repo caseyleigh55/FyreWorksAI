@@ -1,5 +1,7 @@
-using FyreWorksAI.Shared;
-using FyreWorksAI.Web;
+using FyreWorksAI.Shared.Core.DependencyInjection;
+using FyreWorksAI.Shared.Core.Services.Attachments;
+using FyreWorksAI.Shared.Core.Services.Storage;
+using FyreWorksAI.Web.Infrastructure;
 using FyreWorksAI.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);

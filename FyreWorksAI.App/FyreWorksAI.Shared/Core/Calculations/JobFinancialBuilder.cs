@@ -1,217 +1,10 @@
 using System.Text;
 
-namespace FyreWorksAI.Shared;
+namespace FyreWorksAI.Shared.Core.Calculations;
 
-public static class JobCostCodes
-{
-    public const string Admin = "Admin";
-    public const string Engineering = "Engineering";
-    public const string AdminEngineering = "AdminEngineering";
-    public const string Components = "Components";
-    public const string Wire = "Wire";
-    public const string Material = "Material";
-    public const string Materials = "Materials";
-    public const string Install = "Install";
-    public const string Demo = "Demo";
-    public const string Trim = "Trim";
-    public const string Test = "Test";
-    public const string ChangeOrder = "ChangeOrder";
-    public const string Other = "Other";
-
-    public static readonly IReadOnlyList<string> TimeEntryCodes =
-    [
-        Admin,
-        Engineering,
-        Install,
-        Demo,
-        Trim,
-        Test,
-        Other
-    ];
-
-    public static readonly IReadOnlyList<string> ScheduleValueCodes =
-    [
-        Admin,
-        Engineering,
-        AdminEngineering,
-        Materials,
-        Install,
-        Demo,
-        Trim,
-        Test,
-        ChangeOrder,
-        Other
-    ];
-
-    public static string Normalize(string? code)
-    {
-        if (string.IsNullOrWhiteSpace(code))
-        {
-            return Other;
-        }
-
-        return code.Trim().ToLowerInvariant() switch
-        {
-            "admin" => Admin,
-            "engineering" => Engineering,
-            "adminengineering" or "admin and engineering" or "admin + engineering" => AdminEngineering,
-            "components" or "component" => Components,
-            "wire" => Wire,
-            "material" => Material,
-            "materials" or "materials / wire / components" => Materials,
-            "install" => Install,
-            "demo" => Demo,
-            "trim" => Trim,
-            "test" => Test,
-            "changeorder" or "change order" => ChangeOrder,
-            _ => Other
-        };
-    }
-
-    public static string GetLabel(string? code) =>
-        Normalize(code) switch
-        {
-            Admin => "Admin",
-            Engineering => "Engineering",
-            AdminEngineering => "Admin And Engineering",
-            Components => "Components",
-            Wire => "Wire",
-            Material => "Material",
-            Materials => "Materials / Wire / Components",
-            Install => "Install",
-            Demo => "Demo",
-            Trim => "Trim",
-            Test => "Test",
-            ChangeOrder => "Change Order",
-            _ => "Other"
-        };
-
-    public static bool IsMaterialReferenceCategory(string? code) =>
-        Normalize(code) is Components or Wire or Material;
-}
-
-public static class JobFinancialMath
-{
-    public static decimal GetMaterialPurchaseSubtotal(JobMaterialPurchase purchase)
-    {
-        var quantity = purchase.Quantity <= 0m ? 1m : purchase.Quantity;
-        var unitCost = Math.Max(0m, purchase.UnitCost);
-        return EstimateMath.RoundCurrency(quantity * unitCost);
-    }
-
-    public static decimal GetMaterialPurchaseTotal(JobMaterialPurchase purchase)
-    {
-        var subtotal = GetMaterialPurchaseSubtotal(purchase);
-        var salesTax = EstimateMath.RoundCurrency(Math.Max(0m, purchase.SalesTax));
-        var calculated = EstimateMath.RoundCurrency(subtotal + salesTax);
-        return calculated > 0m
-            ? calculated
-            : EstimateMath.RoundCurrency(Math.Max(0m, purchase.ActualCost));
-    }
-
-    public static decimal GetJobActualCost(JobRecord job, string costCode) =>
-        EstimateMath.RoundCurrency(job.TimeEntries
-            .Where(entry => JobCostCodes.Normalize(entry.CostCode) == JobCostCodes.Normalize(costCode))
-            .Sum(entry => entry.TotalCost));
-
-    public static decimal GetJobActualHours(JobRecord job, string costCode) =>
-        EstimateMath.RoundHours(job.TimeEntries
-            .Where(entry => JobCostCodes.Normalize(entry.CostCode) == JobCostCodes.Normalize(costCode))
-            .Sum(entry => entry.Hours));
-
-    public static decimal GetTrackedBidDeviceActualCost(JobRecord job) =>
-        EstimateMath.RoundCurrency(job.Baseline.LineItems.Sum(item => item.ActualCost));
-
-    public static decimal GetTrackedJobDeviceActualCost(JobRecord job) =>
-        EstimateMath.RoundCurrency(job.JobDevices.Sum(item => item.ActualCost));
-
-    public static decimal GetInvoiceLinkedActualCost(JobRecord job, Guid invoiceId) =>
-        EstimateMath.RoundCurrency(
-            job.Baseline.LineItems
-                .Where(item => item.InvoiceId == invoiceId)
-                .Sum(item => item.ActualCost) +
-            job.JobDevices
-                .Where(item => item.InvoiceId == invoiceId)
-                .Sum(item => item.ActualCost));
-
-    public static decimal GetInvoiceAutoRemainder(JobRecord job, JobInvoiceRecord invoice) =>
-        EstimateMath.RoundCurrency(invoice.InvoiceTotal - GetInvoiceLinkedActualCost(job, invoice.Id));
-
-    public static decimal GetBaselineHours(BaselineEstimate baseline, string costCode) =>
-        JobCostCodes.Normalize(costCode) switch
-        {
-            JobCostCodes.Admin => EstimateMath.RoundHours(baseline.EstimatedAdminHours),
-            JobCostCodes.Engineering => EstimateMath.RoundHours(baseline.EstimatedEngineeringHours),
-            JobCostCodes.Install => EstimateMath.RoundHours(baseline.EstimatedInstallHours),
-            JobCostCodes.Demo => EstimateMath.RoundHours(baseline.EstimatedDemoHours),
-            JobCostCodes.Trim => EstimateMath.RoundHours(baseline.EstimatedTrimHours),
-            JobCostCodes.Test => EstimateMath.RoundHours(baseline.EstimatedTestHours),
-            _ => 0m
-        };
-
-    public static decimal GetBaselineScheduledRevenue(BaselineEstimate baseline, string scheduleCode) =>
-        JobCostCodes.Normalize(scheduleCode) switch
-        {
-            JobCostCodes.Admin => EstimateMath.RoundCurrency(baseline.EstimatedAdminSale),
-            JobCostCodes.Engineering => EstimateMath.RoundCurrency(baseline.EstimatedEngineeringSale),
-            JobCostCodes.AdminEngineering => EstimateMath.RoundCurrency(baseline.EstimatedAdminSale + baseline.EstimatedEngineeringSale),
-            JobCostCodes.Materials => EstimateMath.RoundCurrency(baseline.EstimatedComponentSale + baseline.EstimatedWireSale + baseline.EstimatedMaterialOnlySale),
-            JobCostCodes.Install => EstimateMath.RoundCurrency(baseline.EstimatedInstallSale),
-            JobCostCodes.Demo => EstimateMath.RoundCurrency(baseline.EstimatedDemoSale),
-            JobCostCodes.Trim => EstimateMath.RoundCurrency(baseline.EstimatedTrimSale),
-            JobCostCodes.Test => EstimateMath.RoundCurrency(baseline.EstimatedTestSale),
-            _ => 0m
-        };
-
-    public static decimal GetBaselineScheduledCost(BaselineEstimate baseline, string scheduleCode) =>
-        JobCostCodes.Normalize(scheduleCode) switch
-        {
-            JobCostCodes.Admin => EstimateMath.RoundCurrency(baseline.EstimatedAdminCost),
-            JobCostCodes.Engineering => EstimateMath.RoundCurrency(baseline.EstimatedEngineeringCost),
-            JobCostCodes.AdminEngineering => EstimateMath.RoundCurrency(baseline.EstimatedAdminCost + baseline.EstimatedEngineeringCost),
-            JobCostCodes.Materials => EstimateMath.RoundCurrency(baseline.EstimatedComponentCost + baseline.EstimatedWireCost + baseline.EstimatedMaterialOnlyCost),
-            JobCostCodes.Install => EstimateMath.RoundCurrency(baseline.EstimatedInstallCost),
-            JobCostCodes.Demo => EstimateMath.RoundCurrency(baseline.EstimatedDemoCost),
-            JobCostCodes.Trim => EstimateMath.RoundCurrency(baseline.EstimatedTrimCost),
-            JobCostCodes.Test => EstimateMath.RoundCurrency(baseline.EstimatedTestCost),
-            _ => 0m
-        };
-
-    public static decimal GetLinkedCommitmentCommitted(JobRecord job, Guid scheduleValueItemId) =>
-        EstimateMath.RoundCurrency(job.Commitments
-            .Where(commitment => commitment.ScheduleValueItemId == scheduleValueItemId)
-            .Sum(commitment => commitment.CommittedAmount));
-
-    public static decimal GetLinkedCommitmentBilled(JobRecord job, Guid scheduleValueItemId) =>
-        EstimateMath.RoundCurrency(job.Commitments
-            .Where(commitment => commitment.ScheduleValueItemId == scheduleValueItemId)
-            .Sum(commitment => commitment.BilledAmount));
-
-    public static decimal GetLinkedCommitmentPaid(JobRecord job, Guid scheduleValueItemId) =>
-        EstimateMath.RoundCurrency(job.Commitments
-            .Where(commitment => commitment.ScheduleValueItemId == scheduleValueItemId)
-            .Sum(commitment => commitment.PaidAmount));
-
-    public static decimal GetScheduleValuePaidPercent(ScheduleValueItem item)
-    {
-        var scheduledValue = EstimateMath.RoundCurrency(Math.Max(0m, item.ScheduledValue));
-        return scheduledValue <= 0m
-            ? 0m
-            : EstimateMath.RoundCurrency((EstimateMath.RoundCurrency(Math.Max(0m, item.PaidToDate)) / scheduledValue) * 100m);
-    }
-
-    public static decimal GetLinkedCommitmentPaidPercent(JobRecord job, Guid scheduleValueItemId, decimal scheduledValue)
-    {
-        var safeScheduledValue = EstimateMath.RoundCurrency(Math.Max(0m, scheduledValue));
-        return safeScheduledValue <= 0m
-            ? 0m
-            : EstimateMath.RoundCurrency((GetLinkedCommitmentPaid(job, scheduleValueItemId) / safeScheduledValue) * 100m);
-    }
-
-    public static decimal GetBidAllocatedPhaseHours(BidRecord bid, Func<BidLaborDistributionLine, decimal> selector) =>
-        EstimateMath.RoundHours(bid.LaborDistribution.Sum(selector));
-}
-
+//******************************//
+//****** Job Build Logic *******//
+//******************************//
 internal static class JobFinancialBuilder
 {
     public static BaselineEstimate BuildBaselineFromBid(BidRecord bid, string jobNumber)
@@ -610,6 +403,7 @@ internal static class JobFinancialBuilder
             item.Quantity = item.Quantity <= 0m ? 1m : item.Quantity;
             item.UnitLabel = string.IsNullOrWhiteSpace(item.UnitLabel) ? "ea" : item.UnitLabel.Trim();
             item.EstimatedUnitCost = EstimateMath.RoundCurrency(Math.Max(0m, item.EstimatedUnitCost));
+            item.EstimatedUnitSale = EstimateMath.RoundCurrency(Math.Max(0m, item.EstimatedUnitSale));
             item.ActualUnitCost = EstimateMath.RoundCurrency(Math.Max(0m, item.ActualUnitCost));
         }
     }
@@ -855,19 +649,27 @@ internal static class JobFinancialBuilder
                 ? JobCostCodes.GetLabel(item.CategoryCode)
                 : item.Description.Trim();
             item.Notes = item.Notes?.Trim() ?? string.Empty;
-            item.ReferenceValue = EstimateMath.RoundCurrency(Math.Max(0m, item.ReferenceValue > 0m ? item.ReferenceValue : item.ScheduledValue));
+            item.ReferenceValue = item.IsChangeOrderLine
+                ? 0m
+                : EstimateMath.RoundCurrency(Math.Max(0m, item.ReferenceValue > 0m ? item.ReferenceValue : item.ScheduledValue));
             item.ScheduledValue = EstimateMath.RoundCurrency(Math.Max(0m, item.ScheduledValue));
             item.PercentageOfTotal = EstimateMath.RoundCurrency(Math.Max(0m, item.PercentageOfTotal));
             item.BilledToDate = EstimateMath.RoundCurrency(Math.Max(0m, item.BilledToDate));
             item.PaidToDate = EstimateMath.RoundCurrency(Math.Max(0m, item.PaidToDate));
 
-            if (item.SubLines.Count == 0 && (item.BilledToDate > 0m || item.PaidToDate > 0m))
+            var hasLegacyProgressValues = item.BilledToDate > 0m || item.PaidToDate > 0m;
+            var shouldCreateEstimatedSaleSubLine = !item.IsChangeOrderLine && item.ReferenceValue > 0m;
+            if (item.SubLines.Count == 0 && (hasLegacyProgressValues || shouldCreateEstimatedSaleSubLine))
             {
                 item.SubLines.Add(new ScheduleValueSubLine
                 {
-                    Description = $"{item.Description} Progress",
+                    Description = shouldCreateEstimatedSaleSubLine ? "Estimated Sale" : $"{item.Description} Progress",
+                    LineValue = shouldCreateEstimatedSaleSubLine
+                        ? EstimateMath.RoundCurrency(item.ReferenceValue)
+                        : GetScheduleValueStartingValue(item),
                     BilledAmount = item.BilledToDate,
                     PaidAmount = item.PaidToDate,
+                    IsAutoGenerated = shouldCreateEstimatedSaleSubLine,
                     Notes = item.Notes
                 });
             }
@@ -876,13 +678,14 @@ internal static class JobFinancialBuilder
             {
                 NormalizeScheduleValueSubLine(subLine);
             }
+
+            SeedFirstScheduleValueSubLine(item);
         }
     }
 
     private static void SyncChangeOrderScheduleValues(JobRecord job)
     {
         var activeChangeOrders = job.ChangeOrders
-            .Where(changeOrder => changeOrder.Approved)
             .OrderBy(changeOrder => changeOrder.ApprovedOn)
             .ThenBy(changeOrder => changeOrder.Title)
             .ToList();
@@ -911,7 +714,8 @@ internal static class JobFinancialBuilder
             }
 
             item.Description = $"CO - {changeOrder.Title}";
-            item.ReferenceValue = EstimateMath.RoundCurrency(changeOrder.RevenueAmount);
+            item.ReferenceValue = 0m;
+            item.ScheduledValue = EstimateMath.RoundCurrency(changeOrder.RevenueAmount);
         }
     }
 
@@ -1060,6 +864,7 @@ internal static class JobFinancialBuilder
                 var newSubLine = new ScheduleValueSubLine
                 {
                     Description = BuildCommitmentSubLineDescription(commitment),
+                    LineValue = targetItem.SubLines.Count == 0 ? GetScheduleValueStartingValue(targetItem) : 0m,
                     LinkedCommitmentId = commitment.Id,
                     IsAutoGenerated = true,
                     Notes = commitment.Notes
@@ -1113,22 +918,6 @@ internal static class JobFinancialBuilder
     internal static void RollUpScheduleValues(JobRecord job)
     {
         var totalRevenue = EstimateMath.GetJobRevenue(job);
-        var manualPercentTotal = EstimateMath.RoundCurrency(job.ScheduleOfValues
-            .Where(item => item.IsPercentageManual)
-            .Sum(item => Math.Max(0m, item.PercentageOfTotal)));
-        var autoItems = job.ScheduleOfValues
-            .Where(item => !item.IsPercentageManual)
-            .ToList();
-        var remainingPercent = Math.Max(0m, 100m - manualPercentTotal);
-        var autoReferenceTotal = EstimateMath.RoundCurrency(autoItems.Sum(item => Math.Max(0m, item.ReferenceValue)));
-
-        foreach (var item in autoItems)
-        {
-            item.PercentageOfTotal = autoReferenceTotal <= 0m
-                ? 0m
-                : EstimateMath.RoundCurrency(remainingPercent * (item.ReferenceValue / autoReferenceTotal));
-        }
-
         foreach (var item in job.ScheduleOfValues)
         {
             item.CategoryCode = JobCostCodes.Normalize(item.CategoryCode);
@@ -1138,9 +927,6 @@ internal static class JobFinancialBuilder
             item.Notes = item.Notes?.Trim() ?? string.Empty;
             item.ReferenceValue = EstimateMath.RoundCurrency(Math.Max(0m, item.ReferenceValue));
             item.PercentageOfTotal = EstimateMath.RoundCurrency(Math.Max(0m, item.PercentageOfTotal));
-            item.ScheduledValue = totalRevenue <= 0m
-                ? 0m
-                : EstimateMath.RoundCurrency(totalRevenue * (item.PercentageOfTotal / 100m));
 
             item.SubLines ??= [];
             foreach (var subLine in item.SubLines)
@@ -1148,8 +934,16 @@ internal static class JobFinancialBuilder
                 NormalizeScheduleValueSubLine(subLine);
             }
 
+            SeedFirstScheduleValueSubLine(item);
+            item.ScheduledValue = item.SubLines.Count == 0
+                ? GetScheduleValueStartingValue(item)
+                : EstimateMath.RoundCurrency(item.SubLines.Sum(subLine => subLine.LineValue));
             item.BilledToDate = EstimateMath.RoundCurrency(item.SubLines.Sum(subLine => subLine.BilledAmount));
             item.PaidToDate = EstimateMath.RoundCurrency(item.SubLines.Sum(subLine => subLine.PaidAmount));
+            item.PercentageOfTotal = totalRevenue <= 0m
+                ? 0m
+                : EstimateMath.RoundCurrency((item.ScheduledValue / totalRevenue) * 100m);
+            item.IsPercentageManual = false;
         }
     }
 
@@ -1180,9 +974,24 @@ internal static class JobFinancialBuilder
         subLine.Description = string.IsNullOrWhiteSpace(subLine.Description)
             ? "Progress Entry"
             : subLine.Description.Trim();
+        subLine.LineValue = EstimateMath.RoundCurrency(Math.Max(0m, subLine.LineValue));
         subLine.BilledAmount = EstimateMath.RoundCurrency(Math.Max(0m, subLine.BilledAmount));
         subLine.PaidAmount = EstimateMath.RoundCurrency(Math.Max(0m, subLine.PaidAmount));
         subLine.Notes = subLine.Notes?.Trim() ?? string.Empty;
+    }
+
+    private static decimal GetScheduleValueStartingValue(ScheduleValueItem item) =>
+        EstimateMath.RoundCurrency(Math.Max(0m, item.ScheduledValue > 0m ? item.ScheduledValue : item.ReferenceValue));
+
+    private static void SeedFirstScheduleValueSubLine(ScheduleValueItem item)
+    {
+        var startingValue = GetScheduleValueStartingValue(item);
+        if (startingValue <= 0m || item.SubLines.Count == 0 || item.SubLines.Any(subLine => subLine.LineValue > 0m))
+        {
+            return;
+        }
+
+        item.SubLines[0].LineValue = startingValue;
     }
 
     private static decimal GetBidPhaseCost(BidRecord bid, Func<BidLaborDistributionLine, decimal> selector)
@@ -1384,3 +1193,4 @@ internal static class JobFinancialBuilder
             Notes = material.Notes
         };
 }
+

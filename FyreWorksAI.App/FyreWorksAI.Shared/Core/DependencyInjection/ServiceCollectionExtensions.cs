@@ -1,0 +1,17 @@
+using Microsoft.Extensions.DependencyInjection;
+
+namespace FyreWorksAI.Shared.Core.DependencyInjection;
+
+//******************************//
+//****** Service Wiring ********//
+//******************************//
+
+public static class ServiceCollectionExtensions
+{
+    public static IServiceCollection AddFyreWorksCore(this IServiceCollection services)
+    {
+        services.AddSingleton<IWorkspaceStorage, TextFileWorkspaceStorage>();
+        services.AddSingleton<WorkspaceStore>();
+        return services;
+    }
+}

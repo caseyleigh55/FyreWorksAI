@@ -920,6 +920,34 @@ label span {
     font-weight: 600;
 }
 
+.compact-total-value {
+    display: inline-block;
+    margin: 0;
+    color: #ffb17f;
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+}
+
+.compact-readonly-value {
+    display: inline-block;
+    white-space: nowrap;
+    color: var(--text);
+}
+
+.sov-line-editor-table {
+    margin-top: 0.25rem;
+}
+
+.sov-line-editor-table td,
+.sov-line-editor-table th {
+    white-space: nowrap;
+}
+
+.sov-line-editor-table td input,
+.sov-line-editor-table td select {
+    min-height: 2.6rem;
+}
+
 .quote-directory {
     display: grid;
     gap: 0.5rem;
