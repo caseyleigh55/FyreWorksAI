@@ -44,12 +44,15 @@ public sealed class JobInvoiceRecord
 public sealed class JobTimeEntry
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? DailyLogId { get; set; }
     public DateTime WorkDate { get; set; } = DateTime.Today;
     public string CrewMember { get; set; } = string.Empty;
+    public string LaborClass { get; set; } = nameof(PersonnelType.Journeyman);
     public bool IsOvernight { get; set; }
-    public decimal Hours { get; set; } = 8m;
+    public decimal Hours { get; set; }
     public decimal HourlyRate { get; set; } = 115m;
     public string CostCode { get; set; } = "Field";
+    public Guid? ChangeOrderId { get; set; }
     public string Notes { get; set; } = string.Empty;
 
     [JsonIgnore]

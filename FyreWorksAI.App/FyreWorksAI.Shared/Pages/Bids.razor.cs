@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
+using FyreWorksAI.Shared.Core.Services.Status;
 
 namespace FyreWorksAI.Shared.Pages;
 
@@ -147,7 +148,7 @@ public partial class Bids : IDisposable
         CollapseAllSections();
         CloseDirectoryPanel();
         PendingSectionElementId = null;
-        StatusMessage = "New bid created.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp("New bid created.");
         RefreshPageSectionNavigation();
         await Store.SaveAsync();
         NavigationManager.NavigateTo($"/bids?selected={bid.Id}", replace: true);
@@ -164,13 +165,13 @@ public partial class Bids : IDisposable
         if (SelectedBid is null) return;
         var client = Store.CreateClient();
         SelectedBid.ClientId = client.Id;
-        StatusMessage = "New client linked to the bid.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp("New client linked to the bid.");
     }
 
     private async Task SaveAsync()
     {
         await Store.SaveAsync();
-        StatusMessage = "Bid saved.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp("Bid saved.");
     }
 
     private async Task DeleteBidAsync()
@@ -192,7 +193,7 @@ public partial class Bids : IDisposable
         PendingSectionElementId = null;
         RefreshPageSectionNavigation();
         await Store.SaveAsync();
-        StatusMessage = "Bid deleted.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp("Bid deleted.");
         NavigationManager.NavigateTo(
             SelectedBidId is null ? "/bids" : $"/bids?selected={SelectedBidId}",
             replace: true);
@@ -204,7 +205,7 @@ public partial class Bids : IDisposable
         Store.ApplyTemplateToBid(SelectedBid);
         SyncAllCalculatedSales();
         await Store.SaveAsync();
-        StatusMessage = "Template values applied to the bid.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp("Template values applied to the bid.");
     }
 
     private async Task SaveCurrentTemplateAsync()
@@ -212,7 +213,7 @@ public partial class Bids : IDisposable
         if (SelectedBid is null) return;
         var template = Store.CreateTemplateFromBid(SelectedBid);
         await Store.SaveAsync();
-        StatusMessage = $"Saved pricing profile {template.Name}.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp($"Saved pricing profile {template.Name}.");
     }
 
     private async Task ExportProposalAsync()
@@ -220,7 +221,7 @@ public partial class Bids : IDisposable
         if (SelectedBid is null) return;
         await Store.SaveAsync();
         var path = await Store.ExportBidProposalAsync(SelectedBid);
-        StatusMessage = $"Proposal export created at {path}.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp($"Proposal export created at {path}.");
     }
 
     private async Task ConvertToJobAsync()
@@ -279,7 +280,9 @@ public partial class Bids : IDisposable
             PageSectionNavigationOwnerKey,
             BidPageSectionNavigationItems,
             OnPageSectionNavigationRequestedAsync,
-            ActiveMainSectionId);
+            ActiveMainSectionId,
+            "Project",
+            GetPageContextName());
     }
 
     private void SetActiveMainSection(string? sectionId)
@@ -331,8 +334,10 @@ public partial class Bids : IDisposable
             return;
         }
 
-        SelectedBid.AdministrativeTasks.Add(new WorkTask { Title = "Administrative Task" });
+        var task = new WorkTask { Title = "Administrative Task" };
+        SelectedBid.AdministrativeTasks.Add(task);
         ExpandSection(OfficeScopeSectionId);
+        PendingSectionElementId = GetAdministrativeTaskElementId(task.Id);
     }
 
     private void RemoveAdministrativeTask(Guid taskId) => SelectedBid?.AdministrativeTasks.RemoveAll(task => task.Id == taskId);
@@ -344,8 +349,10 @@ public partial class Bids : IDisposable
             return;
         }
 
-        SelectedBid.EngineeringTasks.Add(new WorkTask { Title = "Engineering Task" });
+        var task = new WorkTask { Title = "Engineering Task" };
+        SelectedBid.EngineeringTasks.Add(task);
         ExpandSection(EngineeringScopeSectionId);
+        PendingSectionElementId = GetEngineeringTaskElementId(task.Id);
     }
 
     private void RemoveEngineeringTask(Guid taskId) => SelectedBid?.EngineeringTasks.RemoveAll(task => task.Id == taskId);
@@ -367,6 +374,7 @@ public partial class Bids : IDisposable
         SelectedBid.Components.Add(component);
         ExpandSection(ComponentsSectionId);
         ExpandedComponentIds.Add(component.Id);
+        PendingSectionElementId = GetComponentElementId(component.Id);
         RefreshFieldLaborMix();
     }
 
@@ -384,13 +392,17 @@ public partial class Bids : IDisposable
 
         SelectedBid.DemoItems.Add(demoItem);
         ExpandSection(DemoScopeSectionId);
+        PendingSectionElementId = GetDemoItemElementId(demoItem.Id);
         RefreshFieldLaborMix();
     }
 
     private void MatchComponent(BidComponent component)
     {
         var matched = Store.ApplyTemplateToComponent(component, Store.GetTemplate(SelectedBid?.TemplateId));
-        StatusMessage = matched ? "Component labor matched from the selected template." : "No matching template rule was found for that location/condition combination.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp(
+            matched
+                ? "Component labor matched from the selected template."
+                : "No matching template rule was found for that location/condition combination.");
     }
 
     private void MatchComponentSilently(BidComponent component)
@@ -460,8 +472,9 @@ public partial class Bids : IDisposable
             return;
         }
 
-        AddMaterialLine(BidMaterialKind.Wire, "Wire", "Wire Item");
+        var item = AddMaterialLine(BidMaterialKind.Wire, "Wire", "Wire Item");
         ExpandSection(WireItemsSectionId);
+        PendingSectionElementId = GetMaterialItemElementId(item.Id);
     }
 
     private void AddMaterial()
@@ -471,14 +484,27 @@ public partial class Bids : IDisposable
             return;
         }
 
-        AddMaterialLine(BidMaterialKind.Material, "Material", "Material Item");
+        var item = AddMaterialLine(BidMaterialKind.Material, "Material", "Material Item");
         ExpandSection(MaterialItemsSectionId);
+        PendingSectionElementId = GetMaterialItemElementId(item.Id);
     }
 
-    private void AddMaterialLine(BidMaterialKind kind, string category, string description)
+    private BidMaterialItem AddMaterialLine(BidMaterialKind kind, string category, string description)
     {
-        if (SelectedBid is null) return;
-        SelectedBid.Materials.Add(new BidMaterialItem { Kind = kind, Category = category, Description = description });
+        if (SelectedBid is null)
+        {
+            return new BidMaterialItem();
+        }
+
+        var item = new BidMaterialItem
+        {
+            Kind = kind,
+            Category = category,
+            Description = description
+        };
+
+        SelectedBid.Materials.Add(item);
+        return item;
     }
 
     private void RemoveMaterial(Guid materialId) => SelectedBid?.Materials.RemoveAll(material => material.Id == materialId);
@@ -521,6 +547,53 @@ public partial class Bids : IDisposable
 
     private static string FormatCompactNumber(decimal value) =>
         value.ToString("0.##");
+
+    private static string GetAdministrativeTaskElementId(WorkTask task) =>
+        GetAdministrativeTaskElementId(task.Id);
+
+    private static string GetAdministrativeTaskElementId(Guid taskId) =>
+        $"bids-administrative-task-{taskId:N}";
+
+    private static string GetEngineeringTaskElementId(WorkTask task) =>
+        GetEngineeringTaskElementId(task.Id);
+
+    private static string GetEngineeringTaskElementId(Guid taskId) =>
+        $"bids-engineering-task-{taskId:N}";
+
+    private static string GetDemoItemElementId(Guid demoItemId) =>
+        $"bids-demo-item-{demoItemId:N}";
+
+    private static string GetComponentElementId(Guid componentId) =>
+        $"bids-component-{componentId:N}";
+
+    private static string GetWireItemElementId(BidMaterialItem item) =>
+        GetMaterialItemElementId(item.Id);
+
+    private static string GetMaterialItemElementId(BidMaterialItem item) =>
+        GetMaterialItemElementId(item.Id);
+
+    private static string GetMaterialItemElementId(Guid materialId) =>
+        $"bids-material-item-{materialId:N}";
+
+    private string GetPageContextName()
+    {
+        if (SelectedBid is null)
+        {
+            return string.Empty;
+        }
+
+        if (!string.IsNullOrWhiteSpace(SelectedBid.ProjectName))
+        {
+            return SelectedBid.ProjectName.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(SelectedBid.BidNumber))
+        {
+            return SelectedBid.BidNumber.Trim();
+        }
+
+        return "Untitled Bid";
+    }
 
     private void SyncAllCalculatedSales()
     {

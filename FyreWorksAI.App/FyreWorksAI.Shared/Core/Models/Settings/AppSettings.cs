@@ -23,6 +23,7 @@ public sealed class AppSettings
     public int DefaultServiceContractMonths { get; set; } = 24;
     public int DefaultInspectionIntervalMonths { get; set; } = 12;
     public decimal DefaultMonthlyMonitoringAmount { get; set; } = 165m;
+    public List<string> SavedPersonnelNames { get; set; } = [];
     public List<YearSequenceCounter> BidNumberCounters { get; set; } = [];
     public List<YearSequenceCounter> JobNumberCounters { get; set; } = [];
 }

@@ -1,5 +1,6 @@
 @page "/service"
 @inject WorkspaceStore Store
+@inject NavigationManager NavigationManager
 
 <PageTitle>Service</PageTitle>
 
@@ -84,7 +85,7 @@ else
             }
             else
             {
-                <section class="panel">
+                <section id="@AgreementInfoElementId" class="panel page-section-anchor">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Agreement editor</p>
@@ -108,7 +109,7 @@ else
                         </label>
                         <label>
                             <span>Agreement Name</span>
-                            <input @bind="SelectedAgreement.AgreementName" />
+                            <input @bind="SelectedAgreement.AgreementName" @bind:after="RefreshPageSectionNavigation" />
                         </label>
                         <label class="checkbox-field">
                             <span>Active</span>
@@ -170,131 +171,153 @@ else
                     </article>
                 </section>
 
-                <section class="panel">
+                <section id="@ProtectedPremisesElementId" class="panel page-section-anchor @(IsSectionExpanded(ProtectedPremisesSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Client + site</p>
                             <h3>Protected Premises</h3>
                         </div>
-                        <button class="button button-secondary" type="button" @onclick="CreateClientForAgreement">New Client</button>
+                        <div class="panel-header-actions">
+                            <button class="button button-secondary" type="button" @onclick="CreateClientForAgreement">New Client</button>
+                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ProtectedPremisesSectionId)'>@(IsSectionExpanded(ProtectedPremisesSectionId) ? "Collapse" : "Expand")</button>
+                        </div>
                     </div>
 
-                    @if (currentClient is null)
+                    @if (IsSectionExpanded(ProtectedPremisesSectionId) && currentClient is null)
                     {
                         <p class="muted">Assign a service client to connect billing and monitoring history to a reusable customer record.</p>
                     }
-                    else
+                    else if (IsSectionExpanded(ProtectedPremisesSectionId))
                     {
+                        var editableClient = currentClient!;
+
                         <div class="form-grid two-columns">
                             <label>
                                 <span>Client Name</span>
-                                <input @bind="currentClient.Name" />
+                                <input @bind="editableClient.Name" />
                             </label>
                             <label>
                                 <span>Primary Contact</span>
-                                <input @bind="currentClient.PrimaryContact" />
+                                <input @bind="editableClient.PrimaryContact" />
                             </label>
                             <label>
                                 <span>Email</span>
-                                <input @bind="currentClient.Email" />
+                                <input @bind="editableClient.Email" />
                             </label>
                             <label>
                                 <span>Phone</span>
-                                <input @bind="currentClient.Phone" />
+                                <input @bind="editableClient.Phone" />
                             </label>
                             <label class="full-width">
                                 <span>Billing Address</span>
-                                <textarea rows="2" @bind="currentClient.BillingAddress"></textarea>
+                                <textarea class="notes-field" rows="2" @bind="editableClient.BillingAddress"></textarea>
                             </label>
                         </div>
                     }
 
-                    <div class="form-grid two-columns">
-                        <label>
-                            <span>Site Name</span>
-                            <input @bind="SelectedAgreement.Site.SiteName" />
-                        </label>
-                        <label>
-                            <span>Occupancy</span>
-                            <input @bind="SelectedAgreement.Site.OccupancyType" />
-                        </label>
-                        <label>
-                            <span>Address Line 1</span>
-                            <input @bind="SelectedAgreement.Site.AddressLine1" />
-                        </label>
-                        <label>
-                            <span>Address Line 2</span>
-                            <input @bind="SelectedAgreement.Site.AddressLine2" />
-                        </label>
-                        <label>
-                            <span>City</span>
-                            <input @bind="SelectedAgreement.Site.City" />
-                        </label>
-                        <label>
-                            <span>State</span>
-                            <input @bind="SelectedAgreement.Site.State" />
-                        </label>
-                        <label>
-                            <span>Postal Code</span>
-                            <input @bind="SelectedAgreement.Site.PostalCode" />
-                        </label>
-                        <label class="full-width">
-                            <span>Site Notes</span>
-                            <textarea rows="2" @bind="SelectedAgreement.Site.Notes"></textarea>
-                        </label>
-                    </div>
+                    @if (IsSectionExpanded(ProtectedPremisesSectionId))
+                    {
+                        <div class="form-grid two-columns">
+                            <label>
+                                <span>Site Name</span>
+                                <input @bind="SelectedAgreement.Site.SiteName" />
+                            </label>
+                            <label>
+                                <span>Occupancy</span>
+                                <input @bind="SelectedAgreement.Site.OccupancyType" />
+                            </label>
+                            <label>
+                                <span>Address Line 1</span>
+                                <input @bind="SelectedAgreement.Site.AddressLine1" />
+                            </label>
+                            <label>
+                                <span>Address Line 2</span>
+                                <input @bind="SelectedAgreement.Site.AddressLine2" />
+                            </label>
+                            <label>
+                                <span>City</span>
+                                <input @bind="SelectedAgreement.Site.City" />
+                            </label>
+                            <label>
+                                <span>State</span>
+                                <input @bind="SelectedAgreement.Site.State" />
+                            </label>
+                            <label>
+                                <span>Postal Code</span>
+                                <input @bind="SelectedAgreement.Site.PostalCode" />
+                            </label>
+                            <label class="full-width">
+                                <span>Site Notes</span>
+                                <textarea class="notes-field" rows="1" @bind="SelectedAgreement.Site.Notes"></textarea>
+                            </label>
+                        </div>
+                    }
                 </section>
 
-                <section class="panel">
+                <section id="@MonitoringPaymentsElementId" class="panel page-section-anchor @(IsSectionExpanded(MonitoringPaymentsSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Recurring billing</p>
                             <h3>Monitoring Payments</h3>
                         </div>
-                        <button class="button button-secondary" type="button" @onclick="AddMonitoringPayment">Add Payment Row</button>
+                        <div class="panel-header-actions">
+                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection(MonitoringPaymentsSectionId)'>@(IsSectionExpanded(MonitoringPaymentsSectionId) ? "Collapse" : "Expand")</button>
+                        </div>
                     </div>
 
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Due</th>
-                                <th>Amount</th>
-                                <th>Paid</th>
-                                <th>Received</th>
-                                <th>Notes</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var payment in SelectedAgreement.MonitoringPayments.OrderBy(payment => payment.DueDate))
-                            {
-                                <tr @key="payment.Id">
-                                    <td><input type="date" @bind="payment.DueDate" @bind:format="yyyy-MM-dd" /></td>
-                                    <td><input type="number" step="0.01" @bind="payment.Amount" /></td>
-                                    <td><input type="checkbox" @bind="payment.IsPaid" /></td>
-                                    <td><input type="date" @bind="payment.ReceivedOn" @bind:format="yyyy-MM-dd" /></td>
-                                    <td><input @bind="payment.Notes" /></td>
-                                    <td><button class="text-button danger" type="button" @onclick="() => RemoveMonitoringPayment(payment.Id)">Remove</button></td>
+                    @if (IsSectionExpanded(MonitoringPaymentsSectionId))
+                    {
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Due</th>
+                                    <th>Amount</th>
+                                    <th>Paid</th>
+                                    <th>Received</th>
+                                    <th>Notes</th>
+                                    <th></th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                @foreach (var payment in SelectedAgreement.MonitoringPayments.OrderBy(payment => payment.DueDate))
+                                {
+                                    <tr id="@GetMonitoringPaymentElementId(payment.Id)" class="page-section-anchor" @key="payment.Id">
+                                        <td><input type="date" @bind="payment.DueDate" @bind:format="yyyy-MM-dd" /></td>
+                                        <td><input type="number" step="0.01" @bind="payment.Amount" /></td>
+                                        <td><input type="checkbox" @bind="payment.IsPaid" /></td>
+                                        <td><input type="date" @bind="payment.ReceivedOn" @bind:format="yyyy-MM-dd" /></td>
+                                        <td><input @bind="payment.Notes" /></td>
+                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveMonitoringPayment(payment.Id)">Remove</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+
+                    @if (IsSectionExpanded(MonitoringPaymentsSectionId))
+                    {
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddMonitoringPayment">Add Payment Row</button>
+                        </div>
+                    }
                 </section>
 
-                <section class="panel">
+                <section id="@ServiceCallsElementId" class="panel page-section-anchor @(IsSectionExpanded(ServiceCallsSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Field support</p>
                             <h3>Service Calls</h3>
                         </div>
-                        <button class="button button-secondary" type="button" @onclick="AddServiceCall">Add Service Call</button>
+                        <div class="panel-header-actions">
+                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ServiceCallsSectionId)'>@(IsSectionExpanded(ServiceCallsSectionId) ? "Collapse" : "Expand")</button>
+                        </div>
                     </div>
 
-                    @if (SelectedAgreement.ServiceCalls.Count == 0)
+                    @if (IsSectionExpanded(ServiceCallsSectionId) && SelectedAgreement.ServiceCalls.Count == 0)
                     {
                         <p class="muted">Track call status, scheduling, technicians, and notes for demand service work.</p>
                     }
-                    else
+                    else if (IsSectionExpanded(ServiceCallsSectionId))
                     {
                         <table class="data-table">
                             <thead>
@@ -312,7 +335,7 @@ else
                             <tbody>
                                 @foreach (var serviceCall in SelectedAgreement.ServiceCalls)
                                 {
-                                    <tr @key="serviceCall.Id">
+                                    <tr id="@GetServiceCallElementId(serviceCall.Id)" class="page-section-anchor" @key="serviceCall.Id">
                                         <td><input @bind="serviceCall.Title" /></td>
                                         <td>
                                             <select @bind="serviceCall.Status">
@@ -333,124 +356,153 @@ else
                             </tbody>
                         </table>
                     }
+
+                    @if (IsSectionExpanded(ServiceCallsSectionId))
+                    {
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddServiceCall">Add Service Call</button>
+                        </div>
+                    }
                 </section>
 
-                <section class="panel">
+                <section id="@ServiceQuotesElementId" class="panel page-section-anchor @(IsSectionExpanded(ServiceQuotesSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Simplified quoting</p>
                             <h3>Service Quotes</h3>
                         </div>
-                        <button class="button button-secondary" type="button" @onclick="AddQuote">Add Quote</button>
+                        <div class="panel-header-actions">
+                            <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ServiceQuotesSectionId)'>@(IsSectionExpanded(ServiceQuotesSectionId) ? "Collapse" : "Expand")</button>
+                        </div>
                     </div>
 
-                    <div class="quote-layout">
-                        <div class="quote-directory">
-                            @if (SelectedAgreement.Quotes.Count == 0)
-                            {
-                                <p class="muted">No service quotes yet.</p>
-                            }
-                            else
-                            {
-                                @foreach (var quote in SelectedAgreement.Quotes)
+                    @if (IsSectionExpanded(ServiceQuotesSectionId))
+                    {
+                        <div class="quote-layout">
+                            <div class="quote-directory">
+                                @if (SelectedAgreement.Quotes.Count == 0)
                                 {
-                                    <button class="directory-item @(SelectedQuote?.Id == quote.Id ? "selected" : null)" type="button" @onclick="() => SelectQuote(quote.Id)">
-                                        <strong>@quote.Title</strong>
-                                        <span>@quote.Status</span>
-                                        <small>@EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteRevenue(quote))</small>
-                                    </button>
-                                }
-                            }
-                        </div>
-
-                        <div>
-                            @if (SelectedQuote is null)
-                            {
-                                <p class="muted">Select a quote to edit its line items.</p>
-                            }
-                            else
-                            {
-                                <div class="form-grid two-columns">
-                                    <label>
-                                        <span>Quote Title</span>
-                                        <input @bind="SelectedQuote.Title" />
-                                    </label>
-                                    <label>
-                                        <span>Status</span>
-                                        <select @bind="SelectedQuote.Status">
-                                            <option>Draft</option>
-                                            <option>Sent</option>
-                                            <option>Approved</option>
-                                            <option>Rejected</option>
-                                        </select>
-                                    </label>
-                                    <label>
-                                        <span>Created</span>
-                                        <input type="date" @bind="SelectedQuote.CreatedOn" @bind:format="yyyy-MM-dd" />
-                                    </label>
-                                </div>
-
-                                <label class="full-width">
-                                    <span>Quote Notes</span>
-                                    <textarea rows="2" @bind="SelectedQuote.Notes"></textarea>
-                                </label>
-
-                                <div class="panel-header minor">
-                                    <h4>Quoted Items</h4>
-                                    <button class="button button-secondary" type="button" @onclick="AddQuoteItem">Add Line Item</button>
-                                </div>
-
-                                @if (SelectedQuote.Items.Count == 0)
-                                {
-                                    <p class="muted">Add line items for parts, labor, or service corrections.</p>
+                                    <p class="muted">No service quotes yet.</p>
                                 }
                                 else
                                 {
-                                    <table class="data-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Description</th>
-                                                <th>Qty</th>
-                                                <th>Unit Cost</th>
-                                                <th>Unit Price</th>
-                                                <th>Notes</th>
-                                                <th></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach (var item in SelectedQuote.Items)
-                                            {
-                                                <tr @key="item.Id">
-                                                    <td><input @bind="item.Description" /></td>
-                                                    <td><input type="number" step="1" @bind="item.Quantity" /></td>
-                                                    <td><input type="number" step="0.01" @bind="item.UnitCost" /></td>
-                                                    <td><input type="number" step="0.01" @bind="item.UnitPrice" /></td>
-                                                    <td><input @bind="item.Notes" /></td>
-                                                    <td><button class="text-button danger" type="button" @onclick="() => RemoveQuoteItem(item.Id)">Remove</button></td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
+                                    @foreach (var quote in SelectedAgreement.Quotes)
+                                    {
+                                        <button id="@GetServiceQuoteElementId(quote.Id)" class="directory-item @(SelectedQuote?.Id == quote.Id ? "selected" : null) page-section-anchor" type="button" @onclick="() => SelectQuote(quote.Id)">
+                                            <strong>@quote.Title</strong>
+                                            <span>@quote.Status</span>
+                                            <small>@EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteRevenue(quote))</small>
+                                        </button>
+                                    }
+                                }
 
-                                    <div class="stats-inline">
-                                        <span>Cost @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteCost(SelectedQuote))</span>
-                                        <span>Quote @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteRevenue(SelectedQuote))</span>
-                                        <span>Margin @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteRevenue(SelectedQuote) - EstimateMath.GetServiceQuoteCost(SelectedQuote))</span>
+                                <div class="section-add-action">
+                                    <button class="button button-secondary" type="button" @onclick="AddQuote">Add Quote</button>
+                                </div>
+                            </div>
+
+                            <div>
+                                @if (SelectedQuote is null)
+                                {
+                                    <p class="muted">Select a quote to edit its line items.</p>
+                                }
+                                else
+                                {
+                                    <div class="form-grid two-columns">
+                                        <label>
+                                            <span>Quote Title</span>
+                                            <input @bind="SelectedQuote.Title" />
+                                        </label>
+                                        <label>
+                                            <span>Status</span>
+                                            <select @bind="SelectedQuote.Status">
+                                                <option>Draft</option>
+                                                <option>Sent</option>
+                                                <option>Approved</option>
+                                                <option>Rejected</option>
+                                            </select>
+                                        </label>
+                                        <label>
+                                            <span>Created</span>
+                                            <input type="date" @bind="SelectedQuote.CreatedOn" @bind:format="yyyy-MM-dd" />
+                                        </label>
+                                    </div>
+
+                                    <label class="full-width">
+                                        <span>Quote Notes</span>
+                                        <textarea class="notes-field" rows="1" @bind="SelectedQuote.Notes"></textarea>
+                                    </label>
+
+                                    <div class="panel-header minor">
+                                        <h4>Quoted Items</h4>
+                                    </div>
+
+                                    @if (SelectedQuote.Items.Count == 0)
+                                    {
+                                        <p class="muted">Add line items for parts, labor, or service corrections.</p>
+                                    }
+                                    else
+                                    {
+                                        <table class="data-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Description</th>
+                                                    <th>Qty</th>
+                                                    <th>Unit Cost</th>
+                                                    <th>Unit Price</th>
+                                                    <th>Notes</th>
+                                                    <th></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var item in SelectedQuote.Items)
+                                                {
+                                                    <tr id="@GetServiceQuoteItemElementId(item.Id)" class="page-section-anchor" @key="item.Id">
+                                                        <td><input @bind="item.Description" /></td>
+                                                        <td><input type="number" step="1" @bind="item.Quantity" /></td>
+                                                        <td><input type="number" step="0.01" @bind="item.UnitCost" /></td>
+                                                        <td><input type="number" step="0.01" @bind="item.UnitPrice" /></td>
+                                                        <td><input @bind="item.Notes" /></td>
+                                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveQuoteItem(item.Id)">Remove</button></td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+
+                                        <div class="stats-inline">
+                                            <span>Cost @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteCost(SelectedQuote))</span>
+                                            <span>Quote @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteRevenue(SelectedQuote))</span>
+                                            <span>Margin @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteRevenue(SelectedQuote) - EstimateMath.GetServiceQuoteCost(SelectedQuote))</span>
+                                        </div>
+                                    }
+
+                                    <div class="section-add-action">
+                                        <button class="button button-secondary" type="button" @onclick="AddQuoteItem">Add Line Item</button>
                                     </div>
                                 }
-                            }
+                            </div>
                         </div>
-                    </div>
+                    }
                 </section>
 
                 <AttachmentManager Attachments="SelectedAgreement.Attachments" Area="service" OwnerId="SelectedAgreement.Id" />
 
-                <section class="panel">
-                    <p class="eyebrow">Agreement notes</p>
-                    <label class="full-width">
-                        <span>Notes</span>
-                        <textarea rows="4" @bind="SelectedAgreement.Notes"></textarea>
-                    </label>
+                <section id="@ServiceNotesElementId" class="panel page-section-anchor @(IsSectionExpanded(ServiceNotesSectionId) ? "panel-expanded" : null)">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Agreement notes</p>
+                            <h3>Notes</h3>
+                        </div>
+                        <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ServiceNotesSectionId)'>@(IsSectionExpanded(ServiceNotesSectionId) ? "Collapse" : "Expand")</button>
+                    </div>
+
+                    @if (IsSectionExpanded(ServiceNotesSectionId))
+                    {
+                        <label class="full-width">
+                            <span>Notes</span>
+                            <textarea class="notes-field" rows="2" @bind="SelectedAgreement.Notes"></textarea>
+                        </label>
+                    }
                 </section>
             }
         </div>

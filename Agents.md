@@ -63,8 +63,11 @@ These are recurring preferences that should be treated as the default product di
 
 - Maximize usable horizontal space. Avoid wasting width with large fixed side panels.
 - The Operations Hub should live as a thin sticky bar across the top, with nav links in a row.
+- Dense workflow pages can add a contextual second row under the main hub nav for page-section shortcuts.
+- Page-section shortcuts should collapse the other main sections, open the selected section, and scroll/jump to it.
 - Left-side project-control lists should collapse into a small flag/drawer instead of permanently consuming layout width.
 - Sections should be collapsible where it helps keep dense workflows readable.
+- On dense workflow pages with many sections, main sections should default to collapsed on initial load.
 - Individual records inside sections should also collapse where appropriate.
 - Notes should stay compact by default and expand when focused/opened.
 - Important references should cross-link between related records when possible.
@@ -77,6 +80,7 @@ These are recurring preferences that should be treated as the default product di
 - Legacy long-form job numbers are normalized into `JOB-YY-NNNN`
 - Jobs converted from bids should retain a reference back to the source bid
 - Bids converted into jobs should expose a job-reference navigation action
+- When a bid has a linked job, the bid-to-job navigation action should display the actual linked job number in the button label
 
 ## Jobs + Financial Concepts
 
@@ -161,13 +165,16 @@ The current direction for SOV behavior is:
 These are important decisions already reflected in the app:
 
 - Top-bar Operations Hub layout
+- Contextual hub section-navigation row implemented for Jobs and Bids
 - Collapsible left flag/drawer project-control panels
 - Cross-links between bids and jobs
 - Collapsible sections across the Jobs workflow
+- Main workflow sections on Jobs and Bids default to collapsed on load
 - Compact-expand notes behavior
 - Collapsible invoices and change orders
 - Change-order attachments
 - Job baseline revenue sourced from accepted bid sale
+- Bid page linked-job navigation shows the actual destination job number
 - SOV line reference values and child progress entries
 - SOV totals footer
 - Job number normalization to `JOB-YY-NNNN`

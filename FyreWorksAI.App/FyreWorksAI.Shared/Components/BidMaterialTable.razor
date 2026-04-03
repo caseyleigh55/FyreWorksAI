@@ -19,7 +19,7 @@ else
         <tbody>
             @foreach (var item in Items)
             {
-                <tr @key="item.Id">
+                <tr id="@ResolveRowElementId(item)" class="page-section-anchor" @key="item.Id">
                     <td><input @bind="item.Category" /></td>
                     <td><input @bind="item.Description" /></td>
                     <td><input type="number" step="1" @bind="item.Quantity" @bind:event="oninput" @bind:after="NotifyChanged" /></td>

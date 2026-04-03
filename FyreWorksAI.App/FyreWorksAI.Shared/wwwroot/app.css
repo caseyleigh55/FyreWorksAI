@@ -109,7 +109,7 @@ button:disabled {
 }
 
 .shell.shell-with-page-sections {
-    --current-topbar-height: 7.6rem;
+    --current-topbar-height: 9rem;
 }
 
 .shell-topbar {
@@ -119,9 +119,9 @@ button:disabled {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 1rem;
+    gap: 0.85rem;
     min-height: var(--topbar-height);
-    padding: 0.75rem 1.25rem;
+    padding: 0.6rem 1rem;
     background: rgba(7, 13, 18, 0.92);
     border-bottom: 1px solid var(--line);
     backdrop-filter: blur(18px);
@@ -129,8 +129,9 @@ button:disabled {
 
 .topbar-center {
     display: grid;
-    gap: 0.5rem;
+    gap: 0.3rem;
     min-width: 0;
+    justify-items: center;
 }
 
 .topbar-brand {
@@ -167,22 +168,70 @@ button:disabled {
 
 .shell-page-section-nav {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: center;
-    gap: 0.45rem;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+    margin: 0 auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.shell-page-section-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.shell-page-context {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    min-width: 0;
+    max-width: min(100%, 34rem);
+    margin: 0 auto;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.shell-page-context-label {
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.shell-page-context-value {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-family: var(--font-display);
+    font-size: 0.98rem;
+    letter-spacing: 0.03em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .shell-page-section-link {
-    min-height: 2rem;
-    padding: 0 0.9rem;
+    flex: 0 0 auto;
+    min-height: 1.85rem;
+    padding: 0 0.72rem;
     border-radius: 999px;
     border: 1px solid rgba(255, 122, 47, 0.2);
     background: rgba(255, 122, 47, 0.06);
     color: var(--accent);
-    font-size: 0.76rem;
+    font-size: 0.67rem;
     font-weight: 700;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
+    white-space: nowrap;
     transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
@@ -222,12 +271,13 @@ button:disabled {
 .header-badge {
     display: inline-flex;
     align-items: center;
-    padding: 0.6rem 0.9rem;
+    padding: 0.5rem 0.75rem;
     border-radius: 999px;
     background: rgba(76, 195, 138, 0.12);
     color: #d7ffe8;
     border: 1px solid rgba(76, 195, 138, 0.22);
-    font-size: 0.92rem;
+    font-size: 0.84rem;
+    white-space: nowrap;
 }
 
 .shell-body {
@@ -352,6 +402,35 @@ button:disabled {
     font-size: 1.7rem;
 }
 
+.project-overview-panel {
+    margin-bottom: 1rem;
+}
+
+.project-overview-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.project-overview-card,
+.section-totals-card {
+    display: grid;
+    gap: 0.85rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--line);
+}
+
+.project-overview-card-full {
+    grid-column: 1 / -1;
+}
+
+.project-overview-card .metric-list div {
+    padding: 0.55rem 0.7rem;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
 .dashboard-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -365,6 +444,12 @@ button:disabled {
 
 .panel.accent {
     background: linear-gradient(160deg, rgba(255, 122, 47, 0.14), rgba(11, 20, 26, 0.94));
+}
+
+.panel-expanded,
+.field-card-expanded {
+    background: linear-gradient(160deg, rgba(255, 122, 47, 0.14), rgba(11, 20, 26, 0.94));
+    border-color: rgba(255, 122, 47, 0.18);
 }
 
 .panel-header {
@@ -432,7 +517,7 @@ button:disabled {
 
 .workspace-flag {
     position: fixed;
-    top: clamp(6.5rem, 18vh, 9rem);
+    top: calc(var(--current-topbar-height) + 0.35rem);
     left: 0;
     z-index: 58;
     padding: 0.9rem 0.45rem;
@@ -519,6 +604,80 @@ button:disabled {
     display: grid;
     gap: 1rem;
     min-width: 0;
+}
+
+.workflow-map-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+
+.workflow-step {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.workflow-step h4 {
+    font-size: 1rem;
+}
+
+.section-link-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-top: 0.85rem;
+}
+
+.jobs-section-contacts {
+    order: 10;
+}
+
+.jobs-section-proposal {
+    order: 20;
+}
+
+.jobs-section-baseline {
+    order: 30;
+}
+
+.jobs-section-change-orders {
+    order: 40;
+}
+
+.jobs-section-sov {
+    order: 50;
+}
+
+.jobs-section-invoices {
+    order: 60;
+}
+
+.jobs-section-base-scope {
+    order: 70;
+}
+
+.jobs-section-job-scope {
+    order: 80;
+}
+
+.jobs-section-labor {
+    order: 90;
+}
+
+.jobs-section-commitments {
+    order: 100;
+}
+
+.jobs-section-attachments {
+    order: 105;
+}
+
+.jobs-section-notes {
+    order: 110;
 }
 
 .empty-state,
@@ -614,6 +773,25 @@ button:disabled {
     gap: 0.75rem;
 }
 
+.daily-log-card .field-card-summary-button {
+    grid-template-columns: minmax(9rem, auto) minmax(0, 1fr);
+    align-items: center;
+}
+
+.daily-log-header-grid {
+    grid-template-columns: minmax(10rem, 12rem) minmax(0, 1fr) minmax(10rem, auto);
+    align-items: end;
+}
+
+.daily-log-description-field {
+    min-width: 0;
+}
+
+.daily-log-summary-stack {
+    min-width: 10rem;
+    align-self: end;
+}
+
 .field-card-collapsed {
     gap: 0;
     padding: 0.45rem;
@@ -621,6 +799,12 @@ button:disabled {
 
 .field-card-collapsed .field-card-summary-button {
     padding: 0.7rem 0.85rem;
+}
+
+.section-add-action {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: 1rem;
 }
 
 .field-card-grid {
@@ -860,6 +1044,14 @@ label span {
     overflow-x: auto;
 }
 
+.change-order-line-totals td {
+    padding-top: 0;
+}
+
+.change-order-line-totals .stats-inline {
+    margin-top: 0;
+}
+
 .sub-input {
     margin-top: 0.4rem;
 }
@@ -877,6 +1069,17 @@ label span {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--line);
     color: var(--muted);
+}
+
+.section-totals-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.section-totals-card .data-table {
+    margin-top: 0;
 }
 
 .notes-field {
@@ -1032,6 +1235,10 @@ label span {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .workflow-map-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .totals-grid {
         grid-template-columns: 1fr;
     }
@@ -1043,7 +1250,7 @@ label span {
 
 @media (max-width: 860px) {
     .shell.shell-with-page-sections {
-        --current-topbar-height: 10.5rem;
+        --current-topbar-height: 12.2rem;
     }
 
     .shell-topbar {
@@ -1055,6 +1262,12 @@ label span {
     .topbar-center,
     .shell-nav {
         width: 100%;
+    }
+
+    .shell-page-context {
+        justify-content: flex-start;
+        max-width: 100%;
+        margin: 0;
     }
 
     .shell-nav,
@@ -1074,9 +1287,13 @@ label span {
     .summary-grid,
     .job-summary-grid,
     .dashboard-grid,
+    .project-overview-grid,
+    .section-totals-grid,
+    .workflow-map-grid,
     .form-grid.two-columns,
     .field-card-grid-four,
-    .field-card-grid-three {
+    .field-card-grid-three,
+    .daily-log-header-grid {
         grid-template-columns: 1fr;
     }
 

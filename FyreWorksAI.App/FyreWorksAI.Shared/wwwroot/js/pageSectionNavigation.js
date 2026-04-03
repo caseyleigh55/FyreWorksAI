@@ -10,10 +10,14 @@ window.fyreWorksPageSectionNavigation = {
         }
 
         const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
-        sectionElement.scrollIntoView({
-            behavior: prefersReducedMotion ? "auto" : "smooth",
-            block: "start",
-            inline: "nearest"
+        const topbarElement = document.querySelector(".shell-topbar");
+        const topbarHeight = topbarElement?.getBoundingClientRect().height ?? 0;
+        const sectionTop = sectionElement.getBoundingClientRect().top + window.scrollY;
+        const targetTop = Math.max(sectionTop - topbarHeight - 16, 0);
+
+        window.scrollTo({
+            top: targetTop,
+            behavior: prefersReducedMotion ? "auto" : "smooth"
         });
     }
 };

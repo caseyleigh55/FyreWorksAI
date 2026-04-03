@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
+using FyreWorksAI.Shared.Core.Services.Status;
 
 namespace FyreWorksAI.Shared.Components;
 
@@ -29,9 +30,10 @@ public partial class AttachmentManager
     private async Task UploadAsync()
     {
         var addedCount = await Store.AddAttachmentsAsync(Attachments, Area, OwnerId);
-        StatusMessage = addedCount > 0
-            ? $"{addedCount} attachment(s) added."
-            : "No files were added.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp(
+            addedCount > 0
+                ? $"{addedCount} attachment(s) added."
+                : "No files were added.");
 
         if (addedCount > 0)
         {
@@ -49,6 +51,6 @@ public partial class AttachmentManager
     {
         Store.RemoveAttachment(Attachments, attachment);
         await Store.SaveAsync();
-        StatusMessage = "Attachment removed.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp("Attachment removed.");
     }
 }

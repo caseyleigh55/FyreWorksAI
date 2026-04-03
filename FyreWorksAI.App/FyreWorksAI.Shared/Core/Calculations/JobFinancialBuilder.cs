@@ -105,7 +105,7 @@ internal static class JobFinancialBuilder
         job.Baseline = refreshed;
     }
 
-    public static void EnsureJobDerivedData(JobRecord job)
+    public static void EnsureJobDerivedData(JobRecord job, LaborTemplate? laborTemplate = null)
     {
         job.Baseline ??= new BaselineEstimate();
         job.Baseline.AdministrativeTasks ??= [];
@@ -116,6 +116,7 @@ internal static class JobFinancialBuilder
         job.Baseline.LineItems ??= [];
         job.JobDevices ??= [];
         job.Invoices ??= [];
+        job.DailyLogs ??= [];
         job.TimeEntries ??= [];
         job.MaterialPurchases ??= [];
         job.ChangeOrders ??= [];
@@ -127,7 +128,9 @@ internal static class JobFinancialBuilder
         EnsureBaselineLineItems(job);
         EnsureJobDevices(job);
         EnsureInvoices(job);
-        EnsureChangeOrders(job);
+        EnsureChangeOrders(job, laborTemplate);
+        EnsureDailyLogs(job);
+        EnsureTimeEntries(job);
         MigrateLegacyMaterialPurchases(job);
         EnsureMaterialPurchases(job);
         EnsureScheduleOfValues(job);
@@ -398,13 +401,22 @@ internal static class JobFinancialBuilder
     {
         foreach (var item in job.JobDevices)
         {
-            item.CategoryCode = JobCostCodes.Normalize(item.CategoryCode);
-            item.Description = string.IsNullOrWhiteSpace(item.Description) ? "Job Device" : item.Description.Trim();
-            item.Quantity = item.Quantity <= 0m ? 1m : item.Quantity;
-            item.UnitLabel = string.IsNullOrWhiteSpace(item.UnitLabel) ? "ea" : item.UnitLabel.Trim();
-            item.EstimatedUnitCost = EstimateMath.RoundCurrency(Math.Max(0m, item.EstimatedUnitCost));
-            item.EstimatedUnitSale = EstimateMath.RoundCurrency(Math.Max(0m, item.EstimatedUnitSale));
-            item.ActualUnitCost = EstimateMath.RoundCurrency(Math.Max(0m, item.ActualUnitCost));
+            NormalizeTrackedDeviceItem(
+                item.CategoryCode,
+                item.Description,
+                item.Quantity,
+                item.UnitLabel,
+                item.EstimatedUnitCost,
+                item.EstimatedUnitSale,
+                item.ActualUnitCost,
+                "Job Device",
+                assignCategoryCode: value => item.CategoryCode = value,
+                assignDescription: value => item.Description = value,
+                assignQuantity: value => item.Quantity = value,
+                assignUnitLabel: value => item.UnitLabel = value,
+                assignEstimatedUnitCost: value => item.EstimatedUnitCost = value,
+                assignEstimatedUnitSale: value => item.EstimatedUnitSale = value,
+                assignActualUnitCost: value => item.ActualUnitCost = value);
         }
     }
 
@@ -421,16 +433,251 @@ internal static class JobFinancialBuilder
         }
     }
 
-    private static void EnsureChangeOrders(JobRecord job)
+    private static void EnsureChangeOrders(JobRecord job, LaborTemplate? laborTemplate)
     {
         foreach (var changeOrder in job.ChangeOrders)
         {
             changeOrder.Title = string.IsNullOrWhiteSpace(changeOrder.Title) ? "Change Order" : changeOrder.Title.Trim();
             changeOrder.RevenueAmount = EstimateMath.RoundCurrency(Math.Max(0m, changeOrder.RevenueAmount));
-            changeOrder.EstimatedCostImpact = EstimateMath.RoundCurrency(Math.Max(0m, changeOrder.EstimatedCostImpact));
+            changeOrder.AdditionalEstimatedCost = EstimateMath.RoundCurrency(Math.Max(0m, changeOrder.AdditionalEstimatedCost));
+            changeOrder.EstimatedLaborHours = EstimateMath.RoundHours(Math.Max(0m, changeOrder.EstimatedLaborHours));
+            changeOrder.DirectLaborRate = EstimateMath.RoundCurrency(Math.Max(0m, changeOrder.DirectLaborRate));
+            changeOrder.BilledLaborRate = EstimateMath.RoundCurrency(Math.Max(0m, changeOrder.BilledLaborRate));
+            changeOrder.EstimatedLaborRate = EstimateMath.RoundCurrency(Math.Max(0m, changeOrder.EstimatedLaborRate));
             changeOrder.Notes = changeOrder.Notes?.Trim() ?? string.Empty;
+            changeOrder.DeviceItems ??= [];
             changeOrder.Attachments ??= [];
+
+            ApplyChangeOrderLaborDefaults(changeOrder, laborTemplate);
+
+            if (changeOrder.AdditionalEstimatedCost <= 0m &&
+                changeOrder.EstimatedCostImpact > 0m &&
+                changeOrder.DeviceItems.Count == 0 &&
+                changeOrder.EstimatedLaborHours <= 0m)
+            {
+                changeOrder.AdditionalEstimatedCost = EstimateMath.RoundCurrency(changeOrder.EstimatedCostImpact);
+            }
+
+            EnsureChangeOrderDeviceItems(job, changeOrder);
+            if (changeOrder.UseAutoCalculatedSale)
+            {
+                changeOrder.RevenueAmount = JobFinancialMath.GetChangeOrderCalculatedSale(changeOrder);
+            }
+
+            changeOrder.EstimatedCostImpact = JobFinancialMath.GetChangeOrderEstimatedCost(changeOrder);
         }
+    }
+
+    private static void ApplyChangeOrderLaborDefaults(ChangeOrderRecord changeOrder, LaborTemplate? laborTemplate)
+    {
+        var legacyLaborRate = EstimateMath.RoundCurrency(Math.Max(0m, changeOrder.EstimatedLaborRate));
+        var defaultDirectRate = EstimateMath.RoundCurrency(Math.Max(0m, laborTemplate?.JourneymanRegularDirectRate ?? legacyLaborRate));
+        var defaultBilledRate = EstimateMath.RoundCurrency(Math.Max(0m, laborTemplate?.JourneymanRegularBilledRate ?? legacyLaborRate));
+
+        if (changeOrder.DirectLaborRate <= 0m)
+        {
+            changeOrder.DirectLaborRate = defaultDirectRate > 0m ? defaultDirectRate : legacyLaborRate;
+        }
+
+        if (changeOrder.BilledLaborRate <= 0m)
+        {
+            changeOrder.BilledLaborRate = defaultBilledRate > 0m ? defaultBilledRate : changeOrder.DirectLaborRate;
+        }
+    }
+
+    private static void EnsureChangeOrderDeviceItems(JobRecord job, ChangeOrderRecord changeOrder)
+    {
+        foreach (var item in changeOrder.DeviceItems)
+        {
+            NormalizeTrackedDeviceItem(
+                item.CategoryCode,
+                item.Description,
+                item.Quantity,
+                item.UnitLabel,
+                item.EstimatedUnitCost,
+                item.EstimatedUnitSale,
+                item.ActualUnitCost,
+                "Change Order Device",
+                assignCategoryCode: value => item.CategoryCode = value,
+                assignDescription: value => item.Description = value,
+                assignQuantity: value => item.Quantity = value,
+                assignUnitLabel: value => item.UnitLabel = value,
+                assignEstimatedUnitCost: value => item.EstimatedUnitCost = value,
+                assignEstimatedUnitSale: value => item.EstimatedUnitSale = value,
+                assignActualUnitCost: value => item.ActualUnitCost = value);
+
+            item.InvoiceId = item.InvoiceId is not null && job.Invoices.All(invoice => invoice.Id != item.InvoiceId.Value)
+                ? null
+                : item.InvoiceId;
+            item.Notes = item.Notes?.Trim() ?? string.Empty;
+        }
+    }
+
+    private static void EnsureDailyLogs(JobRecord job)
+    {
+        var logsById = new Dictionary<Guid, JobDailyLogRecord>();
+
+        foreach (var dailyLog in job.DailyLogs)
+        {
+            dailyLog.WorkDate = dailyLog.WorkDate.Date;
+            dailyLog.Description = string.IsNullOrWhiteSpace(dailyLog.Description) ? "Daily Log" : dailyLog.Description.Trim();
+            dailyLog.Attachments ??= [];
+
+            if (!logsById.ContainsKey(dailyLog.Id))
+            {
+                logsById[dailyLog.Id] = dailyLog;
+            }
+        }
+
+        foreach (var entry in job.TimeEntries)
+        {
+            JobDailyLogRecord? linkedDailyLog = null;
+            if (entry.DailyLogId is not null)
+            {
+                logsById.TryGetValue(entry.DailyLogId.Value, out linkedDailyLog);
+            }
+
+            if (linkedDailyLog is null)
+            {
+                var workDate = entry.WorkDate.Date;
+                linkedDailyLog = job.DailyLogs.FirstOrDefault(item => item.WorkDate.Date == workDate);
+                if (linkedDailyLog is null)
+                {
+                    linkedDailyLog = new JobDailyLogRecord
+                    {
+                        WorkDate = workDate,
+                        Description = "Daily Log"
+                    };
+
+                    job.DailyLogs.Add(linkedDailyLog);
+                    logsById[linkedDailyLog.Id] = linkedDailyLog;
+                }
+
+                entry.DailyLogId = linkedDailyLog.Id;
+            }
+
+            entry.WorkDate = linkedDailyLog.WorkDate.Date;
+        }
+    }
+
+    private static void EnsureTimeEntries(JobRecord job)
+    {
+        var defaultChangeOrderId = job.ChangeOrders.FirstOrDefault()?.Id;
+        var validChangeOrderIds = job.ChangeOrders.Select(changeOrder => changeOrder.Id).ToHashSet();
+        var validDailyLogIds = job.DailyLogs.Select(dailyLog => dailyLog.Id).ToHashSet();
+
+        foreach (var entry in job.TimeEntries)
+        {
+            entry.WorkDate = entry.WorkDate.Date;
+            entry.CostCode = JobCostCodes.Normalize(entry.CostCode);
+            entry.CrewMember = entry.CrewMember?.Trim() ?? string.Empty;
+            var laborClassCandidate = IsLegacyLaborClassValue(entry.CrewMember)
+                ? entry.CrewMember
+                : entry.LaborClass;
+            entry.LaborClass = NormalizeTimeEntryLaborClass(laborClassCandidate, entry.CrewMember, entry.CostCode);
+            if (IsLegacyLaborClassValue(entry.CrewMember))
+            {
+                entry.CrewMember = string.Empty;
+            }
+
+            entry.Hours = EstimateMath.RoundHours(Math.Max(0m, entry.Hours));
+            entry.HourlyRate = EstimateMath.RoundCurrency(Math.Max(0m, entry.HourlyRate));
+            entry.Notes = entry.Notes?.Trim() ?? string.Empty;
+
+            if (entry.DailyLogId is null || !validDailyLogIds.Contains(entry.DailyLogId.Value))
+            {
+                entry.DailyLogId = job.DailyLogs.FirstOrDefault(item => item.WorkDate.Date == entry.WorkDate.Date)?.Id
+                    ?? job.DailyLogs.FirstOrDefault()?.Id;
+            }
+
+            if (entry.ChangeOrderId is not null && !validChangeOrderIds.Contains(entry.ChangeOrderId.Value))
+            {
+                entry.ChangeOrderId = null;
+            }
+
+            if (entry.CostCode == JobCostCodes.ChangeOrder)
+            {
+                entry.ChangeOrderId ??= defaultChangeOrderId;
+                if (entry.ChangeOrderId is null)
+                {
+                    entry.CostCode = JobCostCodes.Other;
+                }
+            }
+            else
+            {
+                entry.ChangeOrderId = null;
+            }
+        }
+    }
+
+    private static string NormalizeTimeEntryLaborClass(string? laborClass, string? crewMember, string? costCode)
+    {
+        var candidate = string.IsNullOrWhiteSpace(laborClass) ? crewMember : laborClass;
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return JobCostCodes.Normalize(costCode) switch
+            {
+                JobCostCodes.Admin => JobCostCodes.Admin,
+                JobCostCodes.Engineering => JobCostCodes.Engineering,
+                _ => nameof(PersonnelType.Journeyman)
+            };
+        }
+
+        return candidate.Trim().ToLowerInvariant() switch
+        {
+            "journeyman" or "technician" => nameof(PersonnelType.Journeyman),
+            "apprentice" => nameof(PersonnelType.Apprentice),
+            "admin" or "administrative" => JobCostCodes.Admin,
+            "engineering" => JobCostCodes.Engineering,
+            _ => JobCostCodes.Normalize(costCode) switch
+            {
+                JobCostCodes.Admin => JobCostCodes.Admin,
+                JobCostCodes.Engineering => JobCostCodes.Engineering,
+                _ => nameof(PersonnelType.Journeyman)
+            }
+        };
+    }
+
+    private static bool IsLegacyLaborClassValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return value.Trim().ToLowerInvariant() is
+            "journeyman" or
+            "technician" or
+            "apprentice" or
+            "admin" or
+            "administrative" or
+            "engineering";
+    }
+
+    private static void NormalizeTrackedDeviceItem(
+        string? categoryCode,
+        string? description,
+        decimal quantity,
+        string? unitLabel,
+        decimal estimatedUnitCost,
+        decimal estimatedUnitSale,
+        decimal actualUnitCost,
+        string defaultDescription,
+        Action<string> assignCategoryCode,
+        Action<string> assignDescription,
+        Action<decimal> assignQuantity,
+        Action<string> assignUnitLabel,
+        Action<decimal> assignEstimatedUnitCost,
+        Action<decimal> assignEstimatedUnitSale,
+        Action<decimal> assignActualUnitCost)
+    {
+        assignCategoryCode(JobCostCodes.Normalize(categoryCode));
+        assignDescription(string.IsNullOrWhiteSpace(description) ? defaultDescription : description.Trim());
+        assignQuantity(quantity <= 0m ? 1m : quantity);
+        assignUnitLabel(string.IsNullOrWhiteSpace(unitLabel) ? "ea" : unitLabel.Trim());
+        assignEstimatedUnitCost(EstimateMath.RoundCurrency(Math.Max(0m, estimatedUnitCost)));
+        assignEstimatedUnitSale(EstimateMath.RoundCurrency(Math.Max(0m, estimatedUnitSale)));
+        assignActualUnitCost(EstimateMath.RoundCurrency(Math.Max(0m, actualUnitCost)));
     }
 
     private static void MigrateLegacyMaterialPurchases(JobRecord job)

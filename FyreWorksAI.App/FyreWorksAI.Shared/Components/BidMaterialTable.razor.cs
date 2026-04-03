@@ -26,6 +26,9 @@ public partial class BidMaterialTable
     [Parameter]
     public EventCallback OnChanged { get; set; }
 
+    [Parameter]
+    public Func<BidMaterialItem, string>? GetRowElementId { get; set; }
+
     private async Task NormalizeCostAndNotify(BidMaterialItem item)
     {
         item.UnitCost = EstimateMath.RoundCurrency(item.UnitCost);
@@ -38,6 +41,9 @@ public partial class BidMaterialTable
         item.UnitSale = EstimateMath.RoundCurrency(item.UnitSale);
         await NotifyChanged();
     }
+
+    private string? ResolveRowElementId(BidMaterialItem item) =>
+        GetRowElementId?.Invoke(item);
 
     private Task NotifyChanged() => OnChanged.InvokeAsync();
 }

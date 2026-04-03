@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
+using FyreWorksAI.Shared.Core.Services.Status;
 
 namespace FyreWorksAI.Shared.Pages;
 
@@ -11,6 +12,8 @@ namespace FyreWorksAI.Shared.Pages;
 public partial class Jobs : IDisposable
 {
     private const string PageSectionNavigationOwnerKey = "jobs";
+    private const string BaseContractScopeValue = "base-contract";
+    private const string PersonnelNameSuggestionsListId = "jobs-personnel-name-suggestions";
     private const string ProjectContactsSectionId = "project-contacts";
     private const string ClientFacingSectionId = "client-facing";
     private const string BaselineReferenceSectionId = "baseline-reference";
@@ -45,16 +48,16 @@ public partial class Jobs : IDisposable
 
     private static readonly IReadOnlyList<PageSectionNavigationItem> JobPageSectionNavigationItems =
     [
-        new(ProjectContactsSectionId, ProjectContactsElementId, "Project Contacts"),
-        new(ClientFacingSectionId, ClientFacingElementId, "Exclusions + Proposal"),
-        new(BaselineReferenceSectionId, BaselineReferenceElementId, "Baseline Reference"),
-        new(ScheduleOfValuesSectionId, ScheduleOfValuesElementId, "Schedule Of Values"),
-        new(TimeEntriesSectionId, TimeEntriesElementId, "Time Entries"),
-        new(BidDevicesSectionId, BidDevicesElementId, "Bid Devices"),
-        new(JobDevicesSectionId, JobDevicesElementId, "Job Devices"),
+        new(ProjectContactsSectionId, ProjectContactsElementId, "Contacts"),
+        new(ClientFacingSectionId, ClientFacingElementId, "Proposal"),
+        new(BaselineReferenceSectionId, BaselineReferenceElementId, "Baseline"),
+        new(ChangeOrdersSectionId, ChangeOrdersElementId, "COs"),
+        new(ScheduleOfValuesSectionId, ScheduleOfValuesElementId, "SOV"),
         new(InvoicesSectionId, InvoicesElementId, "Invoices"),
-        new(ChangeOrdersSectionId, ChangeOrdersElementId, "Change Orders"),
-        new(CommitmentsSectionId, CommitmentsElementId, "Commitments"),
+        new(BidDevicesSectionId, BidDevicesElementId, "Base Scope"),
+        new(JobDevicesSectionId, JobDevicesElementId, "Job Scope"),
+        new(TimeEntriesSectionId, TimeEntriesElementId, "Labor"),
+        new(CommitmentsSectionId, CommitmentsElementId, "Subs + POs"),
         new(ProjectNotesSectionId, ProjectNotesElementId, "Notes")
     ];
 
@@ -91,10 +94,12 @@ public partial class Jobs : IDisposable
         JobCostCodes.Test
     ];
     private HashSet<string> ExpandedSectionIds { get; } = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<Guid> ExpandedDailyLogIds { get; } = [];
     private HashSet<Guid> ExpandedInvoiceIds { get; } = [];
     private HashSet<Guid> ExpandedChangeOrderIds { get; } = [];
     private HashSet<Guid> ExpandedScheduleValueIds { get; } = [];
     private bool IsDirectoryPanelExpanded { get; set; }
+    private bool IsDailyLogsNewestFirst { get; set; } = true;
 
     private JobRecord? SelectedJob =>
         SelectedJobId is null
@@ -156,6 +161,7 @@ public partial class Jobs : IDisposable
         if (SelectedJob is not null)
         {
             Store.SyncJobFinancials(SelectedJob);
+            ExpandedDailyLogIds.RemoveWhere(dailyLogId => SelectedJob.DailyLogs.All(item => item.Id != dailyLogId));
             ExpandedInvoiceIds.RemoveWhere(invoiceId => SelectedJob.Invoices.All(item => item.Id != invoiceId));
             ExpandedChangeOrderIds.RemoveWhere(changeOrderId => SelectedJob.ChangeOrders.All(item => item.Id != changeOrderId));
             ExpandedScheduleValueIds.RemoveWhere(scheduleValueId => SelectedJob.ScheduleOfValues.All(item => item.Id != scheduleValueId));
@@ -168,11 +174,13 @@ public partial class Jobs : IDisposable
         if (SelectedJob is null)
         {
             ActiveMainSectionId = null;
+            ExpandedDailyLogIds.Clear();
             ExpandedInvoiceIds.Clear();
             ExpandedChangeOrderIds.Clear();
             ExpandedScheduleValueIds.Clear();
         }
 
+        SyncSavedPersonnelSuggestions();
         RefreshPageSectionNavigation();
     }
 
@@ -180,6 +188,7 @@ public partial class Jobs : IDisposable
     {
         SelectedJobId = jobId;
         CollapseAllSections();
+        ExpandedDailyLogIds.Clear();
         ExpandedInvoiceIds.Clear();
         ExpandedChangeOrderIds.Clear();
         ExpandedScheduleValueIds.Clear();
@@ -198,9 +207,10 @@ public partial class Jobs : IDisposable
         var job = Store.CreateBlankJob();
         SelectedJobId = job.Id;
         CollapseAllSections();
+        ExpandedDailyLogIds.Clear();
         CloseDirectoryPanel();
         PendingSectionElementId = null;
-        StatusMessage = "New job created.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp("New job created.");
         RefreshPageSectionNavigation();
         await Store.SaveAsync();
         NavigationManager.NavigateTo($"/jobs?selected={job.Id}", replace: true);
@@ -215,7 +225,7 @@ public partial class Jobs : IDisposable
 
         var client = Store.CreateClient();
         SelectedJob.ClientId = client.Id;
-        StatusMessage = "New client linked to the job.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp("New client linked to the job.");
     }
 
     private async Task SaveAsync()
@@ -226,7 +236,7 @@ public partial class Jobs : IDisposable
         }
 
         await Store.SaveAsync();
-        StatusMessage = "Job saved.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp("Job saved.");
     }
 
     private async Task DeleteJobAsync()
@@ -244,10 +254,11 @@ public partial class Jobs : IDisposable
 
         SelectedJobId = GetNextJobId();
         CollapseAllSections();
+        ExpandedDailyLogIds.Clear();
         PendingSectionElementId = null;
         RefreshPageSectionNavigation();
         await Store.SaveAsync();
-        StatusMessage = "Job deleted.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp("Job deleted.");
         NavigationManager.NavigateTo(
             SelectedJobId is null ? "/jobs" : $"/jobs?selected={SelectedJobId}",
             replace: true);
@@ -263,7 +274,7 @@ public partial class Jobs : IDisposable
         Store.SyncJobFinancials(SelectedJob);
         var path = await Store.ExportJobCostReportAsync(SelectedJob);
         await Store.SaveAsync();
-        StatusMessage = $"Job cost export created at {path}.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp($"Job cost export created at {path}.");
     }
 
     private async Task OnClientChanged(ChangeEventArgs args)
@@ -343,6 +354,191 @@ public partial class Jobs : IDisposable
     private decimal GetBaselineTotalHours() =>
         GetBaselineHoursTotal(BaselinePhaseCodes);
 
+    private decimal GetProjectEstimateVariance() =>
+        SelectedJob is null
+            ? 0m
+            : EstimateMath.RoundCurrency(EstimateMath.GetJobActualCost(SelectedJob) - EstimateMath.GetJobEstimatedCost(SelectedJob));
+
+    private static string? GetEstimateVarianceStyle(decimal variance) =>
+        variance < 0m
+            ? "color: var(--success);"
+            : variance > 0m
+                ? "color: var(--danger);"
+                : null;
+
+    private static string? GetRemainingHoursStyle(decimal remainingHours) =>
+        remainingHours < 0m
+            ? "color: var(--danger);"
+            : null;
+
+    private decimal GetCommittedAmountTotal() =>
+        SelectedJob is null
+            ? 0m
+            : EstimateMath.RoundCurrency(SelectedJob.Commitments.Sum(commitment => commitment.CommittedAmount));
+
+    private decimal GetPaidCommitmentsTotal() =>
+        SelectedJob is null
+            ? 0m
+            : EstimateMath.RoundCurrency(SelectedJob.Commitments.Sum(commitment => commitment.PaidAmount));
+
+    private decimal GetOutstandingBilledCommitmentsTotal() =>
+        SelectedJob is null
+            ? 0m
+            : EstimateMath.RoundCurrency(Math.Max(0m, EstimateMath.GetJobBilledCommitments(SelectedJob) - GetPaidCommitmentsTotal()));
+
+    private decimal GetRemainingCommittedExposureTotal() =>
+        SelectedJob is null
+            ? 0m
+            : EstimateMath.RoundCurrency(Math.Max(0m, GetCommittedAmountTotal() - GetPaidCommitmentsTotal()));
+
+    private decimal GetApprovedChangeOrderEstimatedLaborHoursTotal() =>
+        SelectedJob is null
+            ? 0m
+            : EstimateMath.RoundHours(SelectedJob.ChangeOrders.Where(changeOrder => changeOrder.Approved).Sum(changeOrder => changeOrder.EstimatedLaborHours));
+
+    private decimal GetApprovedChangeOrderActualLaborHoursTotal()
+    {
+        if (SelectedJob is null)
+        {
+            return 0m;
+        }
+
+        var approvedChangeOrderIds = SelectedJob.ChangeOrders
+            .Where(changeOrder => changeOrder.Approved)
+            .Select(changeOrder => changeOrder.Id)
+            .ToHashSet();
+        return EstimateMath.RoundHours(SelectedJob.TimeEntries
+            .Where(entry => entry.ChangeOrderId is not null && approvedChangeOrderIds.Contains(entry.ChangeOrderId.Value))
+            .Sum(entry => entry.Hours));
+    }
+
+    private decimal GetApprovedChangeOrderRemainingLaborHoursTotal() =>
+        EstimateMath.RoundHours(GetApprovedChangeOrderEstimatedLaborHoursTotal() - GetApprovedChangeOrderActualLaborHoursTotal());
+
+    private decimal GetAllChangeOrderEstimatedLaborHoursTotal() =>
+        SelectedJob is null
+            ? 0m
+            : EstimateMath.RoundHours(SelectedJob.ChangeOrders.Sum(changeOrder => changeOrder.EstimatedLaborHours));
+
+    private decimal GetAllChangeOrderActualLaborHoursTotal() =>
+        SelectedJob is null
+            ? 0m
+            : EstimateMath.RoundHours(SelectedJob.TimeEntries.Where(entry => entry.ChangeOrderId is not null).Sum(entry => entry.Hours));
+
+    private decimal GetAllChangeOrderRemainingLaborHoursTotal() =>
+        EstimateMath.RoundHours(GetAllChangeOrderEstimatedLaborHoursTotal() - GetAllChangeOrderActualLaborHoursTotal());
+
+    private decimal GetContractPlannedLaborHours() =>
+        EstimateMath.RoundHours(GetBaselineTotalHours() + GetApprovedChangeOrderEstimatedLaborHoursTotal());
+
+    private decimal GetContractRemainingLaborHours() =>
+        EstimateMath.RoundHours(GetRemainingHoursTotal(BaselinePhaseCodes) + GetApprovedChangeOrderRemainingLaborHoursTotal());
+
+    private decimal GetAllTrackedLaborPlannedHours() =>
+        EstimateMath.RoundHours(GetBaselineTotalHours() + GetAllChangeOrderEstimatedLaborHoursTotal());
+
+    private decimal GetAllTrackedLaborRemainingHours() =>
+        SelectedJob is null
+            ? 0m
+            : EstimateMath.RoundHours(GetAllTrackedLaborPlannedHours() - EstimateMath.GetJobActualLaborHours(SelectedJob));
+
+    private IEnumerable<(string Scope, decimal PlannedHours, decimal UsedHours, decimal RemainingHours, decimal ActualCost)> GetLaborScopeSummaries()
+    {
+        if (SelectedJob is null)
+        {
+            return [];
+        }
+
+        var summaries = new List<(string Scope, decimal PlannedHours, decimal UsedHours, decimal RemainingHours, decimal ActualCost)>();
+        foreach (var costCode in JobCostCodes.TimeEntryCodes.Where(code => code != JobCostCodes.ChangeOrder && code != JobCostCodes.Other))
+        {
+            var plannedHours = JobFinancialMath.GetBaselineHours(SelectedJob.Baseline, costCode);
+            var usedHours = JobFinancialMath.GetJobActualHours(SelectedJob, costCode);
+            var actualCost = JobFinancialMath.GetJobActualCost(SelectedJob, costCode);
+            if (plannedHours <= 0m && usedHours <= 0m && actualCost <= 0m)
+            {
+                continue;
+            }
+
+            summaries.Add((
+                Scope: JobCostCodes.GetLabel(costCode),
+                PlannedHours: plannedHours,
+                UsedHours: usedHours,
+                RemainingHours: EstimateMath.RoundHours(plannedHours - usedHours),
+                ActualCost: actualCost));
+        }
+
+        foreach (var changeOrder in SelectedJob.ChangeOrders
+                     .OrderBy(changeOrder => changeOrder.Approved ? 0 : 1)
+                     .ThenBy(changeOrder => changeOrder.ApprovedOn)
+                     .ThenBy(changeOrder => changeOrder.Title))
+        {
+            var plannedHours = EstimateMath.RoundHours(changeOrder.EstimatedLaborHours);
+            var usedHours = GetChangeOrderActualLaborHours(changeOrder);
+            var actualCost = GetChangeOrderActualLaborCost(changeOrder);
+            if (plannedHours <= 0m && usedHours <= 0m && actualCost <= 0m)
+            {
+                continue;
+            }
+
+            summaries.Add((
+                Scope: changeOrder.Approved
+                    ? $"CO - {GetChangeOrderLabel(changeOrder)}"
+                    : $"CO - {GetChangeOrderLabel(changeOrder)} (Pending)",
+                PlannedHours: plannedHours,
+                UsedHours: usedHours,
+                RemainingHours: EstimateMath.RoundHours(plannedHours - usedHours),
+                ActualCost: actualCost));
+        }
+
+        return summaries;
+    }
+
+    private IEnumerable<(string Name, decimal Hours, decimal Cost, int DailyLogs, int Entries)> GetPersonnelHourSummaries()
+    {
+        if (SelectedJob is null)
+        {
+            return [];
+        }
+
+        return SelectedJob.TimeEntries
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.CrewMember))
+            .GroupBy(entry => entry.CrewMember.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(group => (
+                Name: group.First().CrewMember.Trim(),
+                Hours: EstimateMath.RoundHours(group.Sum(entry => entry.Hours)),
+                Cost: EstimateMath.RoundCurrency(group.Sum(entry => entry.TotalCost)),
+                DailyLogs: group
+                    .Select(entry => entry.DailyLogId)
+                    .Where(dailyLogId => dailyLogId is not null)
+                    .Distinct()
+                    .Count(),
+                Entries: group.Count()))
+            .OrderByDescending(summary => summary.Hours)
+            .ThenBy(summary => summary.Name)
+            .ToList();
+    }
+
+    private IReadOnlyList<string> GetPersonnelNameSuggestions() =>
+        GetNormalizedPersonnelNames(
+            Store.Workspace.Settings.SavedPersonnelNames
+                .Concat(Store.Workspace.Jobs.SelectMany(job => job.TimeEntries).Select(entry => entry.CrewMember)));
+
+    private void SyncSavedPersonnelSuggestions()
+    {
+        Store.Workspace.Settings.SavedPersonnelNames = GetNormalizedPersonnelNames(
+            Store.Workspace.Settings.SavedPersonnelNames
+                .Concat(Store.Workspace.Jobs.SelectMany(job => job.TimeEntries).Select(entry => entry.CrewMember)));
+    }
+
+    private static List<string> GetNormalizedPersonnelNames(IEnumerable<string?> names) =>
+        names
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name)
+            .ToList();
+
     private int GetBidComponentCount() =>
         SelectedJob?.Baseline.Components.Count ?? 0;
 
@@ -410,6 +606,16 @@ public partial class Jobs : IDisposable
         return InvokeAsync(StateHasChanged);
     }
 
+    private Task NavigateToJobSectionAsync(string sectionId)
+    {
+        var item = JobPageSectionNavigationItems.FirstOrDefault(candidate =>
+            string.Equals(candidate.SectionId, sectionId, StringComparison.OrdinalIgnoreCase));
+
+        return item is null
+            ? Task.CompletedTask
+            : OnPageSectionNavigationRequestedAsync(item);
+    }
+
     private void RefreshPageSectionNavigation()
     {
         if (SelectedJob is null)
@@ -422,7 +628,9 @@ public partial class Jobs : IDisposable
             PageSectionNavigationOwnerKey,
             JobPageSectionNavigationItems,
             OnPageSectionNavigationRequestedAsync,
-            ActiveMainSectionId);
+            ActiveMainSectionId,
+            "Project",
+            GetPageContextName());
     }
 
     private void SetActiveMainSection(string? sectionId)
@@ -467,6 +675,26 @@ public partial class Jobs : IDisposable
 
     private bool IsSectionExpanded(string sectionId) =>
         ExpandedSectionIds.Contains(sectionId);
+
+    private string GetPageContextName()
+    {
+        if (SelectedJob is null)
+        {
+            return string.Empty;
+        }
+
+        if (!string.IsNullOrWhiteSpace(SelectedJob.ProjectName))
+        {
+            return SelectedJob.ProjectName.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(SelectedJob.JobNumber))
+        {
+            return SelectedJob.JobNumber.Trim();
+        }
+
+        return "Untitled Job";
+    }
 
     private string GetInvoiceLabel(JobInvoiceRecord invoice)
     {
@@ -564,18 +792,24 @@ public partial class Jobs : IDisposable
         };
 
     private bool IsTimeEntryOvernightLocked(JobTimeEntry entry) =>
-        NormalizeTimeEntryLaborClass(entry.CrewMember, entry.CostCode) is JobCostCodes.Admin or JobCostCodes.Engineering;
+        NormalizeTimeEntryLaborClass(entry.LaborClass, entry.CostCode) is JobCostCodes.Admin or JobCostCodes.Engineering;
 
     private static bool IsFieldTimeEntryCostCode(string? costCode) =>
-        JobCostCodes.Normalize(costCode) is JobCostCodes.Install or JobCostCodes.Demo or JobCostCodes.Trim or JobCostCodes.Test;
+        JobCostCodes.Normalize(costCode) is JobCostCodes.Install or JobCostCodes.Demo or JobCostCodes.Trim or JobCostCodes.Test or JobCostCodes.ChangeOrder;
 
     private static bool IsOfficeTimeEntryCostCode(string? costCode) =>
         JobCostCodes.Normalize(costCode) is JobCostCodes.Admin or JobCostCodes.Engineering;
 
+    private static bool IsChangeOrderTimeEntryCostCode(string? costCode) =>
+        JobCostCodes.Normalize(costCode) == JobCostCodes.ChangeOrder;
+
+    private bool IsChangeOrderTimeEntry(JobTimeEntry entry) =>
+        IsChangeOrderTimeEntryCostCode(entry.CostCode);
+
     private decimal GetDefaultTimeEntryRate(JobTimeEntry entry)
     {
         var template = CurrentJobTemplate;
-        var laborClass = NormalizeTimeEntryLaborClass(entry.CrewMember, entry.CostCode);
+        var laborClass = NormalizeTimeEntryLaborClass(entry.LaborClass, entry.CostCode);
 
         return laborClass switch
         {
@@ -593,7 +827,7 @@ public partial class Jobs : IDisposable
 
     private void ApplyTimeEntryTemplateRate(JobTimeEntry entry)
     {
-        entry.CrewMember = NormalizeTimeEntryLaborClass(entry.CrewMember, entry.CostCode);
+        entry.LaborClass = NormalizeTimeEntryLaborClass(entry.LaborClass, entry.CostCode);
         if (IsTimeEntryOvernightLocked(entry))
         {
             entry.IsOvernight = false;
@@ -605,12 +839,35 @@ public partial class Jobs : IDisposable
     private void OnTimeEntryLaborTypeChanged(JobTimeEntry entry) =>
         ApplyTimeEntryTemplateRate(entry);
 
+    private void OnTimeEntryCrewMemberChanged(JobTimeEntry entry)
+    {
+        entry.CrewMember = entry.CrewMember?.Trim() ?? string.Empty;
+        SyncSavedPersonnelSuggestions();
+    }
+
     private void OnTimeEntryCostCodeChanged(JobTimeEntry entry)
     {
         entry.CostCode = JobCostCodes.Normalize(entry.CostCode);
-        entry.Hours = IsFieldTimeEntryCostCode(entry.CostCode)
-            ? GetTimeEntryAvailableHours(entry)
-            : 0m;
+        if (IsChangeOrderTimeEntry(entry))
+        {
+            entry.ChangeOrderId ??= SelectedJob?.ChangeOrders.FirstOrDefault()?.Id;
+        }
+        else
+        {
+            entry.ChangeOrderId = null;
+        }
+
+        NormalizeTimeEntry(entry);
+    }
+
+    private void OnTimeEntryChangeOrderChanged(JobTimeEntry entry, ChangeEventArgs args)
+    {
+        entry.ChangeOrderId = ParseNullableGuid(args.Value?.ToString());
+        if (entry.ChangeOrderId is not null)
+        {
+            entry.CostCode = JobCostCodes.ChangeOrder;
+        }
+
         NormalizeTimeEntry(entry);
     }
 
@@ -624,7 +881,110 @@ public partial class Jobs : IDisposable
         ApplyTimeEntryTemplateRate(entry);
     }
 
-    private void AddTimeEntry()
+    private void ToggleDailyLogExpanded(Guid dailyLogId)
+    {
+        if (!ExpandedDailyLogIds.Add(dailyLogId))
+        {
+            ExpandedDailyLogIds.Remove(dailyLogId);
+        }
+    }
+
+    private bool IsDailyLogExpanded(Guid dailyLogId) =>
+        ExpandedDailyLogIds.Contains(dailyLogId);
+
+    private void ToggleDailyLogSortOrder() =>
+        IsDailyLogsNewestFirst = !IsDailyLogsNewestFirst;
+
+    private void AddDailyLog()
+    {
+        if (SelectedJob is null)
+        {
+            return;
+        }
+
+        var dailyLog = new JobDailyLogRecord
+        {
+            WorkDate = DateTime.Today,
+            Description = "Daily Log"
+        };
+
+        SelectedJob.DailyLogs.Add(dailyLog);
+        ExpandSection(TimeEntriesSectionId);
+        ExpandedDailyLogIds.Add(dailyLog.Id);
+        PendingSectionElementId = GetDailyLogElementId(dailyLog.Id);
+    }
+
+    private void RemoveDailyLog(Guid dailyLogId)
+    {
+        if (SelectedJob is null)
+        {
+            return;
+        }
+
+        var dailyLog = SelectedJob.DailyLogs.FirstOrDefault(item => item.Id == dailyLogId);
+        if (dailyLog is null)
+        {
+            return;
+        }
+
+        foreach (var attachment in dailyLog.Attachments.ToList())
+        {
+            Store.RemoveAttachment(dailyLog.Attachments, attachment);
+        }
+
+        SelectedJob.TimeEntries.RemoveAll(entry => entry.DailyLogId == dailyLogId);
+        SelectedJob.DailyLogs.RemoveAll(item => item.Id == dailyLogId);
+        ExpandedDailyLogIds.Remove(dailyLogId);
+    }
+
+    private string GetDailyLogAttachmentArea(Guid dailyLogId)
+    {
+        if (SelectedJob is null)
+        {
+            return "jobs";
+        }
+
+        return Path.Combine("jobs", SelectedJob.Id.ToString("N"), "daily-logs", dailyLogId.ToString("N"));
+    }
+
+    private IEnumerable<JobTimeEntry> GetDailyLogEntries(JobDailyLogRecord dailyLog) =>
+        SelectedJob is null
+            ? []
+            : SelectedJob.TimeEntries
+                .Where(entry => entry.DailyLogId == dailyLog.Id)
+                .OrderBy(entry => entry.CrewMember)
+                .ThenBy(entry => entry.LaborClass)
+                .ThenBy(entry => entry.CostCode)
+                .ToList();
+
+    private decimal GetDailyLogHours(JobDailyLogRecord dailyLog) =>
+        EstimateMath.RoundHours(GetDailyLogEntries(dailyLog).Sum(entry => entry.Hours));
+
+    private decimal GetDailyLogCost(JobDailyLogRecord dailyLog) =>
+        EstimateMath.RoundCurrency(GetDailyLogEntries(dailyLog).Sum(entry => entry.TotalCost));
+
+    private string GetDailyLogDescription(JobDailyLogRecord dailyLog) =>
+        string.IsNullOrWhiteSpace(dailyLog.Description) ? "Daily Log" : dailyLog.Description.Trim();
+
+    private string GetDailyLogDateLabel(JobDailyLogRecord dailyLog) =>
+        dailyLog.WorkDate.ToString("MM/dd/yyyy", CultureInfo.CurrentCulture);
+
+    private void OnDailyLogDateChanged(JobDailyLogRecord dailyLog)
+    {
+        if (SelectedJob is null)
+        {
+            return;
+        }
+
+        dailyLog.WorkDate = dailyLog.WorkDate.Date;
+        dailyLog.Description = GetDailyLogDescription(dailyLog);
+        foreach (var entry in SelectedJob.TimeEntries.Where(entry => entry.DailyLogId == dailyLog.Id))
+        {
+            entry.WorkDate = dailyLog.WorkDate;
+        }
+    }
+
+    private void AddDailyLogTimeEntry(JobDailyLogRecord dailyLog)
     {
         if (SelectedJob is null)
         {
@@ -633,14 +993,19 @@ public partial class Jobs : IDisposable
 
         var entry = new JobTimeEntry
         {
-            CrewMember = nameof(PersonnelType.Journeyman),
-            CostCode = JobCostCodes.Install
+            DailyLogId = dailyLog.Id,
+            WorkDate = dailyLog.WorkDate.Date,
+            CrewMember = string.Empty,
+            LaborClass = nameof(PersonnelType.Journeyman),
+            CostCode = JobCostCodes.Install,
+            Hours = 0m
         };
 
-        entry.Hours = GetTimeEntryAvailableHours(entry);
         ApplyTimeEntryTemplateRate(entry);
         SelectedJob.TimeEntries.Add(entry);
         ExpandSection(TimeEntriesSectionId);
+        ExpandedDailyLogIds.Add(dailyLog.Id);
+        PendingSectionElementId = GetDailyLogTimeEntryElementId(dailyLog.Id, entry.Id);
     }
 
     private void RemoveTimeEntry(Guid entryId) =>
@@ -649,12 +1014,35 @@ public partial class Jobs : IDisposable
     private void NormalizeTimeEntry(JobTimeEntry entry)
     {
         entry.CostCode = JobCostCodes.Normalize(entry.CostCode);
-        var normalizedCrewMember = NormalizeTimeEntryLaborClass(entry.CrewMember, entry.CostCode);
-        var shouldApplyTemplateRate = entry.HourlyRate <= 0m || !string.Equals(entry.CrewMember, normalizedCrewMember, StringComparison.OrdinalIgnoreCase);
-        entry.CrewMember = normalizedCrewMember;
+        entry.CrewMember = entry.CrewMember?.Trim() ?? string.Empty;
+        if (IsChangeOrderTimeEntry(entry))
+        {
+            if (entry.ChangeOrderId is null || SelectedJob?.ChangeOrders.All(changeOrder => changeOrder.Id != entry.ChangeOrderId.Value) == true)
+            {
+                entry.ChangeOrderId = SelectedJob?.ChangeOrders.FirstOrDefault()?.Id;
+            }
+        }
+        else
+        {
+            entry.ChangeOrderId = null;
+        }
+
+        var normalizedLaborClass = NormalizeTimeEntryLaborClass(entry.LaborClass, entry.CostCode);
+        var shouldApplyTemplateRate = entry.HourlyRate <= 0m || !string.Equals(entry.LaborClass, normalizedLaborClass, StringComparison.OrdinalIgnoreCase);
+        entry.LaborClass = normalizedLaborClass;
         if (IsTimeEntryOvernightLocked(entry))
         {
             entry.IsOvernight = false;
+        }
+
+        if (entry.DailyLogId is null && SelectedJob?.DailyLogs.FirstOrDefault() is { } defaultDailyLog)
+        {
+            entry.DailyLogId = defaultDailyLog.Id;
+            entry.WorkDate = defaultDailyLog.WorkDate.Date;
+        }
+        else if (entry.DailyLogId is not null && SelectedJob?.DailyLogs.FirstOrDefault(item => item.Id == entry.DailyLogId.Value) is { } linkedDailyLog)
+        {
+            entry.WorkDate = linkedDailyLog.WorkDate.Date;
         }
 
         entry.Hours = EstimateMath.RoundHours(Math.Max(0m, entry.Hours));
@@ -672,6 +1060,21 @@ public partial class Jobs : IDisposable
             return 0m;
         }
 
+        if (IsChangeOrderTimeEntry(entry))
+        {
+            var linkedChangeOrder = GetLinkedChangeOrder(entry.ChangeOrderId);
+            if (linkedChangeOrder is null)
+            {
+                return 0m;
+            }
+
+            var changeOrderUsedHours = EstimateMath.RoundHours(SelectedJob.TimeEntries
+                .Where(item => item.Id != entry.Id && item.ChangeOrderId == linkedChangeOrder.Id)
+                .Sum(item => item.Hours));
+
+            return EstimateMath.RoundHours(Math.Max(0m, linkedChangeOrder.EstimatedLaborHours - changeOrderUsedHours));
+        }
+
         var baselineHours = JobFinancialMath.GetBaselineHours(SelectedJob.Baseline, entry.CostCode);
         var usedHoursByOtherEntries = EstimateMath.RoundHours(SelectedJob.TimeEntries
             .Where(item => item.Id != entry.Id && JobCostCodes.Normalize(item.CostCode) == JobCostCodes.Normalize(entry.CostCode))
@@ -683,31 +1086,49 @@ public partial class Jobs : IDisposable
     private decimal GetTimeEntryRemainingHours(JobTimeEntry entry) =>
         SelectedJob is null
             ? 0m
-            : EstimateMath.RoundHours(
-                JobFinancialMath.GetBaselineHours(SelectedJob.Baseline, entry.CostCode) -
-                JobFinancialMath.GetJobActualHours(SelectedJob, entry.CostCode));
+            : IsChangeOrderTimeEntry(entry)
+                ? GetChangeOrderRemainingLaborHours(entry.ChangeOrderId)
+                : EstimateMath.RoundHours(
+                    JobFinancialMath.GetBaselineHours(SelectedJob.Baseline, entry.CostCode) -
+                    JobFinancialMath.GetJobActualHours(SelectedJob, entry.CostCode));
 
     private string GetTimeEntryRemainingHoursDisplay(JobTimeEntry entry) =>
-        EstimateMath.GetHours(Math.Abs(GetTimeEntryRemainingHours(entry)));
+        IsChangeOrderTimeEntry(entry) && entry.ChangeOrderId is null
+            ? "Select CO"
+            : EstimateMath.GetHours(Math.Abs(GetTimeEntryRemainingHours(entry)));
 
     private string? GetTimeEntryRemainingHoursStyle(JobTimeEntry entry) =>
-        GetTimeEntryRemainingHours(entry) < 0m
-            ? "color: var(--danger);"
-            : null;
+        IsChangeOrderTimeEntry(entry) && entry.ChangeOrderId is null
+            ? "color: var(--muted);"
+            : GetTimeEntryRemainingHours(entry) < 0m
+                ? "color: var(--danger);"
+                : null;
 
     private string GetTimeEntryHoursInputValue(JobTimeEntry entry)
-    {
-        if (entry.Hours <= 0m && IsOfficeTimeEntryCostCode(entry.CostCode))
-        {
-            return string.Empty;
-        }
-
-        return entry.Hours.ToString("0.##", CultureInfo.InvariantCulture);
-    }
+        => entry.Hours.ToString("0.##", CultureInfo.InvariantCulture);
 
     private void OnTimeEntryHoursChanged(JobTimeEntry entry, ChangeEventArgs args)
     {
         entry.Hours = ParseHoursValue(args.Value?.ToString());
+        NormalizeTimeEntry(entry);
+    }
+
+    private string GetTimeEntryScopeValue(JobTimeEntry entry) =>
+        entry.ChangeOrderId?.ToString() ?? BaseContractScopeValue;
+
+    private void OnTimeEntryScopeChanged(JobTimeEntry entry, ChangeEventArgs args)
+    {
+        var selectedValue = args.Value?.ToString();
+        entry.ChangeOrderId = ParseNullableGuid(selectedValue);
+        if (entry.ChangeOrderId is not null)
+        {
+            entry.CostCode = JobCostCodes.ChangeOrder;
+        }
+        else if (IsChangeOrderTimeEntry(entry))
+        {
+            entry.CostCode = JobCostCodes.Install;
+        }
+
         NormalizeTimeEntry(entry);
     }
 
@@ -734,6 +1155,7 @@ public partial class Jobs : IDisposable
         NormalizeJobDevice(item);
         SelectedJob.JobDevices.Add(item);
         ExpandSection(JobDevicesSectionId);
+        PendingSectionElementId = GetJobDeviceElementId(item.Id);
     }
 
     private void RemoveJobDevice(Guid itemId) =>
@@ -762,6 +1184,70 @@ public partial class Jobs : IDisposable
     private void OnJobDeviceInvoiceChanged(JobDeviceItem item, ChangeEventArgs args) =>
         item.InvoiceId = ParseNullableGuid(args.Value?.ToString());
 
+    private void AddChangeOrderDevice(ChangeOrderRecord changeOrder)
+    {
+        var item = new ChangeOrderDeviceItem
+        {
+            Description = "Change Order Device",
+            CategoryCode = JobCostCodes.Material,
+            Quantity = 1m
+        };
+
+        NormalizeChangeOrderDevice(item);
+        changeOrder.DeviceItems.Add(item);
+        ExpandSection(ChangeOrdersSectionId);
+        ExpandedChangeOrderIds.Add(changeOrder.Id);
+        PendingSectionElementId = GetChangeOrderDeviceElementId(changeOrder.Id, item.Id);
+        SyncJobFinancials();
+    }
+
+    private void RemoveChangeOrderDevice(ChangeOrderRecord changeOrder, Guid itemId)
+    {
+        changeOrder.DeviceItems.RemoveAll(item => item.Id == itemId);
+        SyncJobFinancials();
+    }
+
+    private void NormalizeChangeOrderDevice(ChangeOrderDeviceItem item)
+    {
+        item.CategoryCode = JobCostCodes.Normalize(item.CategoryCode);
+        item.Description = string.IsNullOrWhiteSpace(item.Description) ? "Change Order Device" : item.Description.Trim();
+        item.Quantity = item.Quantity <= 0m ? 1m : item.Quantity;
+        item.UnitLabel = string.IsNullOrWhiteSpace(item.UnitLabel) ? "ea" : item.UnitLabel.Trim();
+        item.EstimatedUnitCost = EstimateMath.RoundCurrency(Math.Max(0m, item.EstimatedUnitCost));
+        item.EstimatedUnitSale = EstimateMath.RoundCurrency(Math.Max(0m, item.EstimatedUnitSale));
+        item.ActualUnitCost = EstimateMath.RoundCurrency(Math.Max(0m, item.ActualUnitCost));
+    }
+
+    private void NormalizeChangeOrderDeviceAndSync(ChangeOrderDeviceItem item)
+    {
+        NormalizeChangeOrderDevice(item);
+        SyncJobFinancials();
+    }
+
+    private void OnChangeOrderDeviceEstimatedCostChanged(ChangeOrderDeviceItem item, ChangeEventArgs args)
+    {
+        item.EstimatedUnitCost = ParseCurrencyValue(args.Value?.ToString());
+        SyncJobFinancials();
+    }
+
+    private void OnChangeOrderDeviceEstimatedSaleChanged(ChangeOrderDeviceItem item, ChangeEventArgs args)
+    {
+        item.EstimatedUnitSale = ParseCurrencyValue(args.Value?.ToString());
+        SyncJobFinancials();
+    }
+
+    private void OnChangeOrderDeviceActualCostChanged(ChangeOrderDeviceItem item, ChangeEventArgs args)
+    {
+        item.ActualUnitCost = ParseCurrencyValue(args.Value?.ToString());
+        SyncJobFinancials();
+    }
+
+    private void OnChangeOrderDeviceInvoiceChanged(ChangeOrderDeviceItem item, ChangeEventArgs args)
+    {
+        item.InvoiceId = ParseNullableGuid(args.Value?.ToString());
+        SyncJobFinancials();
+    }
+
     private void AddInvoice()
     {
         if (SelectedJob is null)
@@ -777,6 +1263,7 @@ public partial class Jobs : IDisposable
         SelectedJob.Invoices.Add(invoice);
         ExpandSection(InvoicesSectionId);
         ExpandedInvoiceIds.Add(invoice.Id);
+        PendingSectionElementId = GetInvoiceElementId(invoice.Id);
     }
 
     private void NormalizeInvoice(JobInvoiceRecord invoice)
@@ -817,6 +1304,11 @@ public partial class Jobs : IDisposable
             item.InvoiceId = null;
         }
 
+        foreach (var item in SelectedJob.ChangeOrders.SelectMany(changeOrder => changeOrder.DeviceItems).Where(item => item.InvoiceId == invoiceId))
+        {
+            item.InvoiceId = null;
+        }
+
         SelectedJob.Invoices.RemoveAll(item => item.Id == invoiceId);
         ExpandedInvoiceIds.Remove(invoiceId);
     }
@@ -838,10 +1330,19 @@ public partial class Jobs : IDisposable
             return;
         }
 
-        var changeOrder = new ChangeOrderRecord { Title = "Change Order" };
+        var changeOrder = new ChangeOrderRecord
+        {
+            Title = "Change Order",
+            UseAutoCalculatedSale = true,
+            DirectLaborRate = GetDefaultChangeOrderDirectLaborRate(),
+            BilledLaborRate = GetDefaultChangeOrderBilledLaborRate(),
+            EstimatedLaborRate = GetDefaultChangeOrderBilledLaborRate()
+        };
+
         SelectedJob.ChangeOrders.Add(changeOrder);
         ExpandSection(ChangeOrdersSectionId);
         ExpandedChangeOrderIds.Add(changeOrder.Id);
+        PendingSectionElementId = GetChangeOrderElementId(changeOrder.Id);
         SyncJobFinancials();
     }
 
@@ -863,6 +1364,17 @@ public partial class Jobs : IDisposable
             Store.RemoveAttachment(changeOrder.Attachments, attachment);
         }
 
+        foreach (var entry in SelectedJob.TimeEntries.Where(entry => entry.ChangeOrderId == changeOrderId))
+        {
+            entry.ChangeOrderId = null;
+            if (IsChangeOrderTimeEntry(entry))
+            {
+                entry.CostCode = JobCostCodes.Other;
+            }
+
+            NormalizeTimeEntry(entry);
+        }
+
         SelectedJob.ChangeOrders.RemoveAll(item => item.Id == changeOrderId);
         ExpandedChangeOrderIds.Remove(changeOrderId);
         SyncJobFinancials();
@@ -876,6 +1388,75 @@ public partial class Jobs : IDisposable
         }
 
         return Path.Combine("jobs", SelectedJob.Id.ToString("N"), "change-orders", changeOrderId.ToString("N"));
+    }
+
+    private ChangeOrderRecord? GetLinkedChangeOrder(Guid? changeOrderId) =>
+        SelectedJob is null || changeOrderId is null
+            ? null
+            : SelectedJob.ChangeOrders.FirstOrDefault(changeOrder => changeOrder.Id == changeOrderId.Value);
+
+    private decimal GetChangeOrderEstimatedMaterialCost(ChangeOrderRecord changeOrder) =>
+        JobFinancialMath.GetChangeOrderEstimatedMaterialCost(changeOrder);
+
+    private decimal GetChangeOrderEstimatedMaterialSale(ChangeOrderRecord changeOrder) =>
+        JobFinancialMath.GetChangeOrderEstimatedMaterialSale(changeOrder);
+
+    private decimal GetChangeOrderActualMaterialCost(ChangeOrderRecord changeOrder) =>
+        JobFinancialMath.GetChangeOrderActualMaterialCost(changeOrder);
+
+    private decimal GetChangeOrderEstimatedDirectLaborCost(ChangeOrderRecord changeOrder) =>
+        JobFinancialMath.GetChangeOrderEstimatedDirectLaborCost(changeOrder);
+
+    private decimal GetChangeOrderEstimatedBilledLaborAmount(ChangeOrderRecord changeOrder) =>
+        JobFinancialMath.GetChangeOrderEstimatedBilledLaborAmount(changeOrder);
+
+    private decimal GetChangeOrderCalculatedSale(ChangeOrderRecord changeOrder) =>
+        JobFinancialMath.GetChangeOrderCalculatedSale(changeOrder);
+
+    private decimal GetChangeOrderActualLaborHours(ChangeOrderRecord changeOrder) =>
+        SelectedJob is null
+            ? 0m
+            : JobFinancialMath.GetChangeOrderActualLaborHours(SelectedJob, changeOrder.Id);
+
+    private decimal GetChangeOrderActualLaborCost(ChangeOrderRecord changeOrder) =>
+        SelectedJob is null
+            ? 0m
+            : JobFinancialMath.GetChangeOrderActualLaborCost(SelectedJob, changeOrder.Id);
+
+    private decimal GetChangeOrderActualCost(ChangeOrderRecord changeOrder) =>
+        EstimateMath.RoundCurrency(GetChangeOrderActualLaborCost(changeOrder) + GetChangeOrderActualMaterialCost(changeOrder));
+
+    private decimal GetChangeOrderVariance(ChangeOrderRecord changeOrder) =>
+        EstimateMath.RoundCurrency(GetChangeOrderActualCost(changeOrder) - changeOrder.EstimatedCostImpact);
+
+    private decimal GetDefaultChangeOrderDirectLaborRate() =>
+        EstimateMath.RoundCurrency(CurrentJobTemplate?.JourneymanRegularDirectRate ?? Store.Workspace.Settings.FieldLaborRate);
+
+    private decimal GetDefaultChangeOrderBilledLaborRate() =>
+        EstimateMath.RoundCurrency(CurrentJobTemplate?.JourneymanRegularBilledRate ?? Store.Workspace.Settings.FieldLaborRate);
+
+    private void OnChangeOrderSaleChanged(ChangeOrderRecord changeOrder, ChangeEventArgs args)
+    {
+        changeOrder.RevenueAmount = ParseCurrencyValue(args.Value?.ToString());
+        changeOrder.UseAutoCalculatedSale = false;
+        SyncJobFinancials();
+    }
+
+    private void UseCalculatedChangeOrderSale(ChangeOrderRecord changeOrder)
+    {
+        changeOrder.UseAutoCalculatedSale = true;
+        SyncJobFinancials();
+    }
+
+    private decimal GetChangeOrderRemainingLaborHours(Guid? changeOrderId)
+    {
+        var changeOrder = GetLinkedChangeOrder(changeOrderId);
+        if (changeOrder is null)
+        {
+            return 0m;
+        }
+
+        return EstimateMath.RoundHours(changeOrder.EstimatedLaborHours - GetChangeOrderActualLaborHours(changeOrder));
     }
 
     private void AddScheduleValue()
@@ -895,6 +1476,7 @@ public partial class Jobs : IDisposable
 
         ExpandSection(ScheduleOfValuesSectionId);
         ExpandedScheduleValueIds.Add(item.Id);
+        PendingSectionElementId = GetScheduleValueElementId(item.Id);
         SyncJobFinancials();
     }
 
@@ -934,15 +1516,18 @@ public partial class Jobs : IDisposable
             return;
         }
 
-        item.SubLines.Add(new ScheduleValueSubLine
+        var subLine = new ScheduleValueSubLine
         {
             Description = $"{item.Description} Progress",
             LineValue = item.SubLines.Count == 0
                 ? EstimateMath.RoundCurrency(Math.Max(0m, item.ScheduledValue > 0m ? item.ScheduledValue : item.ReferenceValue))
                 : 0m
-        });
+        };
 
+        item.SubLines.Add(subLine);
+        ExpandSection(ScheduleOfValuesSectionId);
         ExpandedScheduleValueIds.Add(item.Id);
+        PendingSectionElementId = GetScheduleValueSubLineElementId(item.Id, subLine.Id);
         SyncJobFinancials();
     }
 
@@ -1056,6 +1641,33 @@ public partial class Jobs : IDisposable
     private static string GetCurrencyInputValue(decimal value) =>
         value.ToString("0.##", CultureInfo.InvariantCulture);
 
+    private static string GetDailyLogElementId(Guid dailyLogId) =>
+        $"jobs-daily-log-{dailyLogId:N}";
+
+    private static string GetDailyLogTimeEntryElementId(Guid dailyLogId, Guid entryId) =>
+        $"jobs-daily-log-{dailyLogId:N}-time-entry-{entryId:N}";
+
+    private static string GetScheduleValueElementId(Guid itemId) =>
+        $"jobs-schedule-value-{itemId:N}";
+
+    private static string GetScheduleValueSubLineElementId(Guid itemId, Guid subLineId) =>
+        $"jobs-schedule-value-{itemId:N}-subline-{subLineId:N}";
+
+    private static string GetJobDeviceElementId(Guid itemId) =>
+        $"jobs-job-device-{itemId:N}";
+
+    private static string GetInvoiceElementId(Guid invoiceId) =>
+        $"jobs-invoice-{invoiceId:N}";
+
+    private static string GetChangeOrderElementId(Guid changeOrderId) =>
+        $"jobs-change-order-{changeOrderId:N}";
+
+    private static string GetChangeOrderDeviceElementId(Guid changeOrderId, Guid itemId) =>
+        $"jobs-change-order-{changeOrderId:N}-device-{itemId:N}";
+
+    private static string GetCommitmentElementId(Guid commitmentId) =>
+        $"jobs-commitment-{commitmentId:N}";
+
     private void OnScheduleValueSubLineLineValueChanged(ScheduleValueItem item, ScheduleValueSubLine subLine, ChangeEventArgs args)
     {
         subLine.LineValue = ParseCurrencyValue(args.Value?.ToString());
@@ -1093,13 +1705,16 @@ public partial class Jobs : IDisposable
             return;
         }
 
-        SelectedJob.Commitments.Add(new CommitmentRecord
+        var commitment = new CommitmentRecord
         {
             Vendor = "Vendor",
             ScheduleValueItemId = SelectedJob.ScheduleOfValues.FirstOrDefault()?.Id
-        });
+        };
+
+        SelectedJob.Commitments.Add(commitment);
 
         ExpandSection(CommitmentsSectionId);
+        PendingSectionElementId = GetCommitmentElementId(commitment.Id);
         var firstScheduleValueId = SelectedJob.ScheduleOfValues.FirstOrDefault()?.Id;
         if (firstScheduleValueId is not null)
         {
@@ -1137,6 +1752,7 @@ public partial class Jobs : IDisposable
         }
 
         Store.SyncJobFinancials(SelectedJob);
+        SyncSavedPersonnelSuggestions();
     }
 
     private static decimal ParseCurrencyValue(string? value)

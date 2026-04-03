@@ -1,481 +1,1269 @@
-{
-  "Settings": {
-    "StorageMode": 0,
-    "StorageNotes": "Text-file storage is active today. The repository contracts are ready for future SQLite or SQL Server adapters when you want to expand beyond flat files.",
-    "DefaultTemplateId": "91738e66-21d7-4142-a721-6ae4c12eee60",
-    "FieldLaborRate": 115,
-    "AdminLaborRate": 68,
-    "EngineeringLaborRate": 96,
-    "DefaultMarkupPercent": 22,
-    "DefaultServiceContractMonths": 24,
-    "DefaultInspectionIntervalMonths": 12,
-    "DefaultMonthlyMonitoringAmount": 165,
-    "BidNumberCounters": [
-      {
-        "Year": 2026,
-        "NextSequence": 4
-      }
-    ]
-  },
-  "Clients": [
-    {
-      "Id": "bba84958-d247-4b1c-8ca9-cd66daf88878",
-      "Name": "Client 2",
-      "PrimaryContact": "",
-      "Email": "",
-      "Phone": "",
-      "BillingAddress": "",
-      "ServiceAddress": "",
-      "Notes": "",
-      "IsActive": true
-    }
-  ],
-  "Templates": [
-    {
-      "Id": "91738e66-21d7-4142-a721-6ae4c12eee60",
-      "Name": "Standard Device Labor",
-      "Notes": "Starter template matching the estimating rules described in the project brief.",
-      "IsArchived": false,
-      "BidNumberFormat": "BID-YY-NNNN",
-      "DefaultMarkupPercent": 40,
-      "JourneymanRegularDirectRate": 65,
-      "JourneymanRegularBilledRate": 90,
-      "JourneymanOvernightDirectRate": 97.5,
-      "JourneymanOvernightBilledRate": 135,
-      "ApprenticeRegularDirectRate": 45,
-      "ApprenticeRegularBilledRate": 65,
-      "ApprenticeOvernightDirectRate": 67.5,
-      "ApprenticeOvernightBilledRate": 97.5,
-      "AdminDirectRate": 68,
-      "AdminBilledRate": 95,
-      "EngineeringDirectRate": 96,
-      "EngineeringBilledRate": 130,
-      "Rules": [
-        {
-          "Id": "44d2bc79-9913-41ab-9e98-0992021c1aa0",
-          "LocationProfile": "Warehouse",
-          "InstallType": "Normal",
-          "InstallMinutes": 30,
-          "DemoMinutes": 15,
-          "TrimMinutes": 15,
-          "TestMinutes": 5,
-          "Notes": "Typical ceiling or wall mounted device in a standard environment."
-        },
-        {
-          "Id": "2c244b64-d015-4657-a6b1-6043e70a7534",
-          "LocationProfile": "Warehouse",
-          "InstallType": "Lift",
-          "InstallMinutes": 60,
-          "DemoMinutes": 45,
-          "TrimMinutes": 30,
-          "TestMinutes": 15,
-          "Notes": "Use when lift staging or elevated access is required."
-        },
-        {
-          "Id": "9e7509cb-56c3-4d6d-92b4-28bad4343dec",
-          "LocationProfile": "Hard Lid",
-          "InstallType": "Normal",
-          "InstallMinutes": 30,
-          "DemoMinutes": 15,
-          "TrimMinutes": 15,
-          "TestMinutes": 5,
-          "Notes": "Finished spaces with added coordination and cleanup."
-        },
-        {
-          "Id": "f1c24084-0a2b-4271-a959-1579f792a915",
-          "LocationProfile": "T-Bar",
-          "InstallType": "Normal",
-          "InstallMinutes": 15,
-          "DemoMinutes": 15,
-          "TrimMinutes": 15,
-          "TestMinutes": 5,
-          "Notes": ""
-        },
-        {
-          "Id": "655f0f2f-6d08-453c-9af9-01afead4ead2",
-          "LocationProfile": "T-Bar",
-          "InstallType": "Lift",
-          "InstallMinutes": 45,
-          "DemoMinutes": 45,
-          "TrimMinutes": 30,
-          "TestMinutes": 15,
-          "Notes": ""
-        },
-        {
-          "Id": "5f6c3815-57de-4b7f-90cd-fbfafdb3c8dc",
-          "LocationProfile": "Underground",
-          "InstallType": "Normal",
-          "InstallMinutes": 60,
-          "DemoMinutes": 30,
-          "TrimMinutes": 30,
-          "TestMinutes": 5,
-          "Notes": ""
-        },
-        {
-          "Id": "7eb126ec-f6ca-4fe5-b23d-8fed53c794dd",
-          "LocationProfile": "Panel Room",
-          "InstallType": "Normal",
-          "InstallMinutes": 60,
-          "DemoMinutes": 30,
-          "TrimMinutes": 180,
-          "TestMinutes": 30,
-          "Notes": ""
-        }
-      ]
-    }
-  ],
-  "Bids": [
-    {
-      "Id": "582f92df-eaf2-4571-a2e0-bff9b6bd2cd7",
-      "BidNumber": "BID-26-0003",
-      "ProjectName": "Bid 3",
-      "ClientId": null,
-      "Site": {
-        "SiteName": "New Project Site",
-        "AddressLine1": "",
-        "AddressLine2": "",
-        "City": "",
-        "State": "",
-        "PostalCode": "",
-        "OccupancyType": "",
-        "Notes": "",
-        "ScopeOfWork": "",
-        "ParcelNumber": "",
-        "Jurisdiction": "",
-        "BuildingArea": "",
-        "NumberOfStories": "",
-        "OccupancyGroup": "",
-        "OccupantLoad": "",
-        "ConstructionType": "",
-        "IsSprinklered": false
-      },
-      "Status": "Draft",
-      "IsActive": true,
-      "CreatedOn": "2026-03-22T00:00:00-07:00",
-      "DueDate": "2026-04-05T00:00:00-07:00",
-      "TemplateId": "91738e66-21d7-4142-a721-6ae4c12eee60",
-      "FieldLaborRate": 65,
-      "AdminLaborRate": 68,
-      "EngineeringLaborRate": 96,
-      "MarkupPercent": 40,
-      "ProposedRevenue": 0,
-      "ScopeSummary": "",
-      "Notes": "",
-      "JourneymanRegularDirectRate": 65,
-      "JourneymanRegularBilledRate": 90,
-      "JourneymanOvernightDirectRate": 97.5,
-      "JourneymanOvernightBilledRate": 135,
-      "ApprenticeRegularDirectRate": 45,
-      "ApprenticeRegularBilledRate": 65,
-      "ApprenticeOvernightDirectRate": 67.5,
-      "ApprenticeOvernightBilledRate": 97.5,
-      "AdminDirectRate": 68,
-      "AdminBilledRate": 95,
-      "EngineeringDirectRate": 96,
-      "EngineeringBilledRate": 130,
-      "LaborDistribution": [
-        {
-          "Id": "4281d9e6-d091-415f-865f-e2edd758d2e5",
-          "PersonnelType": 0,
-          "HourType": 0,
-          "InstallHours": 0,
-          "DemoHours": 0,
-          "TrimHours": 0,
-          "TestHours": 0
-        },
-        {
-          "Id": "95d1fbae-4ac8-485d-85f5-7b025e681a69",
-          "PersonnelType": 0,
-          "HourType": 1,
-          "InstallHours": 0,
-          "DemoHours": 0,
-          "TrimHours": 0,
-          "TestHours": 0
-        },
-        {
-          "Id": "f817fc1b-b8d4-44d8-8e18-54328bd4f666",
-          "PersonnelType": 1,
-          "HourType": 0,
-          "InstallHours": 0,
-          "DemoHours": 0,
-          "TrimHours": 0,
-          "TestHours": 0
-        },
-        {
-          "Id": "0061abb2-f820-4da7-9c33-6628d101ec66",
-          "PersonnelType": 1,
-          "HourType": 1,
-          "InstallHours": 0,
-          "DemoHours": 0,
-          "TrimHours": 0,
-          "TestHours": 0
-        }
-      ],
-      "AdministrativeTasks": [],
-      "EngineeringTasks": [],
-      "Components": [],
-      "DemoItems": [],
-      "Materials": [],
-      "Attachments": []
-    },
-    {
-      "Id": "29b9133d-3a49-4a0a-98e5-a47fda2d12e2",
-      "BidNumber": "BID-26-0002",
-      "ProjectName": "Bid 2",
-      "ClientId": "bba84958-d247-4b1c-8ca9-cd66daf88878",
-      "Site": {
-        "SiteName": "New Project Site",
-        "AddressLine1": "",
-        "AddressLine2": "",
-        "City": "",
-        "State": "",
-        "PostalCode": "",
-        "OccupancyType": "",
-        "Notes": "",
-        "ScopeOfWork": "",
-        "ParcelNumber": "",
-        "Jurisdiction": "",
-        "BuildingArea": "",
-        "NumberOfStories": "",
-        "OccupancyGroup": "",
-        "OccupantLoad": "",
-        "ConstructionType": "",
-        "IsSprinklered": false
-      },
-      "Status": "Draft",
-      "IsActive": true,
-      "CreatedOn": "2026-03-22T00:00:00-07:00",
-      "DueDate": "2026-04-05T00:00:00-07:00",
-      "TemplateId": "91738e66-21d7-4142-a721-6ae4c12eee60",
-      "FieldLaborRate": 65,
-      "AdminLaborRate": 68,
-      "EngineeringLaborRate": 96,
-      "MarkupPercent": 40,
-      "ProposedRevenue": 0,
-      "ScopeSummary": "",
-      "Notes": "",
-      "JourneymanRegularDirectRate": 65,
-      "JourneymanRegularBilledRate": 90,
-      "JourneymanOvernightDirectRate": 97.5,
-      "JourneymanOvernightBilledRate": 135,
-      "ApprenticeRegularDirectRate": 45,
-      "ApprenticeRegularBilledRate": 65,
-      "ApprenticeOvernightDirectRate": 67.5,
-      "ApprenticeOvernightBilledRate": 97.5,
-      "AdminDirectRate": 68,
-      "AdminBilledRate": 95,
-      "EngineeringDirectRate": 96,
-      "EngineeringBilledRate": 130,
-      "LaborDistribution": [
-        {
-          "Id": "3dd27b7b-4463-4f7c-8706-b361d56ffc92",
-          "PersonnelType": 0,
-          "HourType": 0,
-          "InstallHours": 0.25,
-          "DemoHours": 0,
-          "TrimHours": 0.25,
-          "TestHours": 0
-        },
-        {
-          "Id": "95c1eccd-4b5c-4868-9232-4461e7825e2c",
-          "PersonnelType": 0,
-          "HourType": 1,
-          "InstallHours": 0,
-          "DemoHours": 0,
-          "TrimHours": 0,
-          "TestHours": 0
-        },
-        {
-          "Id": "98582fcb-c0e7-4f12-8d96-b10c41e0c0eb",
-          "PersonnelType": 1,
-          "HourType": 0,
-          "InstallHours": 0,
-          "DemoHours": 0,
-          "TrimHours": 0,
-          "TestHours": 0
-        },
-        {
-          "Id": "b0f76e72-3b03-44d7-b702-69b709f86fa9",
-          "PersonnelType": 1,
-          "HourType": 1,
-          "InstallHours": 0,
-          "DemoHours": 0,
-          "TrimHours": 0,
-          "TestHours": 0
-        }
-      ],
-      "AdministrativeTasks": [],
-      "EngineeringTasks": [],
-      "Components": [
-        {
-          "Id": "2faf9212-886d-4eb1-b7ea-24a01e0a2ba9",
-          "Name": "sd-365",
-          "Quantity": 1,
-          "LocationProfile": "T-Bar",
-          "InstallType": "Normal",
-          "MaterialCostEach": 100,
-          "UnitSale": 140.0,
-          "IncludeInstall": true,
-          "IncludeTrim": true,
-          "IncludeTest": true,
-          "InstallMinutes": 15,
-          "DemoMinutes": 15,
-          "TrimMinutes": 15,
-          "TestMinutes": 5,
-          "Notes": ""
-        }
-      ],
-      "DemoItems": [],
-      "Materials": [],
-      "Attachments": []
-    },
-    {
-      "Id": "cbc6d42d-31a8-4b8a-aca9-a7eeec83a412",
-      "BidNumber": "BID-20260320-001",
-      "ProjectName": "Bid 1",
-      "ClientId": null,
-      "Site": {
-        "SiteName": "New Project Site",
-        "AddressLine1": "",
-        "AddressLine2": "",
-        "City": "",
-        "State": "",
-        "PostalCode": "",
-        "OccupancyType": "",
-        "Notes": "",
-        "ScopeOfWork": "",
-        "ParcelNumber": "",
-        "Jurisdiction": "",
-        "BuildingArea": "",
-        "NumberOfStories": "",
-        "OccupancyGroup": "",
-        "OccupantLoad": "",
-        "ConstructionType": "",
-        "IsSprinklered": false
-      },
-      "Status": "Draft",
-      "IsActive": false,
-      "CreatedOn": "2026-03-20T00:00:00-07:00",
-      "DueDate": "2026-04-03T00:00:00-07:00",
-      "TemplateId": "91738e66-21d7-4142-a721-6ae4c12eee60",
-      "FieldLaborRate": 65,
-      "AdminLaborRate": 68,
-      "EngineeringLaborRate": 96,
-      "MarkupPercent": 40,
-      "ProposedRevenue": 0,
-      "ScopeSummary": "",
-      "Notes": "",
-      "JourneymanRegularDirectRate": 65,
-      "JourneymanRegularBilledRate": 90,
-      "JourneymanOvernightDirectRate": 97.5,
-      "JourneymanOvernightBilledRate": 135,
-      "ApprenticeRegularDirectRate": 45,
-      "ApprenticeRegularBilledRate": 65,
-      "ApprenticeOvernightDirectRate": 67.5,
-      "ApprenticeOvernightBilledRate": 97.5,
-      "AdminDirectRate": 68,
-      "AdminBilledRate": 95,
-      "EngineeringDirectRate": 96,
-      "EngineeringBilledRate": 130,
-      "LaborDistribution": [
-        {
-          "Id": "66e88f30-4522-433e-a8cc-03024856cdcc",
-          "PersonnelType": 0,
-          "HourType": 0,
-          "InstallHours": 0,
-          "DemoHours": 0,
-          "TrimHours": 0,
-          "TestHours": 0
-        },
-        {
-          "Id": "27f88379-1b60-4d9a-8f45-cf20e247b48e",
-          "PersonnelType": 0,
-          "HourType": 1,
-          "InstallHours": 0,
-          "DemoHours": 0,
-          "TrimHours": 0,
-          "TestHours": 0
-        },
-        {
-          "Id": "89a31f22-967f-4e7f-86ad-e6643c6343fd",
-          "PersonnelType": 1,
-          "HourType": 0,
-          "InstallHours": 0,
-          "DemoHours": 0,
-          "TrimHours": 0,
-          "TestHours": 0
-        },
-        {
-          "Id": "13bd49ac-2f11-4318-9782-f2bea337820c",
-          "PersonnelType": 1,
-          "HourType": 1,
-          "InstallHours": 0,
-          "DemoHours": 0,
-          "TrimHours": 0,
-          "TestHours": 0
-        }
-      ],
-      "AdministrativeTasks": [],
-      "EngineeringTasks": [],
-      "Components": [],
-      "DemoItems": [],
-      "Materials": [],
-      "Attachments": []
-    }
-  ],
-  "Jobs": [
-    {
-      "Id": "6c7cdd09-97a1-40f3-8816-ecf11fac670b",
-      "JobNumber": "JOB-20260320-001",
-      "ProjectName": "Job 1",
-      "ClientId": null,
-      "SourceBidId": null,
-      "Site": {
-        "SiteName": "",
-        "AddressLine1": "",
-        "AddressLine2": "",
-        "City": "",
-        "State": "",
-        "PostalCode": "",
-        "OccupancyType": "",
-        "Notes": "",
-        "ScopeOfWork": "",
-        "ParcelNumber": "",
-        "Jurisdiction": "",
-        "BuildingArea": "",
-        "NumberOfStories": "",
-        "OccupancyGroup": "",
-        "OccupantLoad": "",
-        "ConstructionType": "",
-        "IsSprinklered": false
-      },
-      "Status": "Planning",
-      "IsActive": true,
-      "CreatedOn": "2026-03-20T00:00:00-07:00",
-      "Baseline": {
-        "SourceBidNumber": "",
-        "ScopeSummary": "Direct job entry without a converted bid.",
-        "OriginalRevenue": 0,
-        "EstimatedLaborCost": 0,
-        "EstimatedMaterialCost": 0,
-        "EstimatedTotalCost": 0,
-        "EstimatedFieldHours": 0,
-        "EstimatedAdminHours": 0,
-        "EstimatedEngineeringHours": 0,
-        "AdministrativeTasks": [],
-        "EngineeringTasks": [],
-        "Components": [],
-        "DemoItems": [],
-        "Materials": []
-      },
-      "TimeEntries": [],
-      "MaterialPurchases": [],
-      "ChangeOrders": [],
-      "ScheduleOfValues": [],
-      "Commitments": [],
-      "Attachments": [],
-      "Notes": ""
-    }
-  ],
-  "ServiceAgreements": []
+﻿{
+    "Settings":  {
+                     "StorageMode":  0,
+                     "StorageNotes":  "Text-file storage is active today. The repository contracts are ready for future SQLite or SQL Server adapters when you want to expand beyond flat files.",
+                     "DefaultTemplateId":  "91738e66-21d7-4142-a721-6ae4c12eee60",
+                     "FieldLaborRate":  115,
+                     "AdminLaborRate":  68,
+                     "EngineeringLaborRate":  96,
+                     "DefaultMarkupPercent":  22,
+                     "DefaultServiceContractMonths":  24,
+                     "DefaultInspectionIntervalMonths":  12,
+                     "DefaultMonthlyMonitoringAmount":  165,
+                     "BidNumberCounters":  [
+                                               {
+                                                   "Year":  2026,
+                                                   "NextSequence":  4
+                                               }
+                                           ]
+                 },
+    "Clients":  [
+                    {
+                        "Id":  "a1e6f900-3d4e-4c98-91a2-000000000001",
+                        "Name":  "Demo Client",
+                        "PrimaryContact":  "Taylor Demo",
+                        "Email":  "demo.client@example.com",
+                        "Phone":  "555-0100",
+                        "BillingAddress":  "100 Billing Ave, Sacramento, CA 95814",
+                        "ServiceAddress":  "100 Sample Ave, Sacramento, CA 95814",
+                        "Notes":  "Generic demo client for workflow testing.",
+                        "IsActive":  true
+                    },
+                    {
+                        "Id":  "bba84958-d247-4b1c-8ca9-cd66daf88878",
+                        "Name":  "Client 2",
+                        "PrimaryContact":  "",
+                        "Email":  "",
+                        "Phone":  "",
+                        "BillingAddress":  "",
+                        "ServiceAddress":  "",
+                        "Notes":  "",
+                        "IsActive":  true
+                    }
+                ],
+    "Templates":  [
+                      {
+                          "Id":  "91738e66-21d7-4142-a721-6ae4c12eee60",
+                          "Name":  "Standard Device Labor",
+                          "Notes":  "Starter template matching the estimating rules described in the project brief.",
+                          "IsArchived":  false,
+                          "BidNumberFormat":  "BID-YY-NNNN",
+                          "DefaultMarkupPercent":  40,
+                          "JourneymanRegularDirectRate":  65,
+                          "JourneymanRegularBilledRate":  90,
+                          "JourneymanOvernightDirectRate":  97.5,
+                          "JourneymanOvernightBilledRate":  135,
+                          "ApprenticeRegularDirectRate":  45,
+                          "ApprenticeRegularBilledRate":  65,
+                          "ApprenticeOvernightDirectRate":  67.5,
+                          "ApprenticeOvernightBilledRate":  97.5,
+                          "AdminDirectRate":  68,
+                          "AdminBilledRate":  95,
+                          "EngineeringDirectRate":  96,
+                          "EngineeringBilledRate":  130,
+                          "Rules":  [
+                                        {
+                                            "Id":  "44d2bc79-9913-41ab-9e98-0992021c1aa0",
+                                            "LocationProfile":  "Warehouse",
+                                            "InstallType":  "Normal",
+                                            "InstallMinutes":  30,
+                                            "DemoMinutes":  15,
+                                            "TrimMinutes":  15,
+                                            "TestMinutes":  5,
+                                            "Notes":  "Typical ceiling or wall mounted device in a standard environment."
+                                        },
+                                        {
+                                            "Id":  "2c244b64-d015-4657-a6b1-6043e70a7534",
+                                            "LocationProfile":  "Warehouse",
+                                            "InstallType":  "Lift",
+                                            "InstallMinutes":  60,
+                                            "DemoMinutes":  45,
+                                            "TrimMinutes":  30,
+                                            "TestMinutes":  15,
+                                            "Notes":  "Use when lift staging or elevated access is required."
+                                        },
+                                        {
+                                            "Id":  "9e7509cb-56c3-4d6d-92b4-28bad4343dec",
+                                            "LocationProfile":  "Hard Lid",
+                                            "InstallType":  "Normal",
+                                            "InstallMinutes":  30,
+                                            "DemoMinutes":  15,
+                                            "TrimMinutes":  15,
+                                            "TestMinutes":  5,
+                                            "Notes":  "Finished spaces with added coordination and cleanup."
+                                        },
+                                        {
+                                            "Id":  "f1c24084-0a2b-4271-a959-1579f792a915",
+                                            "LocationProfile":  "T-Bar",
+                                            "InstallType":  "Normal",
+                                            "InstallMinutes":  15,
+                                            "DemoMinutes":  15,
+                                            "TrimMinutes":  15,
+                                            "TestMinutes":  5,
+                                            "Notes":  ""
+                                        },
+                                        {
+                                            "Id":  "655f0f2f-6d08-453c-9af9-01afead4ead2",
+                                            "LocationProfile":  "T-Bar",
+                                            "InstallType":  "Lift",
+                                            "InstallMinutes":  45,
+                                            "DemoMinutes":  45,
+                                            "TrimMinutes":  30,
+                                            "TestMinutes":  15,
+                                            "Notes":  ""
+                                        },
+                                        {
+                                            "Id":  "5f6c3815-57de-4b7f-90cd-fbfafdb3c8dc",
+                                            "LocationProfile":  "Underground",
+                                            "InstallType":  "Normal",
+                                            "InstallMinutes":  60,
+                                            "DemoMinutes":  30,
+                                            "TrimMinutes":  30,
+                                            "TestMinutes":  5,
+                                            "Notes":  ""
+                                        },
+                                        {
+                                            "Id":  "7eb126ec-f6ca-4fe5-b23d-8fed53c794dd",
+                                            "LocationProfile":  "Panel Room",
+                                            "InstallType":  "Normal",
+                                            "InstallMinutes":  60,
+                                            "DemoMinutes":  30,
+                                            "TrimMinutes":  180,
+                                            "TestMinutes":  30,
+                                            "Notes":  ""
+                                        }
+                                    ]
+                      }
+                  ],
+    "Bids":  [
+                 {
+                     "Id":  "a1e6f900-3d4e-4c98-91a2-000000000002",
+                     "BidNumber":  "BID-26-0004",
+                     "ProjectName":  "Generic Fire Alarm Upgrade",
+                     "ClientId":  "a1e6f900-3d4e-4c98-91a2-000000000001",
+                     "Site":  {
+                                  "SiteName":  "Generic Warehouse",
+                                  "AddressLine1":  "100 Sample Ave",
+                                  "AddressLine2":  "",
+                                  "City":  "Sacramento",
+                                  "State":  "CA",
+                                  "PostalCode":  "95814",
+                                  "OccupancyType":  "Warehouse",
+                                  "Notes":  "Generic demo site for bid-to-job workflow testing.",
+                                  "ScopeOfWork":  "Provide and install three generic fire alarm devices, related wire, and supporting material.",
+                                  "ParcelNumber":  "",
+                                  "Jurisdiction":  "",
+                                  "BuildingArea":  "",
+                                  "NumberOfStories":  "",
+                                  "OccupancyGroup":  "",
+                                  "OccupantLoad":  "",
+                                  "ConstructionType":  "",
+                                  "IsSprinklered":  false
+                              },
+                     "Status":  "Awarded",
+                     "IsActive":  true,
+                     "CreatedOn":  "2026-03-29T00:00:00-07:00",
+                     "DueDate":  "2026-04-12T00:00:00-07:00",
+                     "TemplateId":  "91738e66-21d7-4142-a721-6ae4c12eee60",
+                     "FieldLaborRate":  65,
+                     "AdminLaborRate":  68,
+                     "EngineeringLaborRate":  96,
+                     "MarkupPercent":  40,
+                     "ProposedRevenue":  1638,
+                     "ScopeSummary":  "Provide and install three generic fire alarm devices, related wire, and supporting material.",
+                     "Notes":  "Generic demo bid for workflow testing.",
+                     "JourneymanRegularDirectRate":  65,
+                     "JourneymanRegularBilledRate":  90,
+                     "JourneymanOvernightDirectRate":  97.5,
+                     "JourneymanOvernightBilledRate":  135,
+                     "ApprenticeRegularDirectRate":  45,
+                     "ApprenticeRegularBilledRate":  65,
+                     "ApprenticeOvernightDirectRate":  67.5,
+                     "ApprenticeOvernightBilledRate":  97.5,
+                     "AdminDirectRate":  68,
+                     "AdminBilledRate":  95,
+                     "EngineeringDirectRate":  96,
+                     "EngineeringBilledRate":  130,
+                     "LaborDistribution":  [
+                                               {
+                                                   "Id":  "a1e6f900-3d4e-4c98-91a2-000000000040",
+                                                   "PersonnelType":  0,
+                                                   "HourType":  0,
+                                                   "InstallHours":  0.75,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0.5,
+                                                   "TestHours":  0.25
+                                               },
+                                               {
+                                                   "Id":  "a1e6f900-3d4e-4c98-91a2-000000000041",
+                                                   "PersonnelType":  0,
+                                                   "HourType":  1,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               },
+                                               {
+                                                   "Id":  "a1e6f900-3d4e-4c98-91a2-000000000042",
+                                                   "PersonnelType":  1,
+                                                   "HourType":  0,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               },
+                                               {
+                                                   "Id":  "a1e6f900-3d4e-4c98-91a2-000000000043",
+                                                   "PersonnelType":  1,
+                                                   "HourType":  1,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               }
+                                           ],
+                     "AdministrativeTasks":  [
+                                                 {
+                                                     "Id":  "a1e6f900-3d4e-4c98-91a2-000000000044",
+                                                     "Title":  "Project Setup",
+                                                     "PricingMode":  0,
+                                                     "EstimatedHours":  1,
+                                                     "CostPrice":  0,
+                                                     "SalePrice":  0,
+                                                     "Complete":  false,
+                                                     "Notes":  ""
+                                                 }
+                                             ],
+                     "EngineeringTasks":  [
+                                              {
+                                                  "Id":  "a1e6f900-3d4e-4c98-91a2-000000000045",
+                                                  "Title":  "Shop Drawings",
+                                                  "PricingMode":  0,
+                                                  "EstimatedHours":  2,
+                                                  "CostPrice":  0,
+                                                  "SalePrice":  0,
+                                                  "Complete":  false,
+                                                  "Notes":  ""
+                                              }
+                                          ],
+                     "Components":  [
+                                        {
+                                            "Id":  "a1e6f900-3d4e-4c98-91a2-000000000046",
+                                            "Name":  "Component 1",
+                                            "Quantity":  1,
+                                            "LocationProfile":  "Warehouse",
+                                            "InstallType":  "Normal",
+                                            "MaterialCostEach":  120,
+                                            "UnitSale":  168,
+                                            "IncludeInstall":  true,
+                                            "IncludeTrim":  true,
+                                            "IncludeTest":  true,
+                                            "InstallMinutes":  15,
+                                            "DemoMinutes":  0,
+                                            "TrimMinutes":  10,
+                                            "TestMinutes":  5,
+                                            "Notes":  ""
+                                        },
+                                        {
+                                            "Id":  "a1e6f900-3d4e-4c98-91a2-000000000047",
+                                            "Name":  "Component 2",
+                                            "Quantity":  1,
+                                            "LocationProfile":  "Warehouse",
+                                            "InstallType":  "Normal",
+                                            "MaterialCostEach":  150,
+                                            "UnitSale":  210,
+                                            "IncludeInstall":  true,
+                                            "IncludeTrim":  true,
+                                            "IncludeTest":  true,
+                                            "InstallMinutes":  15,
+                                            "DemoMinutes":  0,
+                                            "TrimMinutes":  10,
+                                            "TestMinutes":  5,
+                                            "Notes":  ""
+                                        },
+                                        {
+                                            "Id":  "a1e6f900-3d4e-4c98-91a2-000000000048",
+                                            "Name":  "Component 3",
+                                            "Quantity":  1,
+                                            "LocationProfile":  "Warehouse",
+                                            "InstallType":  "Normal",
+                                            "MaterialCostEach":  200,
+                                            "UnitSale":  280,
+                                            "IncludeInstall":  true,
+                                            "IncludeTrim":  true,
+                                            "IncludeTest":  true,
+                                            "InstallMinutes":  15,
+                                            "DemoMinutes":  0,
+                                            "TrimMinutes":  10,
+                                            "TestMinutes":  5,
+                                            "Notes":  ""
+                                        }
+                                    ],
+                     "DemoItems":  [
+
+                                   ],
+                     "Materials":  [
+                                       {
+                                           "Id":  "a1e6f900-3d4e-4c98-91a2-000000000049",
+                                           "Kind":  1,
+                                           "Category":  "Wire",
+                                           "Description":  "Wire",
+                                           "Quantity":  500,
+                                           "UnitCost":  0.4,
+                                           "UnitSale":  0.56,
+                                           "Notes":  ""
+                                       },
+                                       {
+                                           "Id":  "a1e6f900-3d4e-4c98-91a2-00000000004a",
+                                           "Kind":  2,
+                                           "Category":  "Material",
+                                           "Description":  "Material",
+                                           "Quantity":  1,
+                                           "UnitCost":  150,
+                                           "UnitSale":  210,
+                                           "Notes":  ""
+                                       }
+                                   ],
+                     "Exclusions":  "Permit fees, monitoring activation, and patch/paint by others.",
+                     "ProposalSummary":  "Provide and install three generic fire alarm devices, related wire, and supporting material.",
+                     "ProposalClosing":  "Work to be scheduled during normal business hours unless otherwise noted.",
+                     "Attachments":  [
+
+                                     ]
+                 },
+                 {
+                     "Id":  "582f92df-eaf2-4571-a2e0-bff9b6bd2cd7",
+                     "BidNumber":  "BID-26-0003",
+                     "ProjectName":  "Bid 3",
+                     "ClientId":  null,
+                     "Site":  {
+                                  "SiteName":  "New Project Site",
+                                  "AddressLine1":  "",
+                                  "AddressLine2":  "",
+                                  "City":  "",
+                                  "State":  "",
+                                  "PostalCode":  "",
+                                  "OccupancyType":  "",
+                                  "Notes":  "",
+                                  "ScopeOfWork":  "",
+                                  "ParcelNumber":  "",
+                                  "Jurisdiction":  "",
+                                  "BuildingArea":  "",
+                                  "NumberOfStories":  "",
+                                  "OccupancyGroup":  "",
+                                  "OccupantLoad":  "",
+                                  "ConstructionType":  "",
+                                  "IsSprinklered":  false
+                              },
+                     "Status":  "Draft",
+                     "IsActive":  true,
+                     "CreatedOn":  "2026-03-22T00:00:00-07:00",
+                     "DueDate":  "2026-04-05T00:00:00-07:00",
+                     "TemplateId":  "91738e66-21d7-4142-a721-6ae4c12eee60",
+                     "FieldLaborRate":  65,
+                     "AdminLaborRate":  68,
+                     "EngineeringLaborRate":  96,
+                     "MarkupPercent":  40,
+                     "ProposedRevenue":  0,
+                     "ScopeSummary":  "",
+                     "Notes":  "",
+                     "JourneymanRegularDirectRate":  65,
+                     "JourneymanRegularBilledRate":  90,
+                     "JourneymanOvernightDirectRate":  97.5,
+                     "JourneymanOvernightBilledRate":  135,
+                     "ApprenticeRegularDirectRate":  45,
+                     "ApprenticeRegularBilledRate":  65,
+                     "ApprenticeOvernightDirectRate":  67.5,
+                     "ApprenticeOvernightBilledRate":  97.5,
+                     "AdminDirectRate":  68,
+                     "AdminBilledRate":  95,
+                     "EngineeringDirectRate":  96,
+                     "EngineeringBilledRate":  130,
+                     "LaborDistribution":  [
+                                               {
+                                                   "Id":  "4281d9e6-d091-415f-865f-e2edd758d2e5",
+                                                   "PersonnelType":  0,
+                                                   "HourType":  0,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               },
+                                               {
+                                                   "Id":  "95d1fbae-4ac8-485d-85f5-7b025e681a69",
+                                                   "PersonnelType":  0,
+                                                   "HourType":  1,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               },
+                                               {
+                                                   "Id":  "f817fc1b-b8d4-44d8-8e18-54328bd4f666",
+                                                   "PersonnelType":  1,
+                                                   "HourType":  0,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               },
+                                               {
+                                                   "Id":  "0061abb2-f820-4da7-9c33-6628d101ec66",
+                                                   "PersonnelType":  1,
+                                                   "HourType":  1,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               }
+                                           ],
+                     "AdministrativeTasks":  [
+
+                                             ],
+                     "EngineeringTasks":  [
+
+                                          ],
+                     "Components":  [
+
+                                    ],
+                     "DemoItems":  [
+
+                                   ],
+                     "Materials":  [
+
+                                   ],
+                     "Attachments":  [
+
+                                     ]
+                 },
+                 {
+                     "Id":  "29b9133d-3a49-4a0a-98e5-a47fda2d12e2",
+                     "BidNumber":  "BID-26-0002",
+                     "ProjectName":  "Bid 2",
+                     "ClientId":  "bba84958-d247-4b1c-8ca9-cd66daf88878",
+                     "Site":  {
+                                  "SiteName":  "New Project Site",
+                                  "AddressLine1":  "",
+                                  "AddressLine2":  "",
+                                  "City":  "",
+                                  "State":  "",
+                                  "PostalCode":  "",
+                                  "OccupancyType":  "",
+                                  "Notes":  "",
+                                  "ScopeOfWork":  "",
+                                  "ParcelNumber":  "",
+                                  "Jurisdiction":  "",
+                                  "BuildingArea":  "",
+                                  "NumberOfStories":  "",
+                                  "OccupancyGroup":  "",
+                                  "OccupantLoad":  "",
+                                  "ConstructionType":  "",
+                                  "IsSprinklered":  false
+                              },
+                     "Status":  "Draft",
+                     "IsActive":  true,
+                     "CreatedOn":  "2026-03-22T00:00:00-07:00",
+                     "DueDate":  "2026-04-05T00:00:00-07:00",
+                     "TemplateId":  "91738e66-21d7-4142-a721-6ae4c12eee60",
+                     "FieldLaborRate":  65,
+                     "AdminLaborRate":  68,
+                     "EngineeringLaborRate":  96,
+                     "MarkupPercent":  40,
+                     "ProposedRevenue":  0,
+                     "ScopeSummary":  "",
+                     "Notes":  "",
+                     "JourneymanRegularDirectRate":  65,
+                     "JourneymanRegularBilledRate":  90,
+                     "JourneymanOvernightDirectRate":  97.5,
+                     "JourneymanOvernightBilledRate":  135,
+                     "ApprenticeRegularDirectRate":  45,
+                     "ApprenticeRegularBilledRate":  65,
+                     "ApprenticeOvernightDirectRate":  67.5,
+                     "ApprenticeOvernightBilledRate":  97.5,
+                     "AdminDirectRate":  68,
+                     "AdminBilledRate":  95,
+                     "EngineeringDirectRate":  96,
+                     "EngineeringBilledRate":  130,
+                     "LaborDistribution":  [
+                                               {
+                                                   "Id":  "3dd27b7b-4463-4f7c-8706-b361d56ffc92",
+                                                   "PersonnelType":  0,
+                                                   "HourType":  0,
+                                                   "InstallHours":  0.25,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0.25,
+                                                   "TestHours":  0
+                                               },
+                                               {
+                                                   "Id":  "95c1eccd-4b5c-4868-9232-4461e7825e2c",
+                                                   "PersonnelType":  0,
+                                                   "HourType":  1,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               },
+                                               {
+                                                   "Id":  "98582fcb-c0e7-4f12-8d96-b10c41e0c0eb",
+                                                   "PersonnelType":  1,
+                                                   "HourType":  0,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               },
+                                               {
+                                                   "Id":  "b0f76e72-3b03-44d7-b702-69b709f86fa9",
+                                                   "PersonnelType":  1,
+                                                   "HourType":  1,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               }
+                                           ],
+                     "AdministrativeTasks":  [
+
+                                             ],
+                     "EngineeringTasks":  [
+
+                                          ],
+                     "Components":  [
+                                        {
+                                            "Id":  "2faf9212-886d-4eb1-b7ea-24a01e0a2ba9",
+                                            "Name":  "sd-365",
+                                            "Quantity":  1,
+                                            "LocationProfile":  "T-Bar",
+                                            "InstallType":  "Normal",
+                                            "MaterialCostEach":  100,
+                                            "UnitSale":  140.0,
+                                            "IncludeInstall":  true,
+                                            "IncludeTrim":  true,
+                                            "IncludeTest":  true,
+                                            "InstallMinutes":  15,
+                                            "DemoMinutes":  15,
+                                            "TrimMinutes":  15,
+                                            "TestMinutes":  5,
+                                            "Notes":  ""
+                                        }
+                                    ],
+                     "DemoItems":  [
+
+                                   ],
+                     "Materials":  [
+
+                                   ],
+                     "Attachments":  [
+
+                                     ]
+                 },
+                 {
+                     "Id":  "cbc6d42d-31a8-4b8a-aca9-a7eeec83a412",
+                     "BidNumber":  "BID-20260320-001",
+                     "ProjectName":  "Bid 1",
+                     "ClientId":  null,
+                     "Site":  {
+                                  "SiteName":  "New Project Site",
+                                  "AddressLine1":  "",
+                                  "AddressLine2":  "",
+                                  "City":  "",
+                                  "State":  "",
+                                  "PostalCode":  "",
+                                  "OccupancyType":  "",
+                                  "Notes":  "",
+                                  "ScopeOfWork":  "",
+                                  "ParcelNumber":  "",
+                                  "Jurisdiction":  "",
+                                  "BuildingArea":  "",
+                                  "NumberOfStories":  "",
+                                  "OccupancyGroup":  "",
+                                  "OccupantLoad":  "",
+                                  "ConstructionType":  "",
+                                  "IsSprinklered":  false
+                              },
+                     "Status":  "Draft",
+                     "IsActive":  false,
+                     "CreatedOn":  "2026-03-20T00:00:00-07:00",
+                     "DueDate":  "2026-04-03T00:00:00-07:00",
+                     "TemplateId":  "91738e66-21d7-4142-a721-6ae4c12eee60",
+                     "FieldLaborRate":  65,
+                     "AdminLaborRate":  68,
+                     "EngineeringLaborRate":  96,
+                     "MarkupPercent":  40,
+                     "ProposedRevenue":  0,
+                     "ScopeSummary":  "",
+                     "Notes":  "",
+                     "JourneymanRegularDirectRate":  65,
+                     "JourneymanRegularBilledRate":  90,
+                     "JourneymanOvernightDirectRate":  97.5,
+                     "JourneymanOvernightBilledRate":  135,
+                     "ApprenticeRegularDirectRate":  45,
+                     "ApprenticeRegularBilledRate":  65,
+                     "ApprenticeOvernightDirectRate":  67.5,
+                     "ApprenticeOvernightBilledRate":  97.5,
+                     "AdminDirectRate":  68,
+                     "AdminBilledRate":  95,
+                     "EngineeringDirectRate":  96,
+                     "EngineeringBilledRate":  130,
+                     "LaborDistribution":  [
+                                               {
+                                                   "Id":  "66e88f30-4522-433e-a8cc-03024856cdcc",
+                                                   "PersonnelType":  0,
+                                                   "HourType":  0,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               },
+                                               {
+                                                   "Id":  "27f88379-1b60-4d9a-8f45-cf20e247b48e",
+                                                   "PersonnelType":  0,
+                                                   "HourType":  1,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               },
+                                               {
+                                                   "Id":  "89a31f22-967f-4e7f-86ad-e6643c6343fd",
+                                                   "PersonnelType":  1,
+                                                   "HourType":  0,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               },
+                                               {
+                                                   "Id":  "13bd49ac-2f11-4318-9782-f2bea337820c",
+                                                   "PersonnelType":  1,
+                                                   "HourType":  1,
+                                                   "InstallHours":  0,
+                                                   "DemoHours":  0,
+                                                   "TrimHours":  0,
+                                                   "TestHours":  0
+                                               }
+                                           ],
+                     "AdministrativeTasks":  [
+
+                                             ],
+                     "EngineeringTasks":  [
+
+                                          ],
+                     "Components":  [
+
+                                    ],
+                     "DemoItems":  [
+
+                                   ],
+                     "Materials":  [
+
+                                   ],
+                     "Attachments":  [
+
+                                     ]
+                 }
+             ],
+    "Jobs":  [
+                 {
+                     "Id":  "a1e6f900-3d4e-4c98-91a2-000000000003",
+                     "JobNumber":  "JOB-26-0002",
+                     "ProjectName":  "Generic Fire Alarm Upgrade",
+                     "ClientId":  "a1e6f900-3d4e-4c98-91a2-000000000001",
+                     "SourceBidId":  "a1e6f900-3d4e-4c98-91a2-000000000002",
+                     "Site":  {
+                                  "SiteName":  "Generic Warehouse",
+                                  "AddressLine1":  "100 Sample Ave",
+                                  "AddressLine2":  "",
+                                  "City":  "Sacramento",
+                                  "State":  "CA",
+                                  "PostalCode":  "95814",
+                                  "OccupancyType":  "Warehouse",
+                                  "Notes":  "Generic demo site for bid-to-job workflow testing.",
+                                  "ScopeOfWork":  "Provide and install three generic fire alarm devices, related wire, and supporting material.",
+                                  "ParcelNumber":  "",
+                                  "Jurisdiction":  "",
+                                  "BuildingArea":  "",
+                                  "NumberOfStories":  "",
+                                  "OccupancyGroup":  "",
+                                  "OccupantLoad":  "",
+                                  "ConstructionType":  "",
+                                  "IsSprinklered":  false
+                              },
+                     "Status":  "Closeout",
+                     "IsActive":  true,
+                     "CreatedOn":  "2026-03-29T00:00:00-07:00",
+                     "Baseline":  {
+                                      "SourceBidNumber":  "BID-26-0004",
+                                      "ScopeSummary":  "Provide and install three generic fire alarm devices, related wire, and supporting material.",
+                                      "OriginalRevenue":  1638,
+                                      "EstimatedLaborCost":  357.5,
+                                      "EstimatedFieldLaborSale":  135,
+                                      "EstimatedMaterialCost":  820,
+                                      "EstimatedMaterialSale":  1148,
+                                      "EstimatedTotalCost":  1177.5,
+                                      "EstimatedFieldHours":  1.5,
+                                      "EstimatedAdminHours":  1,
+                                      "EstimatedEngineeringHours":  2,
+                                      "EstimatedInstallHours":  0.75,
+                                      "EstimatedDemoHours":  0,
+                                      "EstimatedTrimHours":  0.5,
+                                      "EstimatedTestHours":  0.25,
+                                      "EstimatedInstallCost":  48.75,
+                                      "EstimatedDemoCost":  0,
+                                      "EstimatedTrimCost":  32.5,
+                                      "EstimatedTestCost":  16.25,
+                                      "EstimatedInstallSale":  67.5,
+                                      "EstimatedDemoSale":  0,
+                                      "EstimatedTrimSale":  45,
+                                      "EstimatedTestSale":  22.5,
+                                      "EstimatedAdminCost":  68,
+                                      "EstimatedAdminSale":  95,
+                                      "EstimatedEngineeringCost":  192,
+                                      "EstimatedEngineeringSale":  260,
+                                      "EstimatedComponentCost":  470,
+                                      "EstimatedComponentSale":  658,
+                                      "EstimatedWireCost":  200,
+                                      "EstimatedWireSale":  280,
+                                      "EstimatedMaterialOnlyCost":  150,
+                                      "EstimatedMaterialOnlySale":  210,
+                                      "AdministrativeTasks":  [
+
+                                                              ],
+                                      "EngineeringTasks":  [
+
+                                                           ],
+                                      "Components":  [
+
+                                                     ],
+                                      "DemoItems":  [
+
+                                                    ],
+                                      "Materials":  [
+
+                                                    ],
+                                      "LineItems":  [
+                                                        {
+                                                            "Id":  "a1e6f900-3d4e-4c98-91a2-000000000060",
+                                                            "ReferenceNumber":  "JOB-26-0002-ADMIN-001",
+                                                            "SourceSection":  "Administrative Task",
+                                                            "CategoryCode":  "Admin",
+                                                            "Description":  "Project Setup",
+                                                            "Quantity":  1,
+                                                            "UnitLabel":  "hrs",
+                                                            "EstimatedUnitCost":  68,
+                                                            "EstimatedUnitSale":  95,
+                                                            "ActualUnitCost":  0,
+                                                            "InvoiceId":  null,
+                                                            "EstimatedHours":  1,
+                                                            "Notes":  ""
+                                                        },
+                                                        {
+                                                            "Id":  "a1e6f900-3d4e-4c98-91a2-000000000061",
+                                                            "ReferenceNumber":  "JOB-26-0002-ENG-001",
+                                                            "SourceSection":  "Engineering Task",
+                                                            "CategoryCode":  "Engineering",
+                                                            "Description":  "Shop Drawings",
+                                                            "Quantity":  2,
+                                                            "UnitLabel":  "hrs",
+                                                            "EstimatedUnitCost":  96,
+                                                            "EstimatedUnitSale":  130,
+                                                            "ActualUnitCost":  0,
+                                                            "InvoiceId":  null,
+                                                            "EstimatedHours":  2,
+                                                            "Notes":  ""
+                                                        },
+                                                        {
+                                                            "Id":  "a1e6f900-3d4e-4c98-91a2-000000000062",
+                                                            "ReferenceNumber":  "JOB-26-0002-COMP-001",
+                                                            "SourceSection":  "Component",
+                                                            "CategoryCode":  "Components",
+                                                            "Description":  "Component 1",
+                                                            "Quantity":  1,
+                                                            "UnitLabel":  "ea",
+                                                            "EstimatedUnitCost":  120,
+                                                            "EstimatedUnitSale":  168,
+                                                            "ActualUnitCost":  110,
+                                                            "InvoiceId":  "a1e6f900-3d4e-4c98-91a2-000000000004",
+                                                            "EstimatedHours":  0.5,
+                                                            "Notes":  "Linked to INV-001 for actual cost tracking."
+                                                        },
+                                                        {
+                                                            "Id":  "a1e6f900-3d4e-4c98-91a2-000000000063",
+                                                            "ReferenceNumber":  "JOB-26-0002-COMP-002",
+                                                            "SourceSection":  "Component",
+                                                            "CategoryCode":  "Components",
+                                                            "Description":  "Component 2",
+                                                            "Quantity":  1,
+                                                            "UnitLabel":  "ea",
+                                                            "EstimatedUnitCost":  150,
+                                                            "EstimatedUnitSale":  210,
+                                                            "ActualUnitCost":  160,
+                                                            "InvoiceId":  "a1e6f900-3d4e-4c98-91a2-000000000004",
+                                                            "EstimatedHours":  0.5,
+                                                            "Notes":  "Linked to INV-001 for actual cost tracking."
+                                                        },
+                                                        {
+                                                            "Id":  "a1e6f900-3d4e-4c98-91a2-000000000064",
+                                                            "ReferenceNumber":  "JOB-26-0002-COMP-003",
+                                                            "SourceSection":  "Component",
+                                                            "CategoryCode":  "Components",
+                                                            "Description":  "Component 3",
+                                                            "Quantity":  1,
+                                                            "UnitLabel":  "ea",
+                                                            "EstimatedUnitCost":  200,
+                                                            "EstimatedUnitSale":  280,
+                                                            "ActualUnitCost":  190,
+                                                            "InvoiceId":  "a1e6f900-3d4e-4c98-91a2-000000000004",
+                                                            "EstimatedHours":  0.5,
+                                                            "Notes":  "Linked to INV-001 for actual cost tracking."
+                                                        },
+                                                        {
+                                                            "Id":  "a1e6f900-3d4e-4c98-91a2-000000000065",
+                                                            "ReferenceNumber":  "JOB-26-0002-WIRE-001",
+                                                            "SourceSection":  "Wire",
+                                                            "CategoryCode":  "Wire",
+                                                            "Description":  "Wire",
+                                                            "Quantity":  500,
+                                                            "UnitLabel":  "ea",
+                                                            "EstimatedUnitCost":  0.4,
+                                                            "EstimatedUnitSale":  0.56,
+                                                            "ActualUnitCost":  0.42,
+                                                            "InvoiceId":  "a1e6f900-3d4e-4c98-91a2-000000000004",
+                                                            "EstimatedHours":  0,
+                                                            "Notes":  "Linked to INV-001 for actual cost tracking."
+                                                        },
+                                                        {
+                                                            "Id":  "a1e6f900-3d4e-4c98-91a2-000000000066",
+                                                            "ReferenceNumber":  "JOB-26-0002-MAT-001",
+                                                            "SourceSection":  "Material",
+                                                            "CategoryCode":  "Material",
+                                                            "Description":  "Material",
+                                                            "Quantity":  1,
+                                                            "UnitLabel":  "ea",
+                                                            "EstimatedUnitCost":  150,
+                                                            "EstimatedUnitSale":  210,
+                                                            "ActualUnitCost":  120,
+                                                            "InvoiceId":  "a1e6f900-3d4e-4c98-91a2-000000000004",
+                                                            "EstimatedHours":  0,
+                                                            "Notes":  "Linked to INV-001 for actual cost tracking."
+                                                        }
+                                                    ]
+                                  },
+                     "JobDevices":  [
+
+                                    ],
+                     "Invoices":  [
+                                      {
+                                          "Id":  "a1e6f900-3d4e-4c98-91a2-000000000004",
+                                          "ReferenceNumber":  "INV-001",
+                                          "InvoiceDate":  "2026-03-26T00:00:00-07:00",
+                                          "Vendor":  "Generic Supply House",
+                                          "InvoiceNumber":  "GS-1001",
+                                          "InvoiceTotal":  790,
+                                          "Notes":  "Base scope parts and material invoice.",
+                                          "Attachments":  [
+
+                                                          ]
+                                      },
+                                      {
+                                          "Id":  "a1e6f900-3d4e-4c98-91a2-000000000005",
+                                          "ReferenceNumber":  "INV-002",
+                                          "InvoiceDate":  "2026-03-28T00:00:00-07:00",
+                                          "Vendor":  "Generic Supply House",
+                                          "InvoiceNumber":  "GS-1002",
+                                          "InvoiceTotal":  105,
+                                          "Notes":  "Change order device invoice.",
+                                          "Attachments":  [
+
+                                                          ]
+                                      }
+                                  ],
+                     "TimeEntries":  [
+                                         {
+                                             "Id":  "a1e6f900-3d4e-4c98-91a2-000000000070",
+                                             "WorkDate":  "2026-03-24T00:00:00-07:00",
+                                             "CrewMember":  "Admin",
+                                             "IsOvernight":  false,
+                                             "Hours":  0.5,
+                                             "HourlyRate":  68,
+                                             "CostCode":  "Admin",
+                                             "ChangeOrderId":  null,
+                                             "Notes":  "Admin closeout and setup."
+                                         },
+                                         {
+                                             "Id":  "a1e6f900-3d4e-4c98-91a2-000000000071",
+                                             "WorkDate":  "2026-03-25T00:00:00-07:00",
+                                             "CrewMember":  "Engineering",
+                                             "IsOvernight":  false,
+                                             "Hours":  1,
+                                             "HourlyRate":  96,
+                                             "CostCode":  "Engineering",
+                                             "ChangeOrderId":  null,
+                                             "Notes":  "Shop drawings and coordination."
+                                         },
+                                         {
+                                             "Id":  "a1e6f900-3d4e-4c98-91a2-000000000072",
+                                             "WorkDate":  "2026-03-26T00:00:00-07:00",
+                                             "CrewMember":  "Journeyman",
+                                             "IsOvernight":  false,
+                                             "Hours":  1,
+                                             "HourlyRate":  65,
+                                             "CostCode":  "Install",
+                                             "ChangeOrderId":  null,
+                                             "Notes":  "Base scope installation."
+                                         },
+                                         {
+                                             "Id":  "a1e6f900-3d4e-4c98-91a2-000000000073",
+                                             "WorkDate":  "2026-03-27T00:00:00-07:00",
+                                             "CrewMember":  "Journeyman",
+                                             "IsOvernight":  false,
+                                             "Hours":  0.75,
+                                             "HourlyRate":  65,
+                                             "CostCode":  "Trim",
+                                             "ChangeOrderId":  null,
+                                             "Notes":  "Base scope trim."
+                                         },
+                                         {
+                                             "Id":  "a1e6f900-3d4e-4c98-91a2-000000000074",
+                                             "WorkDate":  "2026-03-28T00:00:00-07:00",
+                                             "CrewMember":  "Journeyman",
+                                             "IsOvernight":  false,
+                                             "Hours":  0.5,
+                                             "HourlyRate":  65,
+                                             "CostCode":  "Test",
+                                             "ChangeOrderId":  null,
+                                             "Notes":  "Base scope testing."
+                                         },
+                                         {
+                                             "Id":  "a1e6f900-3d4e-4c98-91a2-000000000075",
+                                             "WorkDate":  "2026-03-29T00:00:00-07:00",
+                                             "CrewMember":  "Journeyman",
+                                             "IsOvernight":  false,
+                                             "Hours":  1,
+                                             "HourlyRate":  65,
+                                             "CostCode":  "ChangeOrder",
+                                             "ChangeOrderId":  "a1e6f900-3d4e-4c98-91a2-000000000006",
+                                             "Notes":  "Added device change-order labor."
+                                         }
+                                     ],
+                     "MaterialPurchases":  [
+
+                                           ],
+                     "ChangeOrders":  [
+                                          {
+                                              "Id":  "a1e6f900-3d4e-4c98-91a2-000000000006",
+                                              "ApprovedOn":  "2026-03-28T00:00:00-07:00",
+                                              "Title":  "Added Device",
+                                              "RevenueAmount":  280,
+                                              "AdditionalEstimatedCost":  20,
+                                              "EstimatedLaborHours":  1,
+                                              "EstimatedLaborRate":  65,
+                                              "EstimatedCostImpact":  170,
+                                              "Approved":  true,
+                                              "Notes":  "Approved add for one extra device.",
+                                              "DeviceItems":  [
+                                                                  {
+                                                                      "Id":  "a1e6f900-3d4e-4c98-91a2-000000000007",
+                                                                      "CategoryCode":  "Components",
+                                                                      "Description":  "CO Device 1",
+                                                                      "Quantity":  1,
+                                                                      "UnitLabel":  "ea",
+                                                                      "EstimatedUnitCost":  85,
+                                                                      "EstimatedUnitSale":  120,
+                                                                      "ActualUnitCost":  90,
+                                                                      "InvoiceId":  "a1e6f900-3d4e-4c98-91a2-000000000005",
+                                                                      "Notes":  "Actual cost linked to INV-002."
+                                                                  }
+                                                              ],
+                                              "Attachments":  [
+
+                                                              ]
+                                          }
+                                      ],
+                     "ScheduleOfValues":  [
+                                              {
+                                                  "Id":  "a1e6f900-3d4e-4c98-91a2-000000000009",
+                                                  "Description":  "Admin",
+                                                  "CategoryCode":  "Admin",
+                                                  "ReferenceValue":  95,
+                                                  "ScheduledValue":  95,
+                                                  "PercentageOfTotal":  4.95,
+                                                  "BilledToDate":  95,
+                                                  "PaidToDate":  95,
+                                                  "LinkedChangeOrderId":  null,
+                                                  "IsAutoGenerated":  true,
+                                                  "IsPercentageManual":  false,
+                                                  "Notes":  "",
+                                                  "SubLines":  [
+                                                                   {
+                                                                       "Id":  "a1e6f900-3d4e-4c98-91a2-000000000080",
+                                                                       "Description":  "Admin Billing",
+                                                                       "LineValue":  95,
+                                                                       "BilledAmount":  95,
+                                                                       "PaidAmount":  95,
+                                                                       "LinkedCommitmentId":  null,
+                                                                       "IsAutoGenerated":  false,
+                                                                       "Notes":  ""
+                                                                   }
+                                                               ]
+                                              },
+                                              {
+                                                  "Id":  "a1e6f900-3d4e-4c98-91a2-00000000000a",
+                                                  "Description":  "Engineering",
+                                                  "CategoryCode":  "Engineering",
+                                                  "ReferenceValue":  260,
+                                                  "ScheduledValue":  260,
+                                                  "PercentageOfTotal":  13.56,
+                                                  "BilledToDate":  260,
+                                                  "PaidToDate":  260,
+                                                  "LinkedChangeOrderId":  null,
+                                                  "IsAutoGenerated":  true,
+                                                  "IsPercentageManual":  false,
+                                                  "Notes":  "",
+                                                  "SubLines":  [
+                                                                   {
+                                                                       "Id":  "a1e6f900-3d4e-4c98-91a2-000000000081",
+                                                                       "Description":  "Engineering Billing",
+                                                                       "LineValue":  260,
+                                                                       "BilledAmount":  260,
+                                                                       "PaidAmount":  260,
+                                                                       "LinkedCommitmentId":  null,
+                                                                       "IsAutoGenerated":  false,
+                                                                       "Notes":  ""
+                                                                   }
+                                                               ]
+                                              },
+                                              {
+                                                  "Id":  "a1e6f900-3d4e-4c98-91a2-00000000000b",
+                                                  "Description":  "Materials / Wire / Components",
+                                                  "CategoryCode":  "Materials",
+                                                  "ReferenceValue":  1148,
+                                                  "ScheduledValue":  1148,
+                                                  "PercentageOfTotal":  59.85,
+                                                  "BilledToDate":  900,
+                                                  "PaidToDate":  900,
+                                                  "LinkedChangeOrderId":  null,
+                                                  "IsAutoGenerated":  true,
+                                                  "IsPercentageManual":  false,
+                                                  "Notes":  "",
+                                                  "SubLines":  [
+                                                                   {
+                                                                       "Id":  "a1e6f900-3d4e-4c98-91a2-000000000082",
+                                                                       "Description":  "Material Billing Draw 1",
+                                                                       "LineValue":  1148,
+                                                                       "BilledAmount":  900,
+                                                                       "PaidAmount":  900,
+                                                                       "LinkedCommitmentId":  null,
+                                                                       "IsAutoGenerated":  false,
+                                                                       "Notes":  ""
+                                                                   }
+                                                               ]
+                                              },
+                                              {
+                                                  "Id":  "a1e6f900-3d4e-4c98-91a2-00000000000c",
+                                                  "Description":  "Install",
+                                                  "CategoryCode":  "Install",
+                                                  "ReferenceValue":  67.5,
+                                                  "ScheduledValue":  67.5,
+                                                  "PercentageOfTotal":  3.52,
+                                                  "BilledToDate":  67.5,
+                                                  "PaidToDate":  30,
+                                                  "LinkedChangeOrderId":  null,
+                                                  "IsAutoGenerated":  true,
+                                                  "IsPercentageManual":  false,
+                                                  "Notes":  "",
+                                                  "SubLines":  [
+                                                                   {
+                                                                       "Id":  "a1e6f900-3d4e-4c98-91a2-000000000083",
+                                                                       "Description":  "Install Billing Draw 1",
+                                                                       "LineValue":  67.5,
+                                                                       "BilledAmount":  67.5,
+                                                                       "PaidAmount":  30,
+                                                                       "LinkedCommitmentId":  null,
+                                                                       "IsAutoGenerated":  false,
+                                                                       "Notes":  ""
+                                                                   }
+                                                               ]
+                                              },
+                                              {
+                                                  "Id":  "a1e6f900-3d4e-4c98-91a2-00000000000d",
+                                                  "Description":  "Trim",
+                                                  "CategoryCode":  "Trim",
+                                                  "ReferenceValue":  45,
+                                                  "ScheduledValue":  45,
+                                                  "PercentageOfTotal":  2.35,
+                                                  "BilledToDate":  0,
+                                                  "PaidToDate":  0,
+                                                  "LinkedChangeOrderId":  null,
+                                                  "IsAutoGenerated":  true,
+                                                  "IsPercentageManual":  false,
+                                                  "Notes":  "",
+                                                  "SubLines":  [
+                                                                   {
+                                                                       "Id":  "a1e6f900-3d4e-4c98-91a2-000000000084",
+                                                                       "Description":  "Trim Billing",
+                                                                       "LineValue":  45,
+                                                                       "BilledAmount":  0,
+                                                                       "PaidAmount":  0,
+                                                                       "LinkedCommitmentId":  null,
+                                                                       "IsAutoGenerated":  false,
+                                                                       "Notes":  ""
+                                                                   }
+                                                               ]
+                                              },
+                                              {
+                                                  "Id":  "a1e6f900-3d4e-4c98-91a2-00000000000e",
+                                                  "Description":  "Test",
+                                                  "CategoryCode":  "Test",
+                                                  "ReferenceValue":  22.5,
+                                                  "ScheduledValue":  22.5,
+                                                  "PercentageOfTotal":  1.17,
+                                                  "BilledToDate":  0,
+                                                  "PaidToDate":  0,
+                                                  "LinkedChangeOrderId":  null,
+                                                  "IsAutoGenerated":  true,
+                                                  "IsPercentageManual":  false,
+                                                  "Notes":  "",
+                                                  "SubLines":  [
+                                                                   {
+                                                                       "Id":  "a1e6f900-3d4e-4c98-91a2-000000000085",
+                                                                       "Description":  "Test Billing",
+                                                                       "LineValue":  22.5,
+                                                                       "BilledAmount":  0,
+                                                                       "PaidAmount":  0,
+                                                                       "LinkedCommitmentId":  null,
+                                                                       "IsAutoGenerated":  false,
+                                                                       "Notes":  ""
+                                                                   }
+                                                               ]
+                                              },
+                                              {
+                                                  "Id":  "a1e6f900-3d4e-4c98-91a2-00000000000f",
+                                                  "Description":  "CO - Added Device",
+                                                  "CategoryCode":  "ChangeOrder",
+                                                  "ReferenceValue":  0,
+                                                  "ScheduledValue":  280,
+                                                  "PercentageOfTotal":  14.6,
+                                                  "BilledToDate":  140,
+                                                  "PaidToDate":  0,
+                                                  "LinkedChangeOrderId":  "a1e6f900-3d4e-4c98-91a2-000000000006",
+                                                  "IsAutoGenerated":  true,
+                                                  "IsPercentageManual":  false,
+                                                  "Notes":  "",
+                                                  "SubLines":  [
+                                                                   {
+                                                                       "Id":  "a1e6f900-3d4e-4c98-91a2-000000000086",
+                                                                       "Description":  "CO Customer Billing",
+                                                                       "LineValue":  280,
+                                                                       "BilledAmount":  140,
+                                                                       "PaidAmount":  0,
+                                                                       "LinkedCommitmentId":  null,
+                                                                       "IsAutoGenerated":  false,
+                                                                       "Notes":  ""
+                                                                   }
+                                                               ]
+                                              }
+                                          ],
+                     "Commitments":  [
+                                         {
+                                             "Id":  "a1e6f900-3d4e-4c98-91a2-000000000008",
+                                             "CommitmentNumber":  "JOB-26-0002-COM-001",
+                                             "Vendor":  "Generic Programmer Sub",
+                                             "Description":  "CO Programming Assist",
+                                             "ScheduleValueItemId":  "a1e6f900-3d4e-4c98-91a2-00000000000f",
+                                             "CommittedAmount":  280,
+                                             "BilledAmount":  140,
+                                             "PaidAmount":  70,
+                                             "InvoiceNumber":  "SUB-2001",
+                                             "InvoiceDate":  "2026-03-29T00:00:00-07:00",
+                                             "DueDate":  "2026-04-15T00:00:00-07:00",
+                                             "Notes":  "Linked to the change-order SOV line to demonstrate commitment-to-SOV visibility."
+                                         }
+                                     ],
+                     "Attachments":  [
+
+                                     ],
+                     "Exclusions":  "Permit fees, monitoring activation, and patch/paint by others.",
+                     "ProposalSummary":  "Provide and install three generic fire alarm devices, related wire, and supporting material.",
+                     "ProposalClosing":  "Work to be scheduled during normal business hours unless otherwise noted.",
+                     "Notes":  "Converted generic demo job for workflow testing."
+                 },
+                 {
+                     "Id":  "6c7cdd09-97a1-40f3-8816-ecf11fac670b",
+                     "JobNumber":  "JOB-20260320-001",
+                     "ProjectName":  "Job 1",
+                     "ClientId":  null,
+                     "SourceBidId":  null,
+                     "Site":  {
+                                  "SiteName":  "",
+                                  "AddressLine1":  "",
+                                  "AddressLine2":  "",
+                                  "City":  "",
+                                  "State":  "",
+                                  "PostalCode":  "",
+                                  "OccupancyType":  "",
+                                  "Notes":  "",
+                                  "ScopeOfWork":  "",
+                                  "ParcelNumber":  "",
+                                  "Jurisdiction":  "",
+                                  "BuildingArea":  "",
+                                  "NumberOfStories":  "",
+                                  "OccupancyGroup":  "",
+                                  "OccupantLoad":  "",
+                                  "ConstructionType":  "",
+                                  "IsSprinklered":  false
+                              },
+                     "Status":  "Planning",
+                     "IsActive":  true,
+                     "CreatedOn":  "2026-03-20T00:00:00-07:00",
+                     "Baseline":  {
+                                      "SourceBidNumber":  "",
+                                      "ScopeSummary":  "Direct job entry without a converted bid.",
+                                      "OriginalRevenue":  0,
+                                      "EstimatedLaborCost":  0,
+                                      "EstimatedMaterialCost":  0,
+                                      "EstimatedTotalCost":  0,
+                                      "EstimatedFieldHours":  0,
+                                      "EstimatedAdminHours":  0,
+                                      "EstimatedEngineeringHours":  0,
+                                      "AdministrativeTasks":  [
+
+                                                              ],
+                                      "EngineeringTasks":  [
+
+                                                           ],
+                                      "Components":  [
+
+                                                     ],
+                                      "DemoItems":  [
+
+                                                    ],
+                                      "Materials":  [
+
+                                                    ]
+                                  },
+                     "TimeEntries":  [
+
+                                     ],
+                     "MaterialPurchases":  [
+
+                                           ],
+                     "ChangeOrders":  [
+
+                                      ],
+                     "ScheduleOfValues":  [
+
+                                          ],
+                     "Commitments":  [
+
+                                     ],
+                     "Attachments":  [
+
+                                     ],
+                     "Notes":  ""
+                 }
+             ],
+    "ServiceAgreements":  [
+
+                          ]
 }

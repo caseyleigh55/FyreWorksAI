@@ -28,6 +28,7 @@ public static class JobCostCodes
         Demo,
         Trim,
         Test,
+        ChangeOrder,
         Other
     ];
 

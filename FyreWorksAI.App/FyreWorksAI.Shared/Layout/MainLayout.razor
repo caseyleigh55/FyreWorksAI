@@ -1,6 +1,6 @@
 @inherits LayoutComponentBase
 
-<div class="shell @(PageSectionNavigationState.HasItems ? "shell-with-page-sections" : null)">
+<div class="shell @((PageSectionNavigationState.HasItems || PageSectionNavigationState.HasContext) ? "shell-with-page-sections" : null)">
     <header class="shell-topbar">
         <div class="topbar-brand">
             <p class="eyebrow">FyreWorks</p>
@@ -15,6 +15,17 @@
                 <NavLink href="/templates">Templates</NavLink>
                 <NavLink href="/settings">Settings</NavLink>
             </nav>
+
+            @if (PageSectionNavigationState.HasContext)
+            {
+                <div class="shell-page-context" aria-label="Current record">
+                    @if (!string.IsNullOrWhiteSpace(PageSectionNavigationState.ContextLabel))
+                    {
+                        <span class="shell-page-context-label">@PageSectionNavigationState.ContextLabel</span>
+                    }
+                    <strong class="shell-page-context-value">@PageSectionNavigationState.ContextValue</strong>
+                </div>
+            }
 
             @if (PageSectionNavigationState.HasItems)
             {

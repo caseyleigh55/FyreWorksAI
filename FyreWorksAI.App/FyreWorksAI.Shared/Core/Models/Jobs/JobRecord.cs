@@ -18,6 +18,7 @@ public sealed class JobRecord
     public BaselineEstimate Baseline { get; set; } = new();
     public List<JobDeviceItem> JobDevices { get; set; } = [];
     public List<JobInvoiceRecord> Invoices { get; set; } = [];
+    public List<JobDailyLogRecord> DailyLogs { get; set; } = [];
     public List<JobTimeEntry> TimeEntries { get; set; } = [];
     public List<JobMaterialPurchase> MaterialPurchases { get; set; } = [];
     public List<ChangeOrderRecord> ChangeOrders { get; set; } = [];

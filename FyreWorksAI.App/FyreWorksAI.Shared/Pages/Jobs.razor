@@ -45,6 +45,21 @@ else
         .OrderBy(item => GetDeviceSortOrder(item.CategoryCode))
         .ThenBy(item => item.Description)
         .ToList() ?? [];
+    var dailyLogItems = (SelectedJob?.DailyLogs ?? [])
+        .OrderBy(item => item.WorkDate)
+        .ThenBy(item => item.Description)
+        .ToList();
+    if (IsDailyLogsNewestFirst)
+    {
+        dailyLogItems = dailyLogItems
+            .OrderByDescending(item => item.WorkDate)
+            .ThenBy(item => item.Description)
+            .ToList();
+    }
+    var changeOrderItems = SelectedJob?.ChangeOrders
+        .OrderByDescending(item => item.ApprovedOn)
+        .ThenBy(item => item.Title)
+        .ToList() ?? [];
     var invoiceItems = SelectedJob?.Invoices
         .OrderByDescending(item => item.InvoiceDate)
         .ThenBy(item => item.ReferenceNumber)
@@ -54,6 +69,20 @@ else
         .ThenBy(item => GetScheduleValueSortOrder(item))
         .ThenBy(item => item.Description)
         .ToList() ?? [];
+    var laborScopeSummaries = GetLaborScopeSummaries().ToList();
+    var personnelHourSummaries = GetPersonnelHourSummaries().ToList();
+    var personnelNameSuggestions = GetPersonnelNameSuggestions().ToList();
+    var projectEstimateVariance = GetProjectEstimateVariance();
+
+    @if (personnelNameSuggestions.Count > 0)
+    {
+        <datalist id="@PersonnelNameSuggestionsListId">
+            @foreach (var name in personnelNameSuggestions)
+            {
+                <option value="@name"></option>
+            }
+        </datalist>
+    }
 
     <section class="workspace-grid">
         <button class="workspace-flag" type="button" @onclick="ToggleDirectoryPanel" title="Toggle Jobs panel">Jobs</button>
@@ -123,7 +152,7 @@ else
             }
             else
             {
-                <section id="@ProjectContactsElementId" class="panel page-section-anchor">
+                <section class="panel">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Job editor</p>
@@ -148,7 +177,7 @@ else
                         </label>
                         <label>
                             <span>Project Name</span>
-                            <input @bind="SelectedJob.ProjectName" />
+                            <input @bind="SelectedJob.ProjectName" @bind:after="RefreshPageSectionNavigation" />
                         </label>
                         <label>
                             <span>Status</span>
@@ -181,35 +210,160 @@ else
                     </div>
                 </section>
 
-                <section class="summary-grid job-summary-grid">
-                    <article class="summary-card">
-                        <p class="eyebrow">Total Sale</p>
-                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetJobRevenue(SelectedJob))</h3>
-                        <p>Original contract sale plus approved change orders.</p>
-                    </article>
-                    <article class="summary-card">
-                        <p class="eyebrow">Estimated Cost</p>
-                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetJobEstimatedCost(SelectedJob))</h3>
-                        <p>Baseline estimated cost plus approved change-order cost.</p>
-                    </article>
-                    <article class="summary-card">
-                        <p class="eyebrow">Actual Cost</p>
-                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetJobActualCost(SelectedJob))</h3>
-                        <p>Labor, tracked purchases, billed commitments, and approved change-order cost.</p>
-                    </article>
-                    <article class="summary-card">
-                        <p class="eyebrow">Variance To Estimate</p>
-                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetJobActualCost(SelectedJob) - EstimateMath.GetJobEstimatedCost(SelectedJob))</h3>
-                        <p>Actual cost minus the current estimated cost target.</p>
-                    </article>
-                    <article class="summary-card">
-                        <p class="eyebrow">Profit</p>
-                        <h3>@EstimateMath.GetCurrency(EstimateMath.GetJobProfit(SelectedJob))</h3>
-                        <p>@EstimateMath.GetPercent(EstimateMath.GetJobMarginPercent(SelectedJob)) margin on current contract value.</p>
-                    </article>
+                <section class="panel project-overview-panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Current Snapshot</p>
+                            <h3>Project Totals</h3>
+                        </div>
+                        <p class="muted">Revenue, billing, cost, labor, commitments, and crew hours lined up in one place.</p>
+                    </div>
+
+                    <div class="project-overview-grid">
+                        <article class="summary-card project-overview-card">
+                            <p class="eyebrow">Contract + Billing</p>
+                            <div class="metric-list">
+                                <div><span>Base Contract</span><strong>@EstimateMath.GetCurrency(SelectedJob.Baseline.OriginalRevenue)</strong></div>
+                                <div><span>Approved CO Sale</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobApprovedChangeOrderRevenue(SelectedJob))</strong></div>
+                                <div><span>Total Sale</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobRevenue(SelectedJob))</strong></div>
+                                <div><span>SOV Total Value</span><strong>@EstimateMath.GetCurrency(scheduleValueItems.Sum(item => item.ScheduledValue))</strong></div>
+                                <div><span>Billed To Date</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobBilledRevenue(SelectedJob))</strong></div>
+                                <div><span>Collected</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobCollectedRevenue(SelectedJob))</strong></div>
+                                <div><span>Remaining To Bill</span><strong>@EstimateMath.GetCurrency(scheduleValueItems.Sum(item => item.RemainingToBill))</strong></div>
+                            </div>
+                        </article>
+
+                        <article class="summary-card project-overview-card">
+                            <p class="eyebrow">Cost + Profit</p>
+                            <div class="metric-list">
+                                <div><span>Baseline Estimate</span><strong>@EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedTotalCost)</strong></div>
+                                <div><span>Approved CO Est. Cost</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobApprovedChangeOrderCost(SelectedJob))</strong></div>
+                                <div><span>Total Estimated Cost</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobEstimatedCost(SelectedJob))</strong></div>
+                                <div><span>Actual Labor</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobActualLaborCost(SelectedJob))</strong></div>
+                                <div><span>Actual Material</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobActualMaterialCost(SelectedJob))</strong></div>
+                                <div><span>Billed Commitments</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobBilledCommitments(SelectedJob))</strong></div>
+                                <div><span>Actual Cost</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobActualCost(SelectedJob))</strong></div>
+                                <div><span>Variance To Estimate</span><strong style="@GetEstimateVarianceStyle(projectEstimateVariance)">@EstimateMath.GetCurrency(projectEstimateVariance)</strong></div>
+                                <div><span>Profit</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobProfit(SelectedJob))</strong></div>
+                                <div><span>Margin</span><strong>@EstimateMath.GetPercent(EstimateMath.GetJobMarginPercent(SelectedJob))</strong></div>
+                            </div>
+                        </article>
+
+                        <article class="summary-card project-overview-card">
+                            <p class="eyebrow">Labor + Hours</p>
+                            <div class="metric-list">
+                                <div><span>Base Planned Hours</span><strong>@EstimateMath.GetHours(GetBaselineTotalHours())</strong></div>
+                                <div><span>Approved CO Hours</span><strong>@EstimateMath.GetHours(GetApprovedChangeOrderEstimatedLaborHoursTotal())</strong></div>
+                                <div><span>Contract Hours Planned</span><strong>@EstimateMath.GetHours(GetContractPlannedLaborHours())</strong></div>
+                                <div><span>Base Used Hours</span><strong>@EstimateMath.GetHours(GetActualHoursTotal(BaselinePhaseCodes))</strong></div>
+                                <div><span>Approved CO Used Hours</span><strong>@EstimateMath.GetHours(GetApprovedChangeOrderActualLaborHoursTotal())</strong></div>
+                                <div><span>All Logged Hours</span><strong>@EstimateMath.GetHours(EstimateMath.GetJobActualLaborHours(SelectedJob))</strong></div>
+                                <div><span>Contract Hours Remaining</span><strong style="@GetRemainingHoursStyle(GetContractRemainingLaborHours())">@EstimateMath.GetHours(GetContractRemainingLaborHours())</strong></div>
+                            </div>
+                        </article>
+
+                        <article class="summary-card project-overview-card">
+                            <p class="eyebrow">Commitments</p>
+                            <div class="metric-list">
+                                <div><span>Commitment Records</span><strong>@SelectedJob.Commitments.Count</strong></div>
+                                <div><span>Committed</span><strong>@EstimateMath.GetCurrency(GetCommittedAmountTotal())</strong></div>
+                                <div><span>Billed</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobBilledCommitments(SelectedJob))</strong></div>
+                                <div><span>Paid</span><strong>@EstimateMath.GetCurrency(GetPaidCommitmentsTotal())</strong></div>
+                                <div><span>Unpaid Bills</span><strong>@EstimateMath.GetCurrency(GetOutstandingBilledCommitmentsTotal())</strong></div>
+                                <div><span>Remaining Exposure</span><strong>@EstimateMath.GetCurrency(GetRemainingCommittedExposureTotal())</strong></div>
+                                <div><span>Total Cost Exposure</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobCommittedExposure(SelectedJob))</strong></div>
+                            </div>
+                        </article>
+
+                        <article class="summary-card project-overview-card project-overview-card-full">
+                            <p class="eyebrow">Crew Hours</p>
+                            @if (personnelHourSummaries.Count == 0)
+                            {
+                                <p class="muted">Crew names entered in Daily Logs will show up here and become reusable suggestions for future logs.</p>
+                            }
+                            else
+                            {
+                                <table class="data-table compact-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Hours</th>
+                                            <th>Cost</th>
+                                            <th>Daily Logs</th>
+                                            <th>Entries</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var crewSummary in personnelHourSummaries)
+                                        {
+                                            <tr>
+                                                <td>@crewSummary.Name</td>
+                                                <td>@EstimateMath.GetHours(crewSummary.Hours)</td>
+                                                <td>@EstimateMath.GetCurrency(crewSummary.Cost)</td>
+                                                <td>@crewSummary.DailyLogs</td>
+                                                <td>@crewSummary.Entries</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        </article>
+                    </div>
                 </section>
 
-                <section id="@ScheduleOfValuesElementId" class="panel page-section-anchor">
+                <section class="panel jobs-workflow-panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">Recommended Flow</p>
+                            <h3>Job Workflow</h3>
+                        </div>
+                        <p class="muted">Move left to right when you are entering or cleaning up a job so the linked sections stay aligned.</p>
+                    </div>
+
+                    <div class="workflow-map-grid">
+                        <article class="workflow-step">
+                            <p class="eyebrow">Step 1</p>
+                            <h4>Setup + Contract</h4>
+                            <p class="muted">Anchor the project, client-facing copy, and original estimate first.</p>
+                            <div class="section-link-row">
+                                <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(ProjectContactsSectionId)'>Contacts</button>
+                                <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(ClientFacingSectionId)'>Proposal</button>
+                                <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(BaselineReferenceSectionId)'>Baseline</button>
+                            </div>
+                        </article>
+                        <article class="workflow-step">
+                            <p class="eyebrow">Step 2</p>
+                            <h4>Revenue Plan</h4>
+                            <p class="muted">Set change orders before billing lines so SOV values reflect the current contract.</p>
+                            <div class="section-link-row">
+                                <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(ChangeOrdersSectionId)'>COs</button>
+                                <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(ScheduleOfValuesSectionId)'>SOV</button>
+                            </div>
+                        </article>
+                        <article class="workflow-step">
+                            <p class="eyebrow">Step 3</p>
+                            <h4>Material Cost</h4>
+                            <p class="muted">Create invoice shells, then tie base and added scope items back to those bills.</p>
+                            <div class="section-link-row">
+                                <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(InvoicesSectionId)'>Invoices</button>
+                                <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(BidDevicesSectionId)'>Base Scope</button>
+                                <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(JobDevicesSectionId)'>Job Scope</button>
+                            </div>
+                        </article>
+                        <article class="workflow-step">
+                            <p class="eyebrow">Step 4</p>
+                            <h4>Labor + Closeout</h4>
+                            <p class="muted">Track time, subcontract/vendor commitments, and final notes once the scope is in place.</p>
+                            <div class="section-link-row">
+                                <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(TimeEntriesSectionId)'>Labor</button>
+                                <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(CommitmentsSectionId)'>Subs + POs</button>
+                                <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(ProjectNotesSectionId)'>Notes</button>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+
+                <section id="@ProjectContactsElementId" class="panel jobs-section jobs-section-contacts page-section-anchor @(IsSectionExpanded(ProjectContactsSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Client + site</p>
@@ -290,7 +444,7 @@ else
                     }
                 </section>
 
-                <section id="@ClientFacingElementId" class="panel page-section-anchor">
+                <section id="@ClientFacingElementId" class="panel jobs-section jobs-section-proposal page-section-anchor @(IsSectionExpanded(ClientFacingSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Client Facing Copy</p>
@@ -317,7 +471,7 @@ else
                     }
                 </section>
 
-                <section id="@BaselineReferenceElementId" class="panel accent page-section-anchor">
+                <section id="@BaselineReferenceElementId" class="panel accent jobs-section jobs-section-baseline page-section-anchor">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Original estimate</p>
@@ -340,6 +494,12 @@ else
                         <span>Cost @EstimateMath.GetCurrency(SelectedJob.Baseline.EstimatedTotalCost)</span>
                         <span>Sale @EstimateMath.GetCurrency(SelectedJob.Baseline.OriginalRevenue)</span>
                         <span>Total Hours @EstimateMath.GetHours(GetBaselineTotalHours())</span>
+                    </div>
+
+                    <div class="section-link-row">
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(ChangeOrdersSectionId)'>To COs</button>
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(ScheduleOfValuesSectionId)'>To SOV</button>
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(InvoicesSectionId)'>To Invoices</button>
                     </div>
 
                     @if (IsSectionExpanded(BaselineReferenceSectionId))
@@ -385,7 +545,7 @@ else
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var costCode in JobCostCodes.TimeEntryCodes.Where(code => code != JobCostCodes.Other))
+                                @foreach (var costCode in JobCostCodes.TimeEntryCodes.Where(code => code != JobCostCodes.Other && code != JobCostCodes.ChangeOrder))
                                 {
                                     var specifiedHours = JobFinancialMath.GetBaselineHours(SelectedJob.Baseline, costCode);
                                     var usedHours = JobFinancialMath.GetJobActualHours(SelectedJob, costCode);
@@ -440,16 +600,21 @@ else
                     }
                 </section>
 
-                <section id="@JobDevicesElementId" class="panel page-section-anchor">
+                <section id="@ScheduleOfValuesElementId" class="panel jobs-section jobs-section-sov page-section-anchor @(IsSectionExpanded(ScheduleOfValuesSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Progress billing</p>
                             <h3>Schedule Of Values</h3>
                         </div>
                         <div class="panel-header-actions">
-                            <button class="button button-secondary" type="button" @onclick="AddScheduleValue">Add Line</button>
                             <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ScheduleOfValuesSectionId)'>@(IsSectionExpanded(ScheduleOfValuesSectionId) ? "Collapse" : "Expand")</button>
                         </div>
+                    </div>
+
+                    <div class="section-link-row">
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(ChangeOrdersSectionId)'>To COs</button>
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(CommitmentsSectionId)'>To Subs + POs</button>
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(InvoicesSectionId)'>To Invoices</button>
                     </div>
 
                     @if (SelectedJob.ScheduleOfValues.Count == 0)
@@ -489,7 +654,7 @@ else
                                     var isExpanded = IsScheduleValueExpanded(item.Id);
                                     var isApprovedChangeOrder = IsScheduleValueChangeOrderApproved(item);
 
-                                    <article class="field-card @(isExpanded ? "field-card-expanded" : "field-card-collapsed")" style="@(item.IsChangeOrderLine && !isApprovedChangeOrder ? "opacity: 0.68;" : null)" @key="item.Id">
+                                    <article id="@GetScheduleValueElementId(item.Id)" class="field-card @(isExpanded ? "field-card-expanded" : "field-card-collapsed") page-section-anchor" style="@(item.IsChangeOrderLine && !isApprovedChangeOrder ? "opacity: 0.68;" : null)" @key="item.Id">
                                         <div class="field-card-summary-row">
                                             <button class="field-card-summary-button" type="button" @onclick="() => ToggleScheduleValueExpanded(item.Id)">
                                                 <strong>@item.Description</strong>
@@ -576,7 +741,6 @@ else
                                                         <p class="eyebrow">Progress Entries</p>
                                                         <h4>@item.Description</h4>
                                                     </div>
-                                                    <button class="button button-secondary" type="button" @onclick="() => AddScheduleValueSubLine(item)">Add Subline</button>
                                                 </div>
 
                                                 @if (item.SubLines.Count == 0)
@@ -601,7 +765,7 @@ else
                                                         <tbody>
                                                             @foreach (var subLine in item.SubLines)
                                                             {
-                                                                <tr @key="subLine.Id">
+                                                                <tr id="@GetScheduleValueSubLineElementId(item.Id, subLine.Id)" class="page-section-anchor" @key="subLine.Id">
                                                                     <td><input @bind="subLine.Description" @bind:after="@SyncJobFinancials" /></td>
                                                                     <td><span>@GetScheduleValueSubLineLinkLabel(subLine)</span></td>
                                                                     <td><input type="number" step="0.01" value="@GetCurrencyInputValue(subLine.LineValue)" @oninput="args => OnScheduleValueSubLineLineValueChanged(item, subLine, args)" /></td>
@@ -624,6 +788,10 @@ else
                                                         </tbody>
                                                     </table>
                                                 }
+
+                                                <div class="section-add-action">
+                                                    <button class="button button-secondary" type="button" @onclick="() => AddScheduleValueSubLine(item)">Add Subline</button>
+                                                </div>
                                             </div>
                                         }
                                     </article>
@@ -656,83 +824,231 @@ else
                             </table>
                         }
                     }
+
+                    @if (IsSectionExpanded(ScheduleOfValuesSectionId))
+                    {
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddScheduleValue">Add Line</button>
+                        </div>
+                    }
                 </section>
 
-                <section id="@TimeEntriesElementId" class="panel page-section-anchor">
+                <section id="@TimeEntriesElementId" class="panel jobs-section jobs-section-labor page-section-anchor @(IsSectionExpanded(TimeEntriesSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Actual labor</p>
-                            <h3>Time Entries</h3>
+                            <h3>Daily Logs</h3>
                         </div>
                         <div class="panel-header-actions">
-                            <button class="button button-secondary" type="button" @onclick="AddTimeEntry">Add Time</button>
+                            <button class="button button-secondary" type="button" @onclick="ToggleDailyLogSortOrder">@(IsDailyLogsNewestFirst ? "Newest First" : "Oldest First")</button>
                             <button class="button button-secondary" type="button" @onclick='() => ToggleSection(TimeEntriesSectionId)'>@(IsSectionExpanded(TimeEntriesSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
 
-                    @if (SelectedJob.TimeEntries.Count == 0)
+                    <div class="stats-inline">
+                        <span>Daily Logs @dailyLogItems.Count</span>
+                        <span>Time Logs @SelectedJob.TimeEntries.Count</span>
+                        <span>Total Hours @EstimateMath.GetHours(EstimateMath.GetJobActualLaborHours(SelectedJob))</span>
+                        <span>Total Cost @EstimateMath.GetCurrency(EstimateMath.GetJobActualLaborCost(SelectedJob))</span>
+                        <span>Base Remaining @EstimateMath.GetHours(GetRemainingHoursTotal(BaselinePhaseCodes))</span>
+                        <span>CO Remaining @EstimateMath.GetHours(GetAllChangeOrderRemainingLaborHoursTotal())</span>
+                        <span>Saved Personnel @personnelNameSuggestions.Count</span>
+                    </div>
+
+                    @if (IsSectionExpanded(TimeEntriesSectionId))
                     {
-                        <p class="muted">Track labor hours, crew rates, and notes as the project progresses.</p>
-                    }
-                    else
-                    {
-                        <div class="stats-inline">
-                            <span>Total Hours @EstimateMath.GetHours(EstimateMath.GetJobActualLaborHours(SelectedJob))</span>
-                            <span>Total Cost @EstimateMath.GetCurrency(EstimateMath.GetJobActualLaborCost(SelectedJob))</span>
+                        <div class="section-totals-grid">
+                            <article class="summary-card section-totals-card">
+                                <p class="eyebrow">Hours By Scope</p>
+                                <table class="data-table compact-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Scope</th>
+                                            <th>Planned</th>
+                                            <th>Used</th>
+                                            <th>Remaining</th>
+                                            <th>Actual Cost</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var scopeSummary in laborScopeSummaries)
+                                        {
+                                            <tr>
+                                                <td>@scopeSummary.Scope</td>
+                                                <td>@EstimateMath.GetHours(scopeSummary.PlannedHours)</td>
+                                                <td>@EstimateMath.GetHours(scopeSummary.UsedHours)</td>
+                                                <td><span style="@GetRemainingHoursStyle(scopeSummary.RemainingHours)">@EstimateMath.GetHours(scopeSummary.RemainingHours)</span></td>
+                                                <td>@EstimateMath.GetCurrency(scopeSummary.ActualCost)</td>
+                                            </tr>
+                                        }
+                                        <tr class="sov-total-row">
+                                            <td><strong>All Labor Totals</strong></td>
+                                            <td>@EstimateMath.GetHours(GetAllTrackedLaborPlannedHours())</td>
+                                            <td>@EstimateMath.GetHours(EstimateMath.GetJobActualLaborHours(SelectedJob))</td>
+                                            <td><span style="@GetRemainingHoursStyle(GetAllTrackedLaborRemainingHours())">@EstimateMath.GetHours(GetAllTrackedLaborRemainingHours())</span></td>
+                                            <td>@EstimateMath.GetCurrency(EstimateMath.GetJobActualLaborCost(SelectedJob))</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </article>
+
+                            <article class="summary-card section-totals-card">
+                                <p class="eyebrow">Crew Hours</p>
+                                @if (personnelHourSummaries.Count == 0)
+                                {
+                                    <p class="muted">Enter a crew name once and it will show back up as a suggestion on future daily logs.</p>
+                                }
+                                else
+                                {
+                                    <table class="data-table compact-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Hours</th>
+                                                <th>Cost</th>
+                                                <th>Daily Logs</th>
+                                                <th>Entries</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var crewSummary in personnelHourSummaries)
+                                            {
+                                                <tr>
+                                                    <td>@crewSummary.Name</td>
+                                                    <td>@EstimateMath.GetHours(crewSummary.Hours)</td>
+                                                    <td>@EstimateMath.GetCurrency(crewSummary.Cost)</td>
+                                                    <td>@crewSummary.DailyLogs</td>
+                                                    <td>@crewSummary.Entries</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                            </article>
                         </div>
 
-                        @if (IsSectionExpanded(TimeEntriesSectionId))
+                        @if (dailyLogItems.Count == 0)
                         {
-                            <table class="data-table wide">
-                                <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Crew Member</th>
-                                        <th>Phase</th>
-                                        <th>Hours</th>
-                                        <th>Hours Remaining</th>
-                                        <th>Rate</th>
-                                        <th>Overnight</th>
-                                        <th>Notes</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var entry in SelectedJob.TimeEntries)
-                                    {
-                                        <tr @key="entry.Id">
-                                            <td><input type="date" @bind="entry.WorkDate" @bind:format="yyyy-MM-dd" /></td>
-                                            <td>
-                                                <select @bind="entry.CrewMember" @bind:after="@(() => OnTimeEntryLaborTypeChanged(entry))">
-                                                    @foreach (var laborClass in TimeEntryLaborClasses)
-                                                    {
-                                                        <option value="@laborClass">@GetTimeEntryLaborLabel(laborClass)</option>
-                                                    }
-                                                </select>
-                                            </td>
-                                            <td>
-                                                <select @bind="entry.CostCode" @bind:after="@(() => OnTimeEntryCostCodeChanged(entry))">
-                                                    @foreach (var costCode in JobCostCodes.TimeEntryCodes)
-                                                    {
-                                                        <option value="@costCode">@JobCostCodes.GetLabel(costCode)</option>
-                                                    }
-                                                </select>
-                                            </td>
-                                            <td><input type="number" step="0.25" value="@GetTimeEntryHoursInputValue(entry)" @oninput="args => OnTimeEntryHoursChanged(entry, args)" /></td>
-                                            <td><span style="@GetTimeEntryRemainingHoursStyle(entry)">@GetTimeEntryRemainingHoursDisplay(entry)</span></td>
-                                            <td><input type="number" step="0.01" @bind="entry.HourlyRate" @bind:event="oninput" @bind:after="@(() => NormalizeTimeEntry(entry))" /></td>
-                                            <td><input type="checkbox" @bind="entry.IsOvernight" @bind:after="@(() => OnTimeEntryOvernightChanged(entry))" disabled="@IsTimeEntryOvernightLocked(entry)" /></td>
-                                            <td><textarea class="notes-field notes-field-compact" rows="1" @bind="entry.Notes"></textarea></td>
-                                            <td><button class="text-button danger" type="button" @onclick="() => RemoveTimeEntry(entry.Id)">Remove</button></td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
+                            <p class="muted">Track labor by day so each date carries its own report, pictures, and crew time logs.</p>
                         }
+                        else
+                        {
+                            <div class="field-card-list">
+                                @foreach (var dailyLog in dailyLogItems)
+                                {
+                                    var isExpanded = IsDailyLogExpanded(dailyLog.Id);
+                                    var dailyEntries = GetDailyLogEntries(dailyLog).ToList();
+
+                                    <article id="@GetDailyLogElementId(dailyLog.Id)" class="field-card daily-log-card @(isExpanded ? "field-card-expanded" : "field-card-collapsed") page-section-anchor" @key="dailyLog.Id">
+                                        <div class="field-card-summary-row">
+                                            <button class="field-card-summary-button" type="button" @onclick="() => ToggleDailyLogExpanded(dailyLog.Id)">
+                                                <strong>@GetDailyLogDateLabel(dailyLog)</strong>
+                                                <span>@GetDailyLogDescription(dailyLog)</span>
+                                            </button>
+                                            <div class="field-card-summary-actions">
+                                                <span class="pill">@dailyEntries.Count Log@(dailyEntries.Count == 1 ? string.Empty : "s")</span>
+                                                <button class="text-button danger" type="button" @onclick="() => RemoveDailyLog(dailyLog.Id)">Remove</button>
+                                            </div>
+                                        </div>
+
+                                        @if (isExpanded)
+                                        {
+                                            <div class="field-card-grid daily-log-header-grid">
+                                                <label>
+                                                    <span>Date</span>
+                                                    <input type="date" @bind="dailyLog.WorkDate" @bind:format="yyyy-MM-dd" @bind:after="@(() => OnDailyLogDateChanged(dailyLog))" />
+                                                </label>
+                                                <label class="daily-log-description-field">
+                                                    <span>Description</span>
+                                                    <input @bind="dailyLog.Description" @bind:after="@(() => OnDailyLogDateChanged(dailyLog))" />
+                                                </label>
+                                                <div class="list-stack compact daily-log-summary-stack">
+                                                    <span class="muted small">Hours @EstimateMath.GetHours(GetDailyLogHours(dailyLog))</span>
+                                                    <span class="muted small">Cost @EstimateMath.GetCurrency(GetDailyLogCost(dailyLog))</span>
+                                                </div>
+                                            </div>
+
+                                            @if (dailyEntries.Count == 0)
+                                            {
+                                                <p class="muted">Use Log Time to add technician entries under this date.</p>
+                                            }
+                                            else
+                                            {
+                                                <table class="data-table wide">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Name</th>
+                                                            <th>Class</th>
+                                                            <th>Phase</th>
+                                                            <th>Scope</th>
+                                                            <th>Hours</th>
+                                                            <th>Hours Remaining</th>
+                                                            <th>Rate</th>
+                                                            <th>Overnight</th>
+                                                            <th>Notes</th>
+                                                            <th></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var entry in dailyEntries)
+                                                        {
+                                                            <tr id="@GetDailyLogTimeEntryElementId(dailyLog.Id, entry.Id)" class="page-section-anchor" @key="entry.Id">
+                                                                <td><input list="@PersonnelNameSuggestionsListId" @bind="entry.CrewMember" @bind:after="@(() => OnTimeEntryCrewMemberChanged(entry))" /></td>
+                                                                <td>
+                                                                    <select @bind="entry.LaborClass" @bind:after="@(() => OnTimeEntryLaborTypeChanged(entry))">
+                                                                        @foreach (var laborClass in TimeEntryLaborClasses)
+                                                                        {
+                                                                            <option value="@laborClass">@GetTimeEntryLaborLabel(laborClass)</option>
+                                                                        }
+                                                                    </select>
+                                                                </td>
+                                                                <td>
+                                                                    <select @bind="entry.CostCode" @bind:after="@(() => OnTimeEntryCostCodeChanged(entry))">
+                                                                        @foreach (var costCode in JobCostCodes.TimeEntryCodes)
+                                                                        {
+                                                                            <option value="@costCode">@JobCostCodes.GetLabel(costCode)</option>
+                                                                        }
+                                                                    </select>
+                                                                </td>
+                                                                <td>
+                                                                    <select value="@GetTimeEntryScopeValue(entry)" @onchange="args => OnTimeEntryScopeChanged(entry, args)">
+                                                                        <option value="@BaseContractScopeValue">Base Contract</option>
+                                                                        @foreach (var changeOrder in changeOrderItems)
+                                                                        {
+                                                                            <option value="@changeOrder.Id">@GetChangeOrderLabel(changeOrder)</option>
+                                                                        }
+                                                                    </select>
+                                                                </td>
+                                                                <td><input type="number" step="0.25" value="@GetTimeEntryHoursInputValue(entry)" @oninput="args => OnTimeEntryHoursChanged(entry, args)" /></td>
+                                                                <td><span style="@GetTimeEntryRemainingHoursStyle(entry)">@GetTimeEntryRemainingHoursDisplay(entry)</span></td>
+                                                                <td><input type="number" step="0.01" @bind="entry.HourlyRate" @bind:event="oninput" @bind:after="@(() => NormalizeTimeEntry(entry))" /></td>
+                                                                <td><input type="checkbox" @bind="entry.IsOvernight" @bind:after="@(() => OnTimeEntryOvernightChanged(entry))" disabled="@IsTimeEntryOvernightLocked(entry)" /></td>
+                                                                <td><textarea class="notes-field notes-field-compact" rows="1" @bind="entry.Notes"></textarea></td>
+                                                                <td><button class="text-button danger" type="button" @onclick="() => RemoveTimeEntry(entry.Id)">Remove</button></td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            }
+
+                                            <div class="section-add-action">
+                                                <button class="button button-secondary" type="button" @onclick="() => AddDailyLogTimeEntry(dailyLog)">Log Time</button>
+                                            </div>
+
+                                            <AttachmentManager Attachments="dailyLog.Attachments" Area="@GetDailyLogAttachmentArea(dailyLog.Id)" OwnerId="dailyLog.Id" />
+                                        }
+                                    </article>
+                                }
+                            </div>
+                        }
+
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddDailyLog">Add Daily</button>
+                        </div>
                     }
                 </section>
 
-                <section id="@BidDevicesElementId" class="panel page-section-anchor">
+                <section id="@BidDevicesElementId" class="panel jobs-section jobs-section-base-scope page-section-anchor @(IsSectionExpanded(BidDevicesSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Original estimate detail</p>
@@ -877,14 +1193,13 @@ else
                     }
                 </section>
 
-                <section id="@CommitmentsElementId" class="panel page-section-anchor">
+                <section id="@JobDevicesElementId" class="panel jobs-section jobs-section-job-scope page-section-anchor @(IsSectionExpanded(JobDevicesSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Added scope tracking</p>
                             <h3>Job Devices</h3>
                         </div>
                         <div class="panel-header-actions">
-                            <button class="button button-secondary" type="button" @onclick="AddJobDevice">Add Device</button>
                             <button class="button button-secondary" type="button" @onclick='() => ToggleSection(JobDevicesSectionId)'>@(IsSectionExpanded(JobDevicesSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
@@ -922,7 +1237,7 @@ else
                                 <tbody>
                                     @foreach (var item in jobDeviceItems)
                                     {
-                                        <tr @key="item.Id">
+                                        <tr id="@GetJobDeviceElementId(item.Id)" class="page-section-anchor" @key="item.Id">
                                             <td>
                                                 <select @bind="item.CategoryCode" @bind:after="@(() => NormalizeJobDevice(item))">
                                                     <option value="@JobCostCodes.Components">Component</option>
@@ -954,18 +1269,30 @@ else
                             </table>
                         }
                     }
+
+                    @if (IsSectionExpanded(JobDevicesSectionId))
+                    {
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddJobDevice">Add Device</button>
+                        </div>
+                    }
                 </section>
 
-                <section id="@InvoicesElementId" class="panel page-section-anchor">
+                <section id="@InvoicesElementId" class="panel jobs-section jobs-section-invoices page-section-anchor @(IsSectionExpanded(InvoicesSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Invoice tracking</p>
                             <h3>Invoices</h3>
                         </div>
                         <div class="panel-header-actions">
-                            <button class="button button-secondary" type="button" @onclick="AddInvoice">Add Invoice</button>
                             <button class="button button-secondary" type="button" @onclick='() => ToggleSection(InvoicesSectionId)'>@(IsSectionExpanded(InvoicesSectionId) ? "Collapse" : "Expand")</button>
                         </div>
+                    </div>
+
+                    <div class="section-link-row">
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(BidDevicesSectionId)'>To Base Scope</button>
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(JobDevicesSectionId)'>To Job Scope</button>
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(ChangeOrdersSectionId)'>To COs</button>
                     </div>
 
                     @if (invoiceItems.Count == 0)
@@ -987,7 +1314,7 @@ else
                                 {
                                     var isExpanded = IsInvoiceExpanded(invoice.Id);
 
-                                    <article class="field-card @(isExpanded ? "field-card-expanded" : "field-card-collapsed")" @key="invoice.Id">
+                                    <article id="@GetInvoiceElementId(invoice.Id)" class="field-card @(isExpanded ? "field-card-expanded" : "field-card-collapsed") page-section-anchor" @key="invoice.Id">
                                         <div class="field-card-summary-row">
                                             <button class="field-card-summary-button" type="button" @onclick="() => ToggleInvoiceExpanded(invoice.Id)">
                                                 <strong>@GetInvoiceLabel(invoice)</strong>
@@ -1054,21 +1381,33 @@ else
                             </div>
                         }
                     }
+
+                    @if (IsSectionExpanded(InvoicesSectionId))
+                    {
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddInvoice">Add Invoice</button>
+                        </div>
+                    }
                 </section>
 
-                <section id="@ChangeOrdersElementId" class="panel page-section-anchor">
+                <section id="@ChangeOrdersElementId" class="panel jobs-section jobs-section-change-orders page-section-anchor @(IsSectionExpanded(ChangeOrdersSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Sale adds</p>
                             <h3>Change Orders</h3>
                         </div>
                         <div class="panel-header-actions">
-                            <button class="button button-secondary" type="button" @onclick="AddChangeOrder">Add Change Order</button>
                             <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ChangeOrdersSectionId)'>@(IsSectionExpanded(ChangeOrdersSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
 
-                    @if (SelectedJob.ChangeOrders.Count == 0)
+                    <div class="section-link-row">
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(ScheduleOfValuesSectionId)'>To SOV</button>
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(InvoicesSectionId)'>To Invoices</button>
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(TimeEntriesSectionId)'>To Labor</button>
+                    </div>
+
+                    @if (changeOrderItems.Count == 0)
                     {
                         <p class="muted">Add approved or pending scope changes that affect job sale and projected cost.</p>
                     }
@@ -1077,22 +1416,24 @@ else
                         <div class="stats-inline">
                             <span>Approved Sale @EstimateMath.GetCurrency(EstimateMath.GetJobApprovedChangeOrderRevenue(SelectedJob))</span>
                             <span>Approved Cost @EstimateMath.GetCurrency(EstimateMath.GetJobApprovedChangeOrderCost(SelectedJob))</span>
-                            <span>Approved lines sync into the schedule of values automatically.</span>
+                            <span>Tracked Actual @EstimateMath.GetCurrency(changeOrderItems.Sum(GetChangeOrderActualCost))</span>
+                            <span>Change-order devices stay here so totals do not duplicate in Job Devices.</span>
                         </div>
 
                         @if (IsSectionExpanded(ChangeOrdersSectionId))
                         {
                             <div class="field-card-list">
-                                @foreach (var changeOrder in SelectedJob.ChangeOrders.OrderByDescending(item => item.ApprovedOn).ThenBy(item => item.Title))
+                                @foreach (var changeOrder in changeOrderItems)
                                 {
                                     var isExpanded = IsChangeOrderExpanded(changeOrder.Id);
 
-                                    <article class="field-card @(isExpanded ? "field-card-expanded" : "field-card-collapsed")" @key="changeOrder.Id">
+                                    <article id="@GetChangeOrderElementId(changeOrder.Id)" class="field-card @(isExpanded ? "field-card-expanded" : "field-card-collapsed") page-section-anchor" @key="changeOrder.Id">
                                         <div class="field-card-summary-row">
                                             <button class="field-card-summary-button" type="button" @onclick="() => ToggleChangeOrderExpanded(changeOrder.Id)">
                                                 <strong>@GetChangeOrderLabel(changeOrder)</strong>
                                                 <span>@(changeOrder.Approved ? "Approved" : "Pending")</span>
-                                                <span>Cost @EstimateMath.GetCurrency(changeOrder.EstimatedCostImpact)</span>
+                                                <span>Est. Cost @EstimateMath.GetCurrency(changeOrder.EstimatedCostImpact)</span>
+                                                <span>Actual @EstimateMath.GetCurrency(GetChangeOrderActualCost(changeOrder))</span>
                                                 <span>Sale @EstimateMath.GetCurrency(changeOrder.RevenueAmount)</span>
                                             </button>
                                             <div class="field-card-summary-actions">
@@ -1113,12 +1454,61 @@ else
                                                     <input @bind="changeOrder.Title" @bind:after="@SyncJobFinancials" />
                                                 </label>
                                                 <label>
-                                                    <span>Cost</span>
-                                                    <input type="number" step="0.01" @bind="changeOrder.EstimatedCostImpact" @bind:event="oninput" @bind:after="@SyncJobFinancials" />
+                                                    <span>Other Est. Cost</span>
+                                                    <input type="number" step="0.01" @bind="changeOrder.AdditionalEstimatedCost" @bind:event="oninput" @bind:after="@SyncJobFinancials" />
+                                                    <div class="list-stack compact">
+                                                        <span class="muted small">Included in estimated cost and calculated sale.</span>
+                                                    </div>
                                                 </label>
                                                 <label>
                                                     <span>Sale</span>
-                                                    <input type="number" step="0.01" @bind="changeOrder.RevenueAmount" @bind:event="oninput" @bind:after="@SyncJobFinancials" />
+                                                    <input type="number" step="0.01" value="@GetCurrencyInputValue(changeOrder.RevenueAmount)" @oninput="args => OnChangeOrderSaleChanged(changeOrder, args)" />
+                                                    <div class="list-stack compact">
+                                                        <span class="muted small">Calculated @EstimateMath.GetCurrency(GetChangeOrderCalculatedSale(changeOrder))</span>
+                                                        @if (changeOrder.UseAutoCalculatedSale)
+                                                        {
+                                                            <span class="muted small">Auto mode is on and updates from scope.</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <button class="text-button" type="button" @onclick="() => UseCalculatedChangeOrderSale(changeOrder)">Use Calculated Sale</button>
+                                                        }
+                                                    </div>
+                                                </label>
+                                            </div>
+
+                                            <div class="field-card-grid field-card-grid-four">
+                                                <label>
+                                                    <span>Labor Hours</span>
+                                                    <input type="number" step="0.25" @bind="changeOrder.EstimatedLaborHours" @bind:event="oninput" @bind:after="@SyncJobFinancials" />
+                                                    <div class="list-stack compact">
+                                                        <span class="muted small">Tracked @EstimateMath.GetHours(GetChangeOrderActualLaborHours(changeOrder))</span>
+                                                        <span class="muted small">Remaining @EstimateMath.GetHours(EstimateMath.RoundHours(changeOrder.EstimatedLaborHours - GetChangeOrderActualLaborHours(changeOrder)))</span>
+                                                    </div>
+                                                </label>
+                                                <label>
+                                                    <span>Direct Labor Rate</span>
+                                                    <input type="number" step="0.01" @bind="changeOrder.DirectLaborRate" @bind:event="oninput" @bind:after="@SyncJobFinancials" />
+                                                    <div class="list-stack compact">
+                                                        <span class="muted small">Direct Total @EstimateMath.GetCurrency(GetChangeOrderEstimatedDirectLaborCost(changeOrder))</span>
+                                                    </div>
+                                                </label>
+                                                <label>
+                                                    <span>Billed Labor Rate</span>
+                                                    <input type="number" step="0.01" @bind="changeOrder.BilledLaborRate" @bind:event="oninput" @bind:after="@SyncJobFinancials" />
+                                                    <div class="list-stack compact">
+                                                        <span class="muted small">Billed Total @EstimateMath.GetCurrency(GetChangeOrderEstimatedBilledLaborAmount(changeOrder))</span>
+                                                    </div>
+                                                </label>
+                                                <label>
+                                                    <span>Tracked Labor Cost</span>
+                                                    <div class="input-shell value-pill">
+                                                        <span class="input-prefix">$</span>
+                                                        <span>@EstimateMath.GetCurrency(GetChangeOrderActualLaborCost(changeOrder))</span>
+                                                    </div>
+                                                    <div class="list-stack compact">
+                                                        <span class="muted small">From time entries linked to this change order.</span>
+                                                    </div>
                                                 </label>
                                             </div>
 
@@ -1133,6 +1523,104 @@ else
                                                 </label>
                                             </div>
 
+                                            <div class="stats-inline">
+                                                <span>Est. Material Cost @EstimateMath.GetCurrency(GetChangeOrderEstimatedMaterialCost(changeOrder))</span>
+                                                <span>Est. Material Sale @EstimateMath.GetCurrency(GetChangeOrderEstimatedMaterialSale(changeOrder))</span>
+                                                <span>Direct Labor @EstimateMath.GetCurrency(GetChangeOrderEstimatedDirectLaborCost(changeOrder))</span>
+                                                <span>Billed Labor @EstimateMath.GetCurrency(GetChangeOrderEstimatedBilledLaborAmount(changeOrder))</span>
+                                                <span>Calculated Sale @EstimateMath.GetCurrency(GetChangeOrderCalculatedSale(changeOrder))</span>
+                                                <span>Actual Material @EstimateMath.GetCurrency(GetChangeOrderActualMaterialCost(changeOrder))</span>
+                                                <span>Tracked Hours @EstimateMath.GetHours(GetChangeOrderActualLaborHours(changeOrder))</span>
+                                                <span>Actual Total @EstimateMath.GetCurrency(GetChangeOrderActualCost(changeOrder))</span>
+                                                <span>Est. Cost @EstimateMath.GetCurrency(changeOrder.EstimatedCostImpact)</span>
+                                                <span>Variance @EstimateMath.GetCurrency(GetChangeOrderVariance(changeOrder))</span>
+                                            </div>
+
+                                            <div class="panel-header minor">
+                                                <div>
+                                                    <p class="eyebrow">Change Order Scope</p>
+                                                    <h4>Devices + Material</h4>
+                                                </div>
+                                            </div>
+
+                                            @if (changeOrder.DeviceItems.Count == 0)
+                                            {
+                                                <p class="muted">Add device or material lines here, then track labor for this change order from Time Entries by selecting Phase = Change Order and choosing this record.</p>
+                                            }
+                                            else
+                                            {
+                                                <table class="data-table wide">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Type</th>
+                                                            <th>Description</th>
+                                                            <th>Qty</th>
+                                                            <th>Unit</th>
+                                                            <th>Est. Unit Cost</th>
+                                                            <th>Est. Unit Sale</th>
+                                                            <th>Actual Unit Cost</th>
+                                                            <th>Invoice Ref</th>
+                                                            <th>Notes</th>
+                                                            <th></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var item in changeOrder.DeviceItems)
+                                                        {
+                                                            <tr id="@GetChangeOrderDeviceElementId(changeOrder.Id, item.Id)" class="page-section-anchor" @key="item.Id">
+                                                                <td>
+                                                                    <select @bind="item.CategoryCode" @bind:after="@(() => NormalizeChangeOrderDeviceAndSync(item))">
+                                                                        <option value="@JobCostCodes.Components">Component</option>
+                                                                        <option value="@JobCostCodes.Wire">Wire</option>
+                                                                        <option value="@JobCostCodes.Material">Material</option>
+                                                                        <option value="@JobCostCodes.Other">Other</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td><input @bind="item.Description" @bind:after="@(() => NormalizeChangeOrderDeviceAndSync(item))" /></td>
+                                                                <td><input type="number" step="0.01" @bind="item.Quantity" @bind:event="oninput" @bind:after="@(() => NormalizeChangeOrderDeviceAndSync(item))" /></td>
+                                                                <td><input @bind="item.UnitLabel" @bind:after="@(() => NormalizeChangeOrderDeviceAndSync(item))" /></td>
+                                                                <td><input type="number" step="0.01" value="@item.EstimatedUnitCost" @oninput="args => OnChangeOrderDeviceEstimatedCostChanged(item, args)" /></td>
+                                                                <td><input type="number" step="0.01" value="@item.EstimatedUnitSale" @oninput="args => OnChangeOrderDeviceEstimatedSaleChanged(item, args)" /></td>
+                                                                <td><input type="number" step="0.01" value="@item.ActualUnitCost" @oninput="args => OnChangeOrderDeviceActualCostChanged(item, args)" /></td>
+                                                                <td>
+                                                                    <select value="@(item.InvoiceId?.ToString() ?? string.Empty)" @onchange="args => OnChangeOrderDeviceInvoiceChanged(item, args)">
+                                                                        <option value="">Not linked</option>
+                                                                        @foreach (var invoice in invoiceItems)
+                                                                        {
+                                                                            <option value="@invoice.Id">@GetInvoiceLabel(invoice)</option>
+                                                                        }
+                                                                    </select>
+                                                                </td>
+                                                                <td><textarea class="notes-field notes-field-compact" rows="1" @bind="item.Notes"></textarea></td>
+                                                                <td><button class="text-button danger" type="button" @onclick="() => RemoveChangeOrderDevice(changeOrder, item.Id)">Remove</button></td>
+                                                            </tr>
+                                                            <tr class="change-order-line-totals">
+                                                                <td colspan="10">
+                                                                    <div class="stats-inline">
+                                                                        <span>Est. Cost Total @EstimateMath.GetCurrency(item.EstimatedCost)</span>
+                                                                        <span>Est. Sale Total @EstimateMath.GetCurrency(item.EstimatedSale)</span>
+                                                                        <span>Actual Cost Total @EstimateMath.GetCurrency(item.ActualCost)</span>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr>
+                                                            <th colspan="4">All Line Items</th>
+                                                            <th>@EstimateMath.GetCurrency(GetChangeOrderEstimatedMaterialCost(changeOrder))</th>
+                                                            <th>@EstimateMath.GetCurrency(GetChangeOrderEstimatedMaterialSale(changeOrder))</th>
+                                                            <th>@EstimateMath.GetCurrency(GetChangeOrderActualMaterialCost(changeOrder))</th>
+                                                            <th colspan="3"></th>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            }
+
+                                            <div class="section-add-action">
+                                                <button class="button button-secondary" type="button" @onclick="() => AddChangeOrderDevice(changeOrder)">Add Line Item</button>
+                                            </div>
+
                                             <AttachmentManager Attachments="changeOrder.Attachments" Area="@GetChangeOrderAttachmentArea(changeOrder.Id)" OwnerId="changeOrder.Id" />
                                         }
                                     </article>
@@ -1140,18 +1628,29 @@ else
                             </div>
                         }
                     }
+
+                    @if (IsSectionExpanded(ChangeOrdersSectionId))
+                    {
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddChangeOrder">Add Change Order</button>
+                        </div>
+                    }
                 </section>
 
-                <section class="panel">
+                <section id="@CommitmentsElementId" class="panel jobs-section jobs-section-commitments page-section-anchor @(IsSectionExpanded(CommitmentsSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Committed cost</p>
                             <h3>Commitments</h3>
                         </div>
                         <div class="panel-header-actions">
-                            <button class="button button-secondary" type="button" @onclick="AddCommitment">Add Commitment</button>
                             <button class="button button-secondary" type="button" @onclick='() => ToggleSection(CommitmentsSectionId)'>@(IsSectionExpanded(CommitmentsSectionId) ? "Collapse" : "Expand")</button>
                         </div>
+                    </div>
+
+                    <div class="section-link-row">
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(ScheduleOfValuesSectionId)'>To SOV</button>
+                        <button class="pill pill-button" type="button" @onclick='() => NavigateToJobSectionAsync(InvoicesSectionId)'>To Invoices</button>
                     </div>
 
                     @if (SelectedJob.Commitments.Count == 0)
@@ -1188,7 +1687,7 @@ else
                                 <tbody>
                                     @foreach (var commitment in SelectedJob.Commitments)
                                     {
-                                        <tr @key="commitment.Id">
+                                        <tr id="@GetCommitmentElementId(commitment.Id)" class="page-section-anchor" @key="commitment.Id">
                                             <td><input @bind="commitment.CommitmentNumber" /></td>
                                             <td><input @bind="commitment.Vendor" /></td>
                                             <td>
@@ -1220,11 +1719,20 @@ else
                             </table>
                         }
                     }
+
+                    @if (IsSectionExpanded(CommitmentsSectionId))
+                    {
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddCommitment">Add Commitment</button>
+                        </div>
+                    }
                 </section>
 
-                <AttachmentManager Attachments="SelectedJob.Attachments" Area="jobs" OwnerId="SelectedJob.Id" />
+                <div class="jobs-section jobs-section-attachments">
+                    <AttachmentManager Attachments="SelectedJob.Attachments" Area="jobs" OwnerId="SelectedJob.Id" />
+                </div>
 
-                <section id="@ProjectNotesElementId" class="panel page-section-anchor">
+                <section id="@ProjectNotesElementId" class="panel jobs-section jobs-section-notes page-section-anchor @(IsSectionExpanded(ProjectNotesSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
                             <p class="eyebrow">Project notes</p>

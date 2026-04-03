@@ -12,9 +12,16 @@ public sealed class ChangeOrderRecord
     public DateTime ApprovedOn { get; set; } = DateTime.Today;
     public string Title { get; set; } = string.Empty;
     public decimal RevenueAmount { get; set; }
+    public bool UseAutoCalculatedSale { get; set; }
+    public decimal AdditionalEstimatedCost { get; set; }
+    public decimal EstimatedLaborHours { get; set; }
+    public decimal DirectLaborRate { get; set; }
+    public decimal BilledLaborRate { get; set; }
+    public decimal EstimatedLaborRate { get; set; }
     public decimal EstimatedCostImpact { get; set; }
     public bool Approved { get; set; } = true;
     public string Notes { get; set; } = string.Empty;
+    public List<ChangeOrderDeviceItem> DeviceItems { get; set; } = [];
     public List<AttachmentRecord> Attachments { get; set; } = [];
 }
 

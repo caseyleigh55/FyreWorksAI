@@ -20,7 +20,7 @@ else
         <tbody>
             @foreach (var task in Tasks)
             {
-                <tr @key="task.Id">
+                <tr id="@ResolveRowElementId(task)" class="page-section-anchor" @key="task.Id">
                     <td><input @bind="task.Title" /></td>
                     <td>
                         <select @bind="task.PricingMode" @bind:after="() => SyncTaskSaleAndNotify(task)">

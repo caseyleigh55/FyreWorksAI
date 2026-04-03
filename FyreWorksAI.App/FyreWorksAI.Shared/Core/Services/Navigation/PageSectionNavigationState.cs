@@ -11,7 +11,10 @@ public sealed class PageSectionNavigationState
 
     public IReadOnlyList<PageSectionNavigationItem> NavigationItems { get; private set; } = [];
     public string? ActiveSectionId { get; private set; }
+    public string? ContextLabel { get; private set; }
+    public string? ContextValue { get; private set; }
     public bool HasItems => NavigationItems.Count > 0;
+    public bool HasContext => !string.IsNullOrWhiteSpace(ContextValue);
 
     public event Action? StateChanged;
 
@@ -19,12 +22,16 @@ public sealed class PageSectionNavigationState
         string ownerKey,
         IReadOnlyList<PageSectionNavigationItem> navigationItems,
         Func<PageSectionNavigationItem, Task> sectionNavigationRequested,
-        string? activeSectionId = null)
+        string? activeSectionId = null,
+        string? contextLabel = null,
+        string? contextValue = null)
     {
         OwnerKey = ownerKey;
         NavigationItems = navigationItems;
         SectionNavigationRequested = sectionNavigationRequested;
         ActiveSectionId = activeSectionId;
+        ContextLabel = contextLabel;
+        ContextValue = contextValue;
         NotifyStateChanged();
     }
 
@@ -64,6 +71,8 @@ public sealed class PageSectionNavigationState
 
         OwnerKey = null;
         ActiveSectionId = null;
+        ContextLabel = null;
+        ContextValue = null;
         NavigationItems = [];
         SectionNavigationRequested = null;
         NotifyStateChanged();

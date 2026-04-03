@@ -113,7 +113,7 @@ else
                     </div>
                     <div class="form-grid two-columns">
                         <label><span>Bid Number</span><input @bind="SelectedBid.BidNumber" /></label>
-                        <label><span>Project Name</span><input @bind="SelectedBid.ProjectName" /></label>
+                        <label><span>Project Name</span><input @bind="SelectedBid.ProjectName" @bind:after="RefreshPageSectionNavigation" /></label>
                         <label>
                             <span>Status</span>
                             <select @bind="SelectedBid.Status">
@@ -156,7 +156,7 @@ else
                     </div>
                 </section>
 
-                <section id="@ContactBillingElementId" class="panel page-section-anchor">
+                <section id="@ContactBillingElementId" class="panel page-section-anchor @(IsSectionExpanded(ContactBillingSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div><p class="eyebrow">Client Details</p><h3>Contact + Billing</h3></div>
                         <div class="panel-header-actions">
@@ -186,7 +186,7 @@ else
                     }
                 </section>
 
-                <section id="@PricingElementId" class="panel page-section-anchor">
+                <section id="@PricingElementId" class="panel page-section-anchor @(IsSectionExpanded(PricingSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div><p class="eyebrow">Totals Overview</p><h3>Calculated and Accepted Pricing</h3></div>
                         <button class="button button-secondary" type="button" @onclick='() => ToggleSection(PricingSectionId)'>@(IsSectionExpanded(PricingSectionId) ? "Collapse" : "Expand")</button>
@@ -228,7 +228,7 @@ else
                     }
                 </section>
 
-                <section id="@SiteInfoElementId" class="panel page-section-anchor">
+                <section id="@SiteInfoElementId" class="panel page-section-anchor @(IsSectionExpanded(SiteInfoSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div><p class="eyebrow">Site Info</p><h3>Project Scope + Code Data</h3></div>
                         <button class="button button-secondary" type="button" @onclick='() => ToggleSection(SiteInfoSectionId)'>@(IsSectionExpanded(SiteInfoSectionId) ? "Collapse" : "Expand")</button>
@@ -256,7 +256,7 @@ else
                     }
                 </section>
 
-                <section id="@ExclusionsElementId" class="panel page-section-anchor">
+                <section id="@ExclusionsElementId" class="panel page-section-anchor @(IsSectionExpanded(ExclusionsSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div><p class="eyebrow">Proposal Setup</p><h3>Exclusions</h3></div>
                         <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ExclusionsSectionId)'>@(IsSectionExpanded(ExclusionsSectionId) ? "Collapse" : "Expand")</button>
@@ -270,7 +270,7 @@ else
                     }
                 </section>
 
-                <section id="@ProposalElementId" class="panel page-section-anchor">
+                <section id="@ProposalElementId" class="panel page-section-anchor @(IsSectionExpanded(ProposalSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div><p class="eyebrow">Client Facing Copy</p><h3>Proposal</h3></div>
                         <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ProposalSectionId)'>@(IsSectionExpanded(ProposalSectionId) ? "Collapse" : "Expand")</button>
@@ -291,7 +291,7 @@ else
                     }
                 </section>
 
-                <section id="@FieldLaborElementId" class="panel page-section-anchor">
+                <section id="@FieldLaborElementId" class="panel page-section-anchor @(IsSectionExpanded(FieldLaborSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div><p class="eyebrow">Field Labor Allocation</p><h3>Device Hours + Manual Mix</h3></div>
                         <button class="button button-secondary" type="button" @onclick='() => ToggleSection(FieldLaborSectionId)'>@(IsSectionExpanded(FieldLaborSectionId) ? "Collapse" : "Expand")</button>
@@ -349,17 +349,19 @@ else
                     }
                 </section>
 
-                <section id="@OfficeScopeElementId" class="panel page-section-anchor">
+                <section id="@OfficeScopeElementId" class="panel page-section-anchor @(IsSectionExpanded(OfficeScopeSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div><p class="eyebrow">Administrative Tasks</p><h3>Office Scope</h3></div>
                         <div class="panel-header-actions">
-                            <button class="button button-secondary" type="button" @onclick="AddAdministrativeTask">Add Task</button>
                             <button class="button button-secondary" type="button" @onclick='() => ToggleSection(OfficeScopeSectionId)'>@(IsSectionExpanded(OfficeScopeSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
                     @if (IsSectionExpanded(OfficeScopeSectionId))
                     {
-                        <BidTaskTable Bid="SelectedBid" Tasks="SelectedBid.AdministrativeTasks" Administrative="true" OnRemove="RemoveAdministrativeTask" OnChanged="RefreshBidView" />
+                        <BidTaskTable Bid="SelectedBid" Tasks="SelectedBid.AdministrativeTasks" Administrative="true" OnRemove="RemoveAdministrativeTask" OnChanged="RefreshBidView" GetRowElementId="GetAdministrativeTaskElementId" />
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddAdministrativeTask">Add Task</button>
+                        </div>
                         <div class="stats-inline">
                             <span>Cost @EstimateMath.GetCurrency(EstimateMath.GetBidAdministrativeTaskCost(SelectedBid))</span>
                             <span>Sale @EstimateMath.GetCurrency(EstimateMath.GetBidAdministrativeTaskSale(SelectedBid))</span>
@@ -367,17 +369,19 @@ else
                     }
                 </section>
 
-                <section id="@EngineeringScopeElementId" class="panel page-section-anchor">
+                <section id="@EngineeringScopeElementId" class="panel page-section-anchor @(IsSectionExpanded(EngineeringScopeSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div><p class="eyebrow">Engineering Tasks</p><h3>Engineering Scope</h3></div>
                         <div class="panel-header-actions">
-                            <button class="button button-secondary" type="button" @onclick="AddEngineeringTask">Add Task</button>
                             <button class="button button-secondary" type="button" @onclick='() => ToggleSection(EngineeringScopeSectionId)'>@(IsSectionExpanded(EngineeringScopeSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
                     @if (IsSectionExpanded(EngineeringScopeSectionId))
                     {
-                        <BidTaskTable Bid="SelectedBid" Tasks="SelectedBid.EngineeringTasks" OnRemove="RemoveEngineeringTask" OnChanged="RefreshBidView" />
+                        <BidTaskTable Bid="SelectedBid" Tasks="SelectedBid.EngineeringTasks" OnRemove="RemoveEngineeringTask" OnChanged="RefreshBidView" GetRowElementId="GetEngineeringTaskElementId" />
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddEngineeringTask">Add Task</button>
+                        </div>
                         <div class="stats-inline">
                             <span>Cost @EstimateMath.GetCurrency(EstimateMath.GetBidEngineeringTaskCost(SelectedBid))</span>
                             <span>Sale @EstimateMath.GetCurrency(EstimateMath.GetBidEngineeringTaskSale(SelectedBid))</span>
@@ -404,11 +408,10 @@ else
                     }
                 </datalist>
 
-                <section id="@DemoScopeElementId" class="panel page-section-anchor">
+                <section id="@DemoScopeElementId" class="panel page-section-anchor @(IsSectionExpanded(DemoScopeSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div><p class="eyebrow">Field Demo</p><h3>Demo Scope</h3></div>
                         <div class="panel-header-actions">
-                            <button class="button button-secondary" type="button" @onclick="AddDemoItem">Add Demo Line</button>
                             <button class="button button-secondary" type="button" @onclick='() => ToggleSection(DemoScopeSectionId)'>@(IsSectionExpanded(DemoScopeSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
@@ -423,7 +426,7 @@ else
                             <div class="field-card-list">
                                 @foreach (var demoItem in SelectedBid.DemoItems)
                                 {
-                                    <article class="field-card" @key="demoItem.Id">
+                                    <article id="@GetDemoItemElementId(demoItem.Id)" class="field-card field-card-expanded page-section-anchor" @key="demoItem.Id">
                                         <div class="field-card-header">
                                             <div>
                                                 <p class="eyebrow">Demo line</p>
@@ -472,6 +475,9 @@ else
                                 }
                             </div>
                         }
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddDemoItem">Add Demo Line</button>
+                        </div>
                         <div class="stats-inline">
                             <span>Demo hours @EstimateMath.GetHours(SelectedBid.DemoItems.Sum(item => item.TotalHours))</span>
                             <span>Calculated demo scope rolls into the hour summaries above</span>
@@ -479,11 +485,10 @@ else
                     }
                 </section>
 
-                <section id="@ComponentsElementId" class="panel page-section-anchor">
+                <section id="@ComponentsElementId" class="panel page-section-anchor @(IsSectionExpanded(ComponentsSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div><p class="eyebrow">Field Buildout</p><h3>Components</h3></div>
                         <div class="panel-header-actions">
-                            <button class="button button-secondary" type="button" @onclick="AddComponent">Add Component</button>
                             <button class="button button-secondary" type="button" @onclick='() => ToggleSection(ComponentsSectionId)'>@(IsSectionExpanded(ComponentsSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
@@ -501,7 +506,7 @@ else
                                 {
                                     var isExpanded = IsComponentExpanded(component.Id);
 
-                                    <article class="field-card @(isExpanded ? "field-card-expanded" : "field-card-collapsed")" @key="component.Id">
+                                    <article id="@GetComponentElementId(component.Id)" class="field-card @(isExpanded ? "field-card-expanded" : "field-card-collapsed") page-section-anchor" @key="component.Id">
                                         <div class="field-card-summary-row">
                                             <button class="field-card-summary-button" type="button" @onclick="() => ToggleComponentExpanded(component.Id)">
                                                 <strong>@GetComponentDisplayName(component)</strong>
@@ -600,6 +605,9 @@ else
                                 }
                             </div>
                         }
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddComponent">Add Component</button>
+                        </div>
                         <div class="stats-inline">
                             <span>Cost @EstimateMath.GetCurrency(EstimateMath.GetBidComponentCost(SelectedBid))</span>
                             <span>Sale @EstimateMath.GetCurrency(EstimateMath.GetBidComponentSale(SelectedBid))</span>
@@ -607,39 +615,43 @@ else
                     }
                 </section>
 
-                <section id="@WireItemsElementId" class="panel page-section-anchor">
+                <section id="@WireItemsElementId" class="panel page-section-anchor @(IsSectionExpanded(WireItemsSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div><p class="eyebrow">Wire</p><h3>Wire Items</h3></div>
                         <div class="panel-header-actions">
-                            <button class="button button-secondary" type="button" @onclick="AddWire">Add Wire</button>
                             <button class="button button-secondary" type="button" @onclick='() => ToggleSection(WireItemsSectionId)'>@(IsSectionExpanded(WireItemsSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
                     @if (IsSectionExpanded(WireItemsSectionId))
                     {
-                        <BidMaterialTable Label="Wire" Items="wireItems" MarkupPercent="SelectedBid.MarkupPercent" OnRemove="RemoveMaterial" OnChanged="RefreshBidView" />
+                        <BidMaterialTable Label="Wire" Items="wireItems" MarkupPercent="SelectedBid.MarkupPercent" OnRemove="RemoveMaterial" OnChanged="RefreshBidView" GetRowElementId="GetWireItemElementId" />
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddWire">Add Wire</button>
+                        </div>
                         <div class="stats-inline"><span>Cost @EstimateMath.GetCurrency(EstimateMath.GetBidWireCost(SelectedBid))</span><span>Sale @EstimateMath.GetCurrency(EstimateMath.GetBidWireSale(SelectedBid))</span></div>
                     }
                 </section>
 
-                <section id="@MaterialItemsElementId" class="panel page-section-anchor">
+                <section id="@MaterialItemsElementId" class="panel page-section-anchor @(IsSectionExpanded(MaterialItemsSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div><p class="eyebrow">Material</p><h3>Material Items</h3></div>
                         <div class="panel-header-actions">
-                            <button class="button button-secondary" type="button" @onclick="AddMaterial">Add Material</button>
                             <button class="button button-secondary" type="button" @onclick='() => ToggleSection(MaterialItemsSectionId)'>@(IsSectionExpanded(MaterialItemsSectionId) ? "Collapse" : "Expand")</button>
                         </div>
                     </div>
                     @if (IsSectionExpanded(MaterialItemsSectionId))
                     {
-                        <BidMaterialTable Label="Material" Items="materialItems" MarkupPercent="SelectedBid.MarkupPercent" OnRemove="RemoveMaterial" OnChanged="RefreshBidView" />
+                        <BidMaterialTable Label="Material" Items="materialItems" MarkupPercent="SelectedBid.MarkupPercent" OnRemove="RemoveMaterial" OnChanged="RefreshBidView" GetRowElementId="GetMaterialItemElementId" />
+                        <div class="section-add-action">
+                            <button class="button button-secondary" type="button" @onclick="AddMaterial">Add Material</button>
+                        </div>
                         <div class="stats-inline"><span>Cost @EstimateMath.GetCurrency(EstimateMath.GetBidMaterialOnlyCost(SelectedBid))</span><span>Sale @EstimateMath.GetCurrency(EstimateMath.GetBidMaterialOnlySale(SelectedBid))</span></div>
                     }
                 </section>
 
                 <AttachmentManager Attachments="SelectedBid.Attachments" Area="bids" OwnerId="SelectedBid.Id" />
 
-                <section id="@BidNotesElementId" class="panel page-section-anchor">
+                <section id="@BidNotesElementId" class="panel page-section-anchor @(IsSectionExpanded(BidNotesSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div><p class="eyebrow">Notes</p><h3>Combined Notes</h3></div>
                         <button class="button button-secondary" type="button" @onclick='() => ToggleSection(BidNotesSectionId)'>@(IsSectionExpanded(BidNotesSectionId) ? "Collapse" : "Expand")</button>

@@ -65,6 +65,30 @@ public sealed class WorkspaceStore(
             ? null
             : Workspace.Templates.FirstOrDefault(template => template.Id == templateId.Value);
 
+    private LaborTemplate? ResolveJobTemplate(JobRecord job) =>
+        ResolveJobTemplate(Workspace, job);
+
+    private static LaborTemplate? ResolveJobTemplate(FyreWorksWorkspace workspace, JobRecord job)
+    {
+        if (job.SourceBidId is not null)
+        {
+            var sourceBid = workspace.Bids.FirstOrDefault(item => item.Id == job.SourceBidId.Value);
+            var sourceTemplate = sourceBid is null
+                ? null
+                : workspace.Templates.FirstOrDefault(template => template.Id == sourceBid.TemplateId);
+            if (sourceTemplate is not null)
+            {
+                return sourceTemplate;
+            }
+        }
+
+        return (workspace.Settings.DefaultTemplateId is null
+                ? null
+                : workspace.Templates.FirstOrDefault(template => template.Id == workspace.Settings.DefaultTemplateId.Value))
+            ?? workspace.Templates.FirstOrDefault(template => !template.IsArchived)
+            ?? workspace.Templates.FirstOrDefault();
+    }
+
     public ClientRecord CreateClient(string? name = null)
     {
         var client = new ClientRecord
@@ -114,7 +138,7 @@ public sealed class WorkspaceStore(
             }
         };
 
-        JobFinancialBuilder.EnsureJobDerivedData(job);
+        JobFinancialBuilder.EnsureJobDerivedData(job, ResolveJobTemplate(job));
         Workspace.Jobs.Insert(0, job);
         return job;
     }
@@ -208,7 +232,7 @@ public sealed class WorkspaceStore(
             ProposalClosing = bid.ProposalClosing
         };
 
-        JobFinancialBuilder.EnsureJobDerivedData(job);
+        JobFinancialBuilder.EnsureJobDerivedData(job, ResolveJobTemplate(job));
         Workspace.Jobs.Insert(0, job);
         bid.Status = "Awarded";
         return job;
@@ -618,6 +642,7 @@ public sealed class WorkspaceStore(
     private static void EnsureDefaults(FyreWorksWorkspace workspace)
     {
         workspace.Settings ??= new AppSettings();
+        workspace.Settings.SavedPersonnelNames ??= [];
         workspace.Settings.BidNumberCounters ??= [];
         workspace.Settings.JobNumberCounters ??= [];
         workspace.Clients ??= [];
@@ -625,6 +650,12 @@ public sealed class WorkspaceStore(
         workspace.Bids ??= [];
         workspace.Jobs ??= [];
         workspace.ServiceAgreements ??= [];
+        workspace.Settings.SavedPersonnelNames = workspace.Settings.SavedPersonnelNames
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name)
+            .ToList();
 
         NormalizeJobNumbers(workspace);
 
@@ -879,6 +910,7 @@ public sealed class WorkspaceStore(
             job.Baseline.LineItems ??= [];
             job.JobDevices ??= [];
             job.Invoices ??= [];
+            job.DailyLogs ??= [];
             job.TimeEntries ??= [];
             job.MaterialPurchases ??= [];
             job.ChangeOrders ??= [];
@@ -894,7 +926,7 @@ public sealed class WorkspaceStore(
                 }
             }
 
-            JobFinancialBuilder.EnsureJobDerivedData(job);
+            JobFinancialBuilder.EnsureJobDerivedData(job, ResolveJobTemplate(workspace, job));
         }
 
         foreach (var agreement in workspace.ServiceAgreements)
@@ -1066,7 +1098,7 @@ public sealed class WorkspaceStore(
             }
         }
 
-        JobFinancialBuilder.EnsureJobDerivedData(job);
+        JobFinancialBuilder.EnsureJobDerivedData(job, ResolveJobTemplate(job));
     }
 
     private static void RebalanceDistributionColumn(

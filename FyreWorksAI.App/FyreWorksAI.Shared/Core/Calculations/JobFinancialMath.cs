@@ -6,6 +6,17 @@ namespace FyreWorksAI.Shared.Core.Calculations;
 
 public static class JobFinancialMath
 {
+    private static readonly IReadOnlyList<string> BaseScheduleReferenceCodes =
+    [
+        JobCostCodes.Admin,
+        JobCostCodes.Engineering,
+        JobCostCodes.Materials,
+        JobCostCodes.Install,
+        JobCostCodes.Demo,
+        JobCostCodes.Trim,
+        JobCostCodes.Test
+    ];
+
     public static decimal GetMaterialPurchaseSubtotal(JobMaterialPurchase purchase)
     {
         var quantity = purchase.Quantity <= 0m ? 1m : purchase.Quantity;
@@ -39,12 +50,69 @@ public static class JobFinancialMath
     public static decimal GetTrackedJobDeviceActualCost(JobRecord job) =>
         EstimateMath.RoundCurrency(job.JobDevices.Sum(item => item.ActualCost));
 
+    public static decimal GetTrackedChangeOrderDeviceActualCost(JobRecord job) =>
+        EstimateMath.RoundCurrency(job.ChangeOrders.Sum(changeOrder => changeOrder.DeviceItems.Sum(item => item.ActualCost)));
+
+    public static decimal GetChangeOrderEstimatedMaterialCost(ChangeOrderRecord changeOrder) =>
+        EstimateMath.RoundCurrency(changeOrder.DeviceItems.Sum(item => item.EstimatedCost));
+
+    public static decimal GetChangeOrderEstimatedMaterialSale(ChangeOrderRecord changeOrder) =>
+        EstimateMath.RoundCurrency(changeOrder.DeviceItems.Sum(item => item.EstimatedSale));
+
+    public static decimal GetChangeOrderActualMaterialCost(ChangeOrderRecord changeOrder) =>
+        EstimateMath.RoundCurrency(changeOrder.DeviceItems.Sum(item => item.ActualCost));
+
+    public static decimal GetChangeOrderEstimatedDirectLaborCost(ChangeOrderRecord changeOrder) =>
+        EstimateMath.RoundCurrency(changeOrder.EstimatedLaborHours * changeOrder.DirectLaborRate);
+
+    public static decimal GetChangeOrderEstimatedBilledLaborAmount(ChangeOrderRecord changeOrder) =>
+        EstimateMath.RoundCurrency(changeOrder.EstimatedLaborHours * changeOrder.BilledLaborRate);
+
+    public static decimal GetChangeOrderCalculatedSale(ChangeOrderRecord changeOrder) =>
+        EstimateMath.RoundCurrency(
+            Math.Max(0m, changeOrder.AdditionalEstimatedCost) +
+            GetChangeOrderEstimatedBilledLaborAmount(changeOrder) +
+            GetChangeOrderEstimatedMaterialSale(changeOrder));
+
+    public static decimal GetChangeOrderActualLaborHours(JobRecord job, Guid changeOrderId) =>
+        EstimateMath.RoundHours(job.TimeEntries
+            .Where(entry => entry.ChangeOrderId == changeOrderId)
+            .Sum(entry => entry.Hours));
+
+    public static decimal GetChangeOrderActualLaborCost(JobRecord job, Guid changeOrderId) =>
+        EstimateMath.RoundCurrency(job.TimeEntries
+            .Where(entry => entry.ChangeOrderId == changeOrderId)
+            .Sum(entry => entry.TotalCost));
+
+    public static decimal GetTrackedChangeOrderActualCost(JobRecord job, Guid changeOrderId)
+    {
+        var changeOrder = job.ChangeOrders.FirstOrDefault(item => item.Id == changeOrderId);
+        if (changeOrder is null)
+        {
+            return 0m;
+        }
+
+        return EstimateMath.RoundCurrency(
+            GetChangeOrderActualLaborCost(job, changeOrderId) +
+            GetChangeOrderActualMaterialCost(changeOrder));
+    }
+
+    public static decimal GetChangeOrderEstimatedCost(ChangeOrderRecord changeOrder) =>
+        EstimateMath.RoundCurrency(
+            Math.Max(0m, changeOrder.AdditionalEstimatedCost) +
+            GetChangeOrderEstimatedDirectLaborCost(changeOrder) +
+            GetChangeOrderEstimatedMaterialCost(changeOrder));
+
     public static decimal GetInvoiceLinkedActualCost(JobRecord job, Guid invoiceId) =>
         EstimateMath.RoundCurrency(
             job.Baseline.LineItems
                 .Where(item => item.InvoiceId == invoiceId)
                 .Sum(item => item.ActualCost) +
             job.JobDevices
+                .Where(item => item.InvoiceId == invoiceId)
+                .Sum(item => item.ActualCost) +
+            job.ChangeOrders
+                .SelectMany(changeOrder => changeOrder.DeviceItems)
                 .Where(item => item.InvoiceId == invoiceId)
                 .Sum(item => item.ActualCost));
 
@@ -63,19 +131,37 @@ public static class JobFinancialMath
             _ => 0m
         };
 
-    public static decimal GetBaselineScheduledRevenue(BaselineEstimate baseline, string scheduleCode) =>
-        JobCostCodes.Normalize(scheduleCode) switch
+    public static decimal GetBaselineScheduledRevenue(BaselineEstimate baseline, string scheduleCode)
+    {
+        var adjustedReferences = GetAdjustedBaseScheduleReferences(baseline);
+        return JobCostCodes.Normalize(scheduleCode) switch
         {
-            JobCostCodes.Admin => EstimateMath.RoundCurrency(baseline.EstimatedAdminSale),
-            JobCostCodes.Engineering => EstimateMath.RoundCurrency(baseline.EstimatedEngineeringSale),
-            JobCostCodes.AdminEngineering => EstimateMath.RoundCurrency(baseline.EstimatedAdminSale + baseline.EstimatedEngineeringSale),
-            JobCostCodes.Materials => EstimateMath.RoundCurrency(baseline.EstimatedComponentSale + baseline.EstimatedWireSale + baseline.EstimatedMaterialOnlySale),
-            JobCostCodes.Install => EstimateMath.RoundCurrency(baseline.EstimatedInstallSale),
-            JobCostCodes.Demo => EstimateMath.RoundCurrency(baseline.EstimatedDemoSale),
-            JobCostCodes.Trim => EstimateMath.RoundCurrency(baseline.EstimatedTrimSale),
-            JobCostCodes.Test => EstimateMath.RoundCurrency(baseline.EstimatedTestSale),
+            JobCostCodes.Admin => adjustedReferences[JobCostCodes.Admin],
+            JobCostCodes.Engineering => adjustedReferences[JobCostCodes.Engineering],
+            JobCostCodes.AdminEngineering => EstimateMath.RoundCurrency(adjustedReferences[JobCostCodes.Admin] + adjustedReferences[JobCostCodes.Engineering]),
+            JobCostCodes.Materials => adjustedReferences[JobCostCodes.Materials],
+            JobCostCodes.Install => adjustedReferences[JobCostCodes.Install],
+            JobCostCodes.Demo => adjustedReferences[JobCostCodes.Demo],
+            JobCostCodes.Trim => adjustedReferences[JobCostCodes.Trim],
+            JobCostCodes.Test => adjustedReferences[JobCostCodes.Test],
             _ => 0m
         };
+    }
+
+    public static decimal GetBaselineScheduledRevenueTotal(BaselineEstimate baseline)
+    {
+        var rawTotal = EstimateMath.RoundCurrency(
+            baseline.EstimatedAdminSale +
+            baseline.EstimatedEngineeringSale +
+            baseline.EstimatedComponentSale +
+            baseline.EstimatedWireSale +
+            baseline.EstimatedMaterialOnlySale +
+            baseline.EstimatedInstallSale +
+            baseline.EstimatedDemoSale +
+            baseline.EstimatedTrimSale +
+            baseline.EstimatedTestSale);
+        return EstimateMath.RoundCurrency(baseline.OriginalRevenue > 0m ? baseline.OriginalRevenue : rawTotal);
+    }
 
     public static decimal GetBaselineScheduledCost(BaselineEstimate baseline, string scheduleCode) =>
         JobCostCodes.Normalize(scheduleCode) switch
@@ -124,4 +210,67 @@ public static class JobFinancialMath
 
     public static decimal GetBidAllocatedPhaseHours(BidRecord bid, Func<BidLaborDistributionLine, decimal> selector) =>
         EstimateMath.RoundHours(bid.LaborDistribution.Sum(selector));
+
+    private static Dictionary<string, decimal> GetAdjustedBaseScheduleReferences(BaselineEstimate baseline)
+    {
+        var rawReferences = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+        {
+            [JobCostCodes.Admin] = EstimateMath.RoundCurrency(baseline.EstimatedAdminSale),
+            [JobCostCodes.Engineering] = EstimateMath.RoundCurrency(baseline.EstimatedEngineeringSale),
+            [JobCostCodes.Materials] = EstimateMath.RoundCurrency(baseline.EstimatedComponentSale + baseline.EstimatedWireSale + baseline.EstimatedMaterialOnlySale),
+            [JobCostCodes.Install] = EstimateMath.RoundCurrency(baseline.EstimatedInstallSale),
+            [JobCostCodes.Demo] = EstimateMath.RoundCurrency(baseline.EstimatedDemoSale),
+            [JobCostCodes.Trim] = EstimateMath.RoundCurrency(baseline.EstimatedTrimSale),
+            [JobCostCodes.Test] = EstimateMath.RoundCurrency(baseline.EstimatedTestSale)
+        };
+
+        var rawTotal = EstimateMath.RoundCurrency(rawReferences.Values.Sum());
+        var targetTotal = GetBaselineScheduledRevenueTotal(baseline);
+        if (rawTotal <= 0m || targetTotal <= 0m || Math.Abs(rawTotal - targetTotal) < 0.01m)
+        {
+            return rawReferences;
+        }
+
+        var adjustedReferences = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        var codesWithValue = BaseScheduleReferenceCodes
+            .Where(code => rawReferences[code] > 0m)
+            .ToList();
+        if (codesWithValue.Count == 0)
+        {
+            return rawReferences;
+        }
+
+        var lastCode = codesWithValue[^1];
+        var remainingRawTotal = rawTotal;
+        var remainingTargetTotal = targetTotal;
+
+        foreach (var code in BaseScheduleReferenceCodes)
+        {
+            var rawValue = rawReferences[code];
+            if (rawValue <= 0m)
+            {
+                adjustedReferences[code] = 0m;
+                continue;
+            }
+
+            decimal adjustedValue;
+            if (code == lastCode)
+            {
+                adjustedValue = EstimateMath.RoundCurrency(Math.Max(0m, remainingTargetTotal));
+            }
+            else
+            {
+                adjustedValue = remainingRawTotal <= 0m
+                    ? 0m
+                    : EstimateMath.RoundCurrency((rawValue / remainingRawTotal) * remainingTargetTotal);
+                adjustedValue = EstimateMath.RoundCurrency(Math.Min(Math.Max(0m, adjustedValue), remainingTargetTotal));
+            }
+
+            adjustedReferences[code] = adjustedValue;
+            remainingRawTotal = EstimateMath.RoundCurrency(Math.Max(0m, remainingRawTotal - rawValue));
+            remainingTargetTotal = EstimateMath.RoundCurrency(Math.Max(0m, remainingTargetTotal - adjustedValue));
+        }
+
+        return adjustedReferences;
+    }
 }

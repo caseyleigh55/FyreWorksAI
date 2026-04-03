@@ -26,6 +26,9 @@ public partial class BidTaskTable
     [Parameter]
     public EventCallback OnChanged { get; set; }
 
+    [Parameter]
+    public Func<WorkTask, string>? GetRowElementId { get; set; }
+
     private decimal GetCost(WorkTask task) =>
         Administrative
             ? EstimateMath.GetWorkTaskCost(task, Bid.AdminDirectRate)
@@ -63,6 +66,9 @@ public partial class BidTaskTable
 
         await NotifyChanged();
     }
+
+    private string? ResolveRowElementId(WorkTask task) =>
+        GetRowElementId?.Invoke(task);
 
     private Task NotifyChanged() => OnChanged.InvokeAsync();
 }

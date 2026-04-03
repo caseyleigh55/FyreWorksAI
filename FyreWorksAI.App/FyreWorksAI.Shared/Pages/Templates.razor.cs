@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
+using FyreWorksAI.Shared.Core.Services.Status;
 
 namespace FyreWorksAI.Shared.Pages;
 
@@ -10,9 +11,12 @@ namespace FyreWorksAI.Shared.Pages;
 //******************************//
 public partial class Templates
 {
+    [Inject]
+    private IJSRuntime JsRuntime { get; set; } = default!;
 
     private Guid? SelectedTemplateId { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
+    private string? PendingSectionElementId { get; set; }
     private bool IsDirectoryPanelExpanded { get; set; }
 
     private LaborTemplate? SelectedTemplate =>
@@ -24,6 +28,18 @@ public partial class Templates
     {
         await Store.InitializeAsync();
         SelectedTemplateId = Store.Workspace.Templates.FirstOrDefault()?.Id;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (string.IsNullOrWhiteSpace(PendingSectionElementId))
+        {
+            return;
+        }
+
+        var sectionElementId = PendingSectionElementId;
+        PendingSectionElementId = null;
+        await JsRuntime.InvokeVoidAsync("fyreWorksPageSectionNavigation.scrollToSection", sectionElementId);
     }
 
     private void SelectTemplate(Guid templateId)
@@ -38,7 +54,7 @@ public partial class Templates
         var template = Store.CreateTemplate();
         SelectedTemplateId = template.Id;
         CloseDirectoryPanel();
-        StatusMessage = "New template created.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp("New template created.");
         await Store.SaveAsync();
     }
 
@@ -51,7 +67,7 @@ public partial class Templates
     private async Task SaveAsync()
     {
         await Store.SaveAsync();
-        StatusMessage = "Template saved.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp("Template saved.");
     }
 
     private async Task SetDefaultTemplateAsync()
@@ -59,9 +75,23 @@ public partial class Templates
         if (SelectedTemplate is null) return;
         Store.Workspace.Settings.DefaultTemplateId = SelectedTemplate.Id;
         await Store.SaveAsync();
-        StatusMessage = "Default template updated.";
+        StatusMessage = StatusMessageFormatter.WithTimestamp("Default template updated.");
     }
 
-    private void AddRule() => SelectedTemplate?.Rules.Add(new LaborRule());
+    private void AddRule()
+    {
+        if (SelectedTemplate is null)
+        {
+            return;
+        }
+
+        var rule = new LaborRule();
+        SelectedTemplate.Rules.Add(rule);
+        PendingSectionElementId = GetRuleElementId(rule.Id);
+    }
+
+    private static string GetRuleElementId(Guid ruleId) =>
+        $"template-rule-{ruleId:N}";
+
     private void RemoveRule(Guid ruleId) => SelectedTemplate?.Rules.RemoveAll(rule => rule.Id == ruleId);
 }
