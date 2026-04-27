@@ -11,7 +11,7 @@
     --accent: #ff7a2f;
     --accent-soft: rgba(255, 122, 47, 0.15);
     --success: #4cc38a;
-    --danger: #ff8070;
+    --danger: #c9857f;
     --shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
     --radius-lg: 24px;
     --radius-md: 18px;
@@ -363,9 +363,9 @@ button:disabled {
 }
 
 .button.button-danger {
-    background: rgba(255, 128, 112, 0.08);
-    border-color: rgba(255, 128, 112, 0.35);
-    color: #ffd7d0;
+    background: linear-gradient(135deg, rgba(92, 34, 36, 0.94), rgba(120, 52, 49, 0.94));
+    border-color: rgba(201, 133, 127, 0.38);
+    color: #f2d7d3;
 }
 
 .text-link,

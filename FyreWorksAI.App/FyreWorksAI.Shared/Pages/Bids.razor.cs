@@ -174,6 +174,25 @@ public partial class Bids : IDisposable
         StatusMessage = StatusMessageFormatter.WithTimestamp("Bid saved.");
     }
 
+    private async Task DuplicateBidAsync()
+    {
+        if (SelectedBid is null)
+        {
+            return;
+        }
+
+        var duplicatedBid = Store.DuplicateBid(SelectedBid);
+        SelectedBidId = duplicatedBid.Id;
+        CollapseAllSections();
+        ExpandedComponentIds.Clear();
+        CloseDirectoryPanel();
+        PendingSectionElementId = null;
+        RefreshPageSectionNavigation();
+        await Store.SaveAsync();
+        StatusMessage = StatusMessageFormatter.WithTimestamp($"Bid duplicated to {duplicatedBid.BidNumber}.");
+        NavigationManager.NavigateTo($"/bids?selected={duplicatedBid.Id}", replace: true);
+    }
+
     private async Task DeleteBidAsync()
     {
         if (SelectedBid is null)

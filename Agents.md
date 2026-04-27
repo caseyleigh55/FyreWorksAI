@@ -76,6 +76,7 @@ These are recurring preferences that should be treated as the default product di
 ## Numbering + Navigation Rules
 
 - Bid numbers use the bid format system and default to `BID-YY-NNNN`
+- Duplicated bids keep the original bid number root and append an incrementing `-N` suffix, even when duplicating an existing duplicate
 - Job numbers should use `JOB-YY-NNNN`
 - Legacy long-form job numbers are normalized into `JOB-YY-NNNN`
 - Jobs converted from bids should retain a reference back to the source bid
@@ -173,11 +174,13 @@ These are important decisions already reflected in the app:
 - Compact-expand notes behavior
 - Collapsible invoices and change orders
 - Change-order attachments
+- Bid duplication keeps the full bid content and creates a new incremented duplicate bid number
 - Job baseline revenue sourced from accepted bid sale
 - Bid page linked-job navigation shows the actual destination job number
 - SOV line reference values and child progress entries
 - SOV totals footer
 - Job number normalization to `JOB-YY-NNNN`
+- Delete actions use a subdued dark-red danger treatment
 
 ## Remembered Backlog / Direction From `Jobs.md`
 

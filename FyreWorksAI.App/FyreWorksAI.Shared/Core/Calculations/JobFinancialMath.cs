@@ -131,6 +131,23 @@ public static class JobFinancialMath
             _ => 0m
         };
 
+    public static decimal GetBaselineBidSaleReference(BaselineEstimate baseline, string scheduleCode)
+    {
+        var rawReferences = GetRawBaseScheduleReferences(baseline);
+        return JobCostCodes.Normalize(scheduleCode) switch
+        {
+            JobCostCodes.Admin => rawReferences[JobCostCodes.Admin],
+            JobCostCodes.Engineering => rawReferences[JobCostCodes.Engineering],
+            JobCostCodes.AdminEngineering => EstimateMath.RoundCurrency(rawReferences[JobCostCodes.Admin] + rawReferences[JobCostCodes.Engineering]),
+            JobCostCodes.Materials => rawReferences[JobCostCodes.Materials],
+            JobCostCodes.Install => rawReferences[JobCostCodes.Install],
+            JobCostCodes.Demo => rawReferences[JobCostCodes.Demo],
+            JobCostCodes.Trim => rawReferences[JobCostCodes.Trim],
+            JobCostCodes.Test => rawReferences[JobCostCodes.Test],
+            _ => 0m
+        };
+    }
+
     public static decimal GetBaselineScheduledRevenue(BaselineEstimate baseline, string scheduleCode)
     {
         var adjustedReferences = GetAdjustedBaseScheduleReferences(baseline);
@@ -211,9 +228,8 @@ public static class JobFinancialMath
     public static decimal GetBidAllocatedPhaseHours(BidRecord bid, Func<BidLaborDistributionLine, decimal> selector) =>
         EstimateMath.RoundHours(bid.LaborDistribution.Sum(selector));
 
-    private static Dictionary<string, decimal> GetAdjustedBaseScheduleReferences(BaselineEstimate baseline)
-    {
-        var rawReferences = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+    private static Dictionary<string, decimal> GetRawBaseScheduleReferences(BaselineEstimate baseline) =>
+        new(StringComparer.OrdinalIgnoreCase)
         {
             [JobCostCodes.Admin] = EstimateMath.RoundCurrency(baseline.EstimatedAdminSale),
             [JobCostCodes.Engineering] = EstimateMath.RoundCurrency(baseline.EstimatedEngineeringSale),
@@ -224,6 +240,9 @@ public static class JobFinancialMath
             [JobCostCodes.Test] = EstimateMath.RoundCurrency(baseline.EstimatedTestSale)
         };
 
+    private static Dictionary<string, decimal> GetAdjustedBaseScheduleReferences(BaselineEstimate baseline)
+    {
+        var rawReferences = GetRawBaseScheduleReferences(baseline);
         var rawTotal = EstimateMath.RoundCurrency(rawReferences.Values.Sum());
         var targetTotal = GetBaselineScheduledRevenueTotal(baseline);
         if (rawTotal <= 0m || targetTotal <= 0m || Math.Abs(rawTotal - targetTotal) < 0.01m)

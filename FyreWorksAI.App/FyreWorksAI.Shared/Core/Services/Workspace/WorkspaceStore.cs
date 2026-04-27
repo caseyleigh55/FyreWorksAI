@@ -24,7 +24,6 @@ public sealed class WorkspaceStore(
     private static readonly Regex LegacyJobNumberPattern = new(
         @"^JOB-(?<date>\d{8})-(?<sequence>\d{3,4})$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-
     public FyreWorksWorkspace Workspace { get; private set; } = new();
     public bool IsInitialized { get; private set; }
     public string DataFilePath => storage.DataFilePath;
@@ -122,6 +121,18 @@ public sealed class WorkspaceStore(
 
         Workspace.Bids.Insert(0, bid);
         return bid;
+    }
+
+    public BidRecord DuplicateBid(BidRecord sourceBid)
+    {
+        var duplicatedBid = Clone(sourceBid);
+        duplicatedBid.Id = Guid.NewGuid();
+        duplicatedBid.BidNumber = GenerateDuplicatedBidNumber(sourceBid);
+        ResetBidItemIdentifiers(duplicatedBid);
+        CopyBidAttachments(sourceBid, duplicatedBid);
+
+        Workspace.Bids.Insert(0, duplicatedBid);
+        return duplicatedBid;
     }
 
     public JobRecord CreateBlankJob()
@@ -527,6 +538,23 @@ public sealed class WorkspaceStore(
         return current;
     }
 
+    private string GenerateDuplicatedBidNumber(BidRecord sourceBid)
+    {
+        var normalizedSourceBidNumber = string.IsNullOrWhiteSpace(sourceBid.BidNumber)
+            ? "BID"
+            : sourceBid.BidNumber.Trim();
+        var bidNumberSequenceDigitCount = GetBidNumberSequenceDigitCount(sourceBid.TemplateId);
+        var bidNumberRoot = GetBidNumberRoot(normalizedSourceBidNumber, bidNumberSequenceDigitCount);
+        var nextCopySequence = Workspace.Bids
+            .Select(bid => TryGetBidDuplicateSequence(bid.BidNumber, bidNumberRoot, bidNumberSequenceDigitCount))
+            .Where(copySequence => copySequence.HasValue)
+            .Select(copySequence => copySequence!.Value)
+            .DefaultIfEmpty(0)
+            .Max() + 1;
+
+        return $"{bidNumberRoot}-{nextCopySequence}";
+    }
+
     private int GetNextJobSequence(int year)
     {
         Workspace.Settings.JobNumberCounters ??= [];
@@ -630,6 +658,136 @@ public sealed class WorkspaceStore(
     {
         var json = JsonSerializer.Serialize(value, CloneOptions);
         return JsonSerializer.Deserialize<T>(json, CloneOptions)!;
+    }
+
+    private void CopyBidAttachments(BidRecord sourceBid, BidRecord duplicatedBid)
+    {
+        duplicatedBid.Attachments = [];
+        if (sourceBid.Attachments.Count == 0)
+        {
+            return;
+        }
+
+        var sourceDirectory = Path.Combine(AttachmentRootPath, "bids", sourceBid.Id.ToString("N"));
+        var targetDirectory = Path.Combine(AttachmentRootPath, "bids", duplicatedBid.Id.ToString("N"));
+
+        foreach (var sourceAttachment in sourceBid.Attachments)
+        {
+            var duplicatedAttachment = Clone(sourceAttachment);
+            duplicatedAttachment.Id = Guid.NewGuid();
+            duplicatedAttachment.RelativePath = Path.Combine("bids", duplicatedBid.Id.ToString("N"), sourceAttachment.StoredFileName);
+            duplicatedBid.Attachments.Add(duplicatedAttachment);
+
+            var sourceFullPath = Path.Combine(sourceDirectory, sourceAttachment.StoredFileName);
+            if (!File.Exists(sourceFullPath))
+            {
+                continue;
+            }
+
+            Directory.CreateDirectory(targetDirectory);
+            var targetFullPath = Path.Combine(targetDirectory, sourceAttachment.StoredFileName);
+            File.Copy(sourceFullPath, targetFullPath, overwrite: true);
+        }
+    }
+
+    private int GetBidNumberSequenceDigitCount(Guid? templateId) =>
+        GetBidNumberSequenceDigitCount(GetTemplate(templateId)?.BidNumberFormat);
+
+    private static int GetBidNumberSequenceDigitCount(string? bidNumberFormat)
+    {
+        var format = string.IsNullOrWhiteSpace(bidNumberFormat)
+            ? "BID-YY-NNNN"
+            : bidNumberFormat.Trim();
+        var firstN = format.IndexOf('N');
+        if (firstN < 0)
+        {
+            return 4;
+        }
+
+        var count = 0;
+        for (var index = firstN; index < format.Length && format[index] == 'N'; index++)
+        {
+            count++;
+        }
+
+        return Math.Max(1, count);
+    }
+
+    private static string GetBidNumberRoot(string bidNumber, int bidNumberSequenceDigitCount)
+    {
+        var normalizedBidNumber = bidNumber.Trim();
+        var duplicateMatch = Regex.Match(
+            normalizedBidNumber,
+            $@"^(?<root>.+-\d{{{Math.Max(1, bidNumberSequenceDigitCount)}}})(?:-(?<copy>\d+))?$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return duplicateMatch.Success
+            ? duplicateMatch.Groups["root"].Value
+            : normalizedBidNumber;
+    }
+
+    private static int? TryGetBidDuplicateSequence(string? bidNumber, string bidNumberRoot, int bidNumberSequenceDigitCount)
+    {
+        if (string.IsNullOrWhiteSpace(bidNumber))
+        {
+            return null;
+        }
+
+        var normalizedBidNumber = bidNumber.Trim();
+        if (string.Equals(normalizedBidNumber, bidNumberRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        var duplicateMatch = Regex.Match(
+            normalizedBidNumber,
+            $@"^(?<root>.+-\d{{{Math.Max(1, bidNumberSequenceDigitCount)}}})(?:-(?<copy>\d+))?$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!duplicateMatch.Success)
+        {
+            return null;
+        }
+
+        if (!string.Equals(duplicateMatch.Groups["root"].Value, bidNumberRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return int.TryParse(duplicateMatch.Groups["copy"].Value, CultureInfo.InvariantCulture, out var copySequence)
+            ? copySequence
+            : null;
+    }
+
+    private static void ResetBidItemIdentifiers(BidRecord bid)
+    {
+        foreach (var laborDistributionLine in bid.LaborDistribution)
+        {
+            laborDistributionLine.Id = Guid.NewGuid();
+        }
+
+        foreach (var administrativeTask in bid.AdministrativeTasks)
+        {
+            administrativeTask.Id = Guid.NewGuid();
+        }
+
+        foreach (var engineeringTask in bid.EngineeringTasks)
+        {
+            engineeringTask.Id = Guid.NewGuid();
+        }
+
+        foreach (var demoItem in bid.DemoItems)
+        {
+            demoItem.Id = Guid.NewGuid();
+        }
+
+        foreach (var component in bid.Components)
+        {
+            component.Id = Guid.NewGuid();
+        }
+
+        foreach (var material in bid.Materials)
+        {
+            material.Id = Guid.NewGuid();
+        }
     }
 
     private static FyreWorksWorkspace CreateDefaultWorkspace()
