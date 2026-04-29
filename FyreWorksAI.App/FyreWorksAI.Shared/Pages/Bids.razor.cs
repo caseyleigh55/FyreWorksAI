@@ -67,6 +67,8 @@ public partial class Bids : IDisposable
 
     private Guid? SelectedBidId { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
+    private bool IsProposalExportDialogOpen { get; set; }
+    private string ProposalExportFileName { get; set; } = string.Empty;
     private string? ActiveMainSectionId { get; set; }
     private string? PendingSectionElementId { get; set; }
     private HashSet<string> ExpandedSectionIds { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -238,9 +240,32 @@ public partial class Bids : IDisposable
     private async Task ExportProposalAsync()
     {
         if (SelectedBid is null) return;
+        ProposalExportFileName = BuildDefaultProposalExportFileName(SelectedBid);
+        IsProposalExportDialogOpen = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void CancelProposalExport()
+    {
+        IsProposalExportDialogOpen = false;
+        ProposalExportFileName = string.Empty;
+    }
+
+    private async Task ConfirmProposalExportAsync()
+    {
+        if (SelectedBid is null)
+        {
+            CancelProposalExport();
+            return;
+        }
+
         await Store.SaveAsync();
-        var path = await Store.ExportBidProposalAsync(SelectedBid);
-        StatusMessage = StatusMessageFormatter.WithTimestamp($"Proposal export created at {path}.");
+        var path = await Store.ExportBidProposalAsync(SelectedBid, ProposalExportFileName);
+        CancelProposalExport();
+        StatusMessage = StatusMessageFormatter.WithTimestamp(
+            path.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)
+                ? $"Proposal PDF created at {path}."
+                : $"Proposal document created at {path}. PDF export was unavailable, so an HTML file was created instead.");
     }
 
     private async Task ConvertToJobAsync()
@@ -345,6 +370,18 @@ public partial class Bids : IDisposable
         string.IsNullOrWhiteSpace(job.JobNumber)
             ? "To Job"
             : $"To {job.JobNumber.Trim()}";
+
+    private string BuildDefaultProposalExportFileName(BidRecord bid)
+    {
+        var projectName = string.IsNullOrWhiteSpace(bid.ProjectName)
+            ? (!string.IsNullOrWhiteSpace(bid.BidNumber) ? bid.BidNumber.Trim() : "Proposal")
+            : bid.ProjectName.Trim();
+        var companyName = Store.Workspace.Settings.ProposalCompanyName?.Trim() ?? string.Empty;
+
+        return string.IsNullOrWhiteSpace(companyName)
+            ? $"{projectName} Proposal"
+            : $"{projectName} Proposal {companyName}";
+    }
 
     private void AddAdministrativeTask()
     {

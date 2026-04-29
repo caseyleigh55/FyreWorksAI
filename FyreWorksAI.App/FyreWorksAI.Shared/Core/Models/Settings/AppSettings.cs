@@ -13,6 +13,13 @@ public enum StorageMode
 
 public sealed class AppSettings
 {
+    public string ProposalCompanyName { get; set; } = string.Empty;
+    public string ProposalCompanyLicenseNumber { get; set; } = string.Empty;
+    public string ProposalCompanyAddress { get; set; } = string.Empty;
+    public string ProposalCompanyPhoneNumber { get; set; } = string.Empty;
+    public string ProposalCompanyEmail { get; set; } = string.Empty;
+    public string ProposalLogoRelativePath { get; set; } = string.Empty;
+    public string ProposalLogoOriginalFileName { get; set; } = string.Empty;
     public StorageMode StorageMode { get; set; } = StorageMode.TextFile;
     public string StorageNotes { get; set; } = "Text-file storage is active today. The repository contracts are ready for future SQLite or SQL Server adapters when you want to expand beyond flat files.";
     public Guid? DefaultTemplateId { get; set; }

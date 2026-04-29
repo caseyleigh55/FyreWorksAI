@@ -51,6 +51,16 @@ else
                 </div>
                 <div class="list-row storage-path-row">
                     <div class="storage-path-copy">
+                        <strong>Branding</strong>
+                        <span>@Store.BrandingRootPath</span>
+                    </div>
+                    @if (Store.CanOpenStorageLocations)
+                    {
+                        <button class="button button-secondary" type="button" @onclick="OpenBrandingDirectoryAsync">Open Folder</button>
+                    }
+                </div>
+                <div class="list-row storage-path-row">
+                    <div class="storage-path-copy">
                         <strong>Exports</strong>
                         <span>@Store.ExportRootPath</span>
                     </div>
@@ -118,6 +128,85 @@ else
                 <span>Storage Notes</span>
                 <textarea rows="3" @bind="Store.Workspace.Settings.StorageNotes"></textarea>
             </label>
+        </article>
+
+        <article class="panel">
+            <div class="panel-header">
+                <div>
+                    <p class="eyebrow">Proposal branding</p>
+                    <h2>Logo + Company Footer</h2>
+                </div>
+                <div class="button-row">
+                    @if (Store.CanPickAttachments)
+                    {
+                        <button class="button button-secondary" type="button" @onclick="SelectProposalLogoAsync">Choose Logo</button>
+                    }
+                    @if (HasProposalLogo)
+                    {
+                        <button class="button button-secondary" type="button" @onclick="RemoveProposalLogoAsync">Remove Logo</button>
+                    }
+                    <button class="button" type="button" @onclick="SaveAsync">Save Settings</button>
+                </div>
+            </div>
+
+            <p class="muted">The proposal export places the logo above the proposal content and uses the company details below as the sendable footer.</p>
+
+            <div class="branding-preview-grid">
+                @if (!string.IsNullOrWhiteSpace(ProposalLogoPreviewDataUri))
+                {
+                    <div class="proposal-logo-preview-shell">
+                        <img class="proposal-logo-preview-image" src="@ProposalLogoPreviewDataUri" alt="Proposal logo preview" />
+                    </div>
+                }
+                else
+                {
+                    <div class="branding-empty-state">
+                        <strong>No logo selected</strong>
+                        <p class="muted small">Add a PNG, JPG, SVG, GIF, BMP, or WEBP logo to place it above the proposal header.</p>
+                    </div>
+                }
+
+                <div class="list-stack compact">
+                    <div class="list-row">
+                        <div class="storage-path-copy">
+                            <strong>Stored Logo</strong>
+                            <span>@(string.IsNullOrWhiteSpace(Store.Workspace.Settings.ProposalLogoOriginalFileName) ? "No file saved yet." : Store.Workspace.Settings.ProposalLogoOriginalFileName)</span>
+                        </div>
+                    </div>
+                    @if (!Store.CanPickAttachments)
+                    {
+                        <div class="list-row">
+                            <div class="storage-path-copy">
+                                <strong>Logo Upload</strong>
+                                <span>Logo selection is currently available in the desktop app host.</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="form-grid two-columns">
+                <label>
+                    <span>Company Name</span>
+                    <input @bind="Store.Workspace.Settings.ProposalCompanyName" />
+                </label>
+                <label>
+                    <span>License Number</span>
+                    <input @bind="Store.Workspace.Settings.ProposalCompanyLicenseNumber" />
+                </label>
+                <label>
+                    <span>Phone Number</span>
+                    <input @bind="Store.Workspace.Settings.ProposalCompanyPhoneNumber" />
+                </label>
+                <label>
+                    <span>Email</span>
+                    <input type="email" @bind="Store.Workspace.Settings.ProposalCompanyEmail" />
+                </label>
+                <label class="full-width">
+                    <span>Address</span>
+                    <textarea rows="2" @bind="Store.Workspace.Settings.ProposalCompanyAddress"></textarea>
+                </label>
+            </div>
         </article>
 
         <article class="panel">

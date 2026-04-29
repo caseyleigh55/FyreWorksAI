@@ -8,6 +8,6 @@ public interface IAttachmentService
 {
     bool SupportsPicking { get; }
     bool SupportsOpening { get; }
-    Task<IReadOnlyList<PickedFile>> PickFilesAsync();
+    Task<IReadOnlyList<PickedFile>> PickFilesAsync(string pickerTitle = "Select files");
     Task OpenAsync(string fullPath);
 }

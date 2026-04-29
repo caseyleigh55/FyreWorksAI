@@ -9,6 +9,7 @@ namespace FyreWorksAI.Shared.Core.Services.Workspace;
 //******** Workspace ***********//
 //******************************//
 public sealed class WorkspaceStore(
+    IProposalDocumentExporter proposalDocumentExporter,
     IWorkspaceStorage storage,
     IStoragePathResolver pathResolver,
     IAttachmentService attachmentService,
@@ -24,11 +25,22 @@ public sealed class WorkspaceStore(
     private static readonly Regex LegacyJobNumberPattern = new(
         @"^JOB-(?<date>\d{8})-(?<sequence>\d{3,4})$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly HashSet<string> SupportedProposalLogoExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".bmp",
+        ".webp",
+        ".svg"
+    };
     public FyreWorksWorkspace Workspace { get; private set; } = new();
     public bool IsInitialized { get; private set; }
     public string DataFilePath => storage.DataFilePath;
     public string RootDirectory => pathResolver.GetRootDirectory();
     public string AttachmentRootPath => Path.Combine(RootDirectory, "attachments");
+    public string BrandingRootPath => Path.Combine(RootDirectory, "branding");
     public string ExportRootPath => Path.Combine(RootDirectory, "exports");
     public string BackupRootPath => Path.Combine(RootDirectory, "backups");
     public bool CanPickAttachments => attachmentService.SupportsPicking;
@@ -416,6 +428,72 @@ public sealed class WorkspaceStore(
         attachments.RemoveAll(existing => existing.Id == attachment.Id);
     }
 
+    public async Task<string?> SaveProposalLogoAsync()
+    {
+        if (!attachmentService.SupportsPicking)
+        {
+            return null;
+        }
+
+        var pickedFiles = await attachmentService.PickFilesAsync("Select a proposal logo image");
+        var selectedLogo = pickedFiles.FirstOrDefault(IsSupportedProposalLogoFile);
+        if (selectedLogo is null || string.IsNullOrWhiteSpace(selectedLogo.SourcePath) || !File.Exists(selectedLogo.SourcePath))
+        {
+            return null;
+        }
+
+        Directory.CreateDirectory(BrandingRootPath);
+
+        var currentRelativePath = Workspace.Settings.ProposalLogoRelativePath;
+        var extension = Path.GetExtension(selectedLogo.FileName);
+        var storedFileName = $"proposal-logo{extension.ToLowerInvariant()}";
+        var nextRelativePath = Path.Combine("branding", storedFileName);
+        var destinationPath = Path.Combine(RootDirectory, nextRelativePath);
+
+        File.Copy(selectedLogo.SourcePath, destinationPath, overwrite: true);
+
+        if (!string.IsNullOrWhiteSpace(currentRelativePath) &&
+            !string.Equals(currentRelativePath, nextRelativePath, StringComparison.OrdinalIgnoreCase))
+        {
+            DeleteWorkspaceFile(currentRelativePath);
+        }
+
+        Workspace.Settings.ProposalLogoRelativePath = nextRelativePath;
+        Workspace.Settings.ProposalLogoOriginalFileName = selectedLogo.FileName.Trim();
+        return destinationPath;
+    }
+
+    public void RemoveProposalLogo()
+    {
+        DeleteWorkspaceFile(Workspace.Settings.ProposalLogoRelativePath);
+        Workspace.Settings.ProposalLogoRelativePath = string.Empty;
+        Workspace.Settings.ProposalLogoOriginalFileName = string.Empty;
+    }
+
+    public string? GetProposalLogoDataUri()
+    {
+        var relativePath = Workspace.Settings.ProposalLogoRelativePath;
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            return null;
+        }
+
+        var fullPath = Path.Combine(RootDirectory, relativePath);
+        if (!File.Exists(fullPath))
+        {
+            return null;
+        }
+
+        var contentType = GetImageContentTypeFromPath(fullPath);
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            return null;
+        }
+
+        var bytes = File.ReadAllBytes(fullPath);
+        return $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
+    }
+
     public async Task<string> ExportJobCostReportAsync(JobRecord job)
     {
         Directory.CreateDirectory(ExportRootPath);
@@ -425,13 +503,17 @@ public sealed class WorkspaceStore(
         return fullPath;
     }
 
-    public async Task<string> ExportBidProposalAsync(BidRecord bid)
+    public async Task<string> ExportBidProposalAsync(BidRecord bid, string? requestedDocumentName = null)
     {
         Directory.CreateDirectory(ExportRootPath);
-        var fileName = $"{MakeSafeFileName(bid.BidNumber)}-proposal-{DateTime.Now:yyyyMMddHHmmss}.txt";
-        var fullPath = Path.Combine(ExportRootPath, fileName);
-        await File.WriteAllTextAsync(fullPath, JobFinancialBuilder.BuildBidProposal(bid, GetClient(bid.ClientId)));
-        return fullPath;
+        var defaultDocumentBaseFileName = $"{MakeSafeFileName(bid.BidNumber)}-proposal-{DateTime.Now:yyyyMMddHHmmss}";
+        var requestedBaseFileName = string.IsNullOrWhiteSpace(requestedDocumentName)
+            ? defaultDocumentBaseFileName
+            : MakeSafeFileName(requestedDocumentName.Trim());
+        var documentBaseFileName = GetUniqueProposalExportBaseFileName(requestedBaseFileName);
+        var brandingProfile = BuildProposalBrandingProfile();
+        var htmlDocument = BidProposalHtmlDocumentBuilder.BuildDocument(bid, GetClient(bid.ClientId), brandingProfile);
+        return await proposalDocumentExporter.ExportAsync(ExportRootPath, documentBaseFileName, htmlDocument);
     }
 
     public void SyncJobFinancials(JobRecord job) =>
@@ -478,6 +560,9 @@ public sealed class WorkspaceStore(
     public Task OpenAttachmentDirectoryAsync() =>
         OpenDirectoryAsync(AttachmentRootPath);
 
+    public Task OpenBrandingDirectoryAsync() =>
+        OpenDirectoryAsync(BrandingRootPath);
+
     public Task OpenExportDirectoryAsync() =>
         OpenDirectoryAsync(ExportRootPath);
 
@@ -518,6 +603,52 @@ public sealed class WorkspaceStore(
         {
             Directory.Delete(targetDirectory, recursive: true);
         }
+    }
+
+    private void DeleteWorkspaceFile(string relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            return;
+        }
+
+        var fullPath = Path.Combine(RootDirectory, relativePath);
+        if (File.Exists(fullPath))
+        {
+            File.Delete(fullPath);
+        }
+    }
+
+    private ProposalBrandingProfile BuildProposalBrandingProfile() =>
+        new()
+        {
+            CompanyName = Workspace.Settings.ProposalCompanyName.Trim(),
+            CompanyLicenseNumber = Workspace.Settings.ProposalCompanyLicenseNumber.Trim(),
+            CompanyAddress = Workspace.Settings.ProposalCompanyAddress.Trim(),
+            CompanyPhoneNumber = Workspace.Settings.ProposalCompanyPhoneNumber.Trim(),
+            CompanyEmail = Workspace.Settings.ProposalCompanyEmail.Trim(),
+            ProposalLogoDataUri = GetProposalLogoDataUri() ?? string.Empty
+        };
+
+    private static bool IsSupportedProposalLogoFile(PickedFile pickedFile)
+    {
+        var extension = Path.GetExtension(pickedFile.FileName);
+        return !string.IsNullOrWhiteSpace(extension) && SupportedProposalLogoExtensions.Contains(extension);
+    }
+
+    private static string GetImageContentTypeFromPath(string fullPath)
+    {
+        var extension = Path.GetExtension(fullPath);
+        return extension.ToLowerInvariant() switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".bmp" => "image/bmp",
+            ".webp" => "image/webp",
+            ".svg" => "image/svg+xml",
+            _ => string.Empty
+        };
     }
 
     private int GetNextBidSequence(int year)
@@ -652,6 +783,25 @@ public sealed class WorkspaceStore(
         }
 
         return builder.ToString();
+    }
+
+    private string GetUniqueProposalExportBaseFileName(string requestedBaseFileName)
+    {
+        var normalizedBaseFileName = string.IsNullOrWhiteSpace(requestedBaseFileName)
+            ? $"proposal-{DateTime.Now:yyyyMMddHHmmss}"
+            : requestedBaseFileName.Trim().TrimEnd('.');
+
+        var candidateBaseFileName = normalizedBaseFileName;
+        var suffixNumber = 2;
+
+        while (File.Exists(Path.Combine(ExportRootPath, $"{candidateBaseFileName}.pdf")) ||
+               File.Exists(Path.Combine(ExportRootPath, $"{candidateBaseFileName}.html")))
+        {
+            candidateBaseFileName = $"{normalizedBaseFileName}-{suffixNumber}";
+            suffixNumber++;
+        }
+
+        return candidateBaseFileName;
     }
 
     private static T Clone<T>(T value)
@@ -803,6 +953,13 @@ public sealed class WorkspaceStore(
         workspace.Settings.SavedPersonnelNames ??= [];
         workspace.Settings.BidNumberCounters ??= [];
         workspace.Settings.JobNumberCounters ??= [];
+        workspace.Settings.ProposalCompanyName = workspace.Settings.ProposalCompanyName?.Trim() ?? string.Empty;
+        workspace.Settings.ProposalCompanyLicenseNumber = workspace.Settings.ProposalCompanyLicenseNumber?.Trim() ?? string.Empty;
+        workspace.Settings.ProposalCompanyAddress = workspace.Settings.ProposalCompanyAddress?.Trim() ?? string.Empty;
+        workspace.Settings.ProposalCompanyPhoneNumber = workspace.Settings.ProposalCompanyPhoneNumber?.Trim() ?? string.Empty;
+        workspace.Settings.ProposalCompanyEmail = workspace.Settings.ProposalCompanyEmail?.Trim() ?? string.Empty;
+        workspace.Settings.ProposalLogoRelativePath = workspace.Settings.ProposalLogoRelativePath?.Trim() ?? string.Empty;
+        workspace.Settings.ProposalLogoOriginalFileName = workspace.Settings.ProposalLogoOriginalFileName?.Trim() ?? string.Empty;
         workspace.Clients ??= [];
         workspace.Templates ??= [];
         workspace.Bids ??= [];

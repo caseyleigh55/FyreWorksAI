@@ -1,6 +1,7 @@
 using FyreWorksAI.Infrastructure;
 using FyreWorksAI.Shared.Core.DependencyInjection;
 using FyreWorksAI.Shared.Core.Services.Attachments;
+using FyreWorksAI.Shared.Core.Services.Exports;
 using FyreWorksAI.Shared.Core.Services.Storage;
 
 namespace FyreWorksAI;
@@ -22,6 +23,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IAttachmentService, MauiAttachmentService>();
         builder.Services.AddSingleton<IWorkspaceLocationService, MauiWorkspaceLocationService>();
         builder.Services.AddFyreWorksCore();
+        builder.Services.AddSingleton<IProposalDocumentExporter, MauiProposalDocumentExporter>();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

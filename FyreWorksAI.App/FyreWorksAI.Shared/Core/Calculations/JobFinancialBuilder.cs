@@ -139,49 +139,6 @@ internal static class JobFinancialBuilder
         RollUpScheduleValues(job);
     }
 
-    public static string BuildBidProposal(BidRecord bid, ClientRecord? client)
-    {
-        var builder = new StringBuilder();
-        builder.AppendLine($"Proposal - {bid.BidNumber}");
-        builder.AppendLine($"Project: {bid.ProjectName}");
-        if (client is not null)
-        {
-            builder.AppendLine($"Client: {client.Name}");
-            if (!string.IsNullOrWhiteSpace(client.PrimaryContact))
-            {
-                builder.AppendLine($"Attention: {client.PrimaryContact}");
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(bid.Site.SingleLineAddress))
-        {
-            builder.AppendLine($"Project Address: {bid.Site.SingleLineAddress}");
-        }
-
-        builder.AppendLine($"Date: {DateTime.Now:D}");
-        builder.AppendLine();
-        builder.AppendLine("Scope");
-        builder.AppendLine(string.IsNullOrWhiteSpace(bid.ProposalSummary)
-            ? (!string.IsNullOrWhiteSpace(bid.Site.ScopeOfWork) ? bid.Site.ScopeOfWork : "Scope to be finalized.")
-            : bid.ProposalSummary.Trim());
-        builder.AppendLine();
-        builder.AppendLine($"Proposal Amount: {EstimateMath.GetCurrency(EstimateMath.GetBidAdjustedRevenue(bid))}");
-
-        if (!string.IsNullOrWhiteSpace(bid.Exclusions))
-        {
-            builder.AppendLine();
-            builder.AppendLine("Exclusions");
-            builder.AppendLine(bid.Exclusions.Trim());
-        }
-
-        builder.AppendLine();
-        builder.AppendLine(string.IsNullOrWhiteSpace(bid.ProposalClosing)
-            ? "We appreciate the opportunity to provide this proposal and are ready to proceed upon approval."
-            : bid.ProposalClosing.Trim());
-
-        return builder.ToString();
-    }
-
     public static string BuildJobCostReport(JobRecord job, ClientRecord? client)
     {
         var builder = new StringBuilder();

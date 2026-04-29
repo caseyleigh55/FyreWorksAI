@@ -1,7 +1,4 @@
 using System.Globalization;
-using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.JSInterop;
 using FyreWorksAI.Shared.Core.Services.Status;
 
 namespace FyreWorksAI.Shared.Pages;
@@ -13,13 +10,18 @@ public partial class Settings
 {
 
     private string StatusMessage { get; set; } = string.Empty;
+    private string ProposalLogoPreviewDataUri { get; set; } = string.Empty;
 
     private LaborTemplate? DefaultTemplate =>
         Store.GetTemplate(Store.Workspace.Settings.DefaultTemplateId);
 
+    private bool HasProposalLogo =>
+        !string.IsNullOrWhiteSpace(Store.Workspace.Settings.ProposalLogoRelativePath);
+
     protected override async Task OnInitializedAsync()
     {
         await Store.InitializeAsync();
+        RefreshProposalLogoPreview();
     }
 
     private async Task SaveAsync()
@@ -40,6 +42,9 @@ public partial class Settings
     private Task OpenAttachmentDirectoryAsync() =>
         OpenStorageFolderAsync(Store.OpenAttachmentDirectoryAsync, "attachments");
 
+    private Task OpenBrandingDirectoryAsync() =>
+        OpenStorageFolderAsync(Store.OpenBrandingDirectoryAsync, "branding");
+
     private Task OpenExportDirectoryAsync() =>
         OpenStorageFolderAsync(Store.OpenExportDirectoryAsync, "exports");
 
@@ -50,5 +55,32 @@ public partial class Settings
     {
         await openAction();
         StatusMessage = StatusMessageFormatter.WithTimestamp($"Opened the {label} folder.");
+    }
+
+    private async Task SelectProposalLogoAsync()
+    {
+        var path = await Store.SaveProposalLogoAsync();
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            StatusMessage = StatusMessageFormatter.WithTimestamp("No supported image logo was selected.");
+            return;
+        }
+
+        await Store.SaveAsync();
+        RefreshProposalLogoPreview();
+        StatusMessage = StatusMessageFormatter.WithTimestamp($"Proposal logo saved at {path}.");
+    }
+
+    private async Task RemoveProposalLogoAsync()
+    {
+        Store.RemoveProposalLogo();
+        await Store.SaveAsync();
+        RefreshProposalLogoPreview();
+        StatusMessage = StatusMessageFormatter.WithTimestamp("Proposal logo removed.");
+    }
+
+    private void RefreshProposalLogoPreview()
+    {
+        ProposalLogoPreviewDataUri = Store.GetProposalLogoDataUri() ?? string.Empty;
     }
 }

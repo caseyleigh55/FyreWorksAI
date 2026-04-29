@@ -11,13 +11,13 @@ public sealed class MauiAttachmentService : IAttachmentService
     public bool SupportsPicking => true;
     public bool SupportsOpening => true;
 
-    public async Task<IReadOnlyList<PickedFile>> PickFilesAsync()
+    public async Task<IReadOnlyList<PickedFile>> PickFilesAsync(string pickerTitle = "Select files")
     {
         try
         {
             var fileResults = await FilePicker.Default.PickMultipleAsync(new PickOptions
             {
-                PickerTitle = "Select drawings, receipts, images, PDFs, Word, or Excel files"
+                PickerTitle = pickerTitle
             });
 
             if (fileResults is null)

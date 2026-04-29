@@ -970,6 +970,71 @@ label span {
     overflow-wrap: anywhere;
 }
 
+.branding-preview-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(16rem, 0.8fr);
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.proposal-logo-preview-shell,
+.branding-empty-state {
+    display: grid;
+    align-items: center;
+    min-height: 10rem;
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--line);
+}
+
+.branding-empty-state {
+    gap: 0.4rem;
+    align-content: center;
+}
+
+.proposal-logo-preview-image {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    max-height: 8rem;
+    object-fit: contain;
+    object-position: left center;
+}
+
+.dialog-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    border: none;
+    background: rgba(3, 8, 11, 0.72);
+}
+
+.dialog-shell {
+    position: fixed;
+    inset: 0;
+    z-index: 115;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    pointer-events: none;
+}
+
+.dialog-panel {
+    width: min(34rem, calc(100vw - 2rem));
+    padding: 1.25rem;
+    border-radius: var(--radius-lg);
+    background: var(--bg-elevated);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px);
+    pointer-events: auto;
+}
+
+.dialog-panel .button-row {
+    margin-top: 1rem;
+}
+
 .list-row-button {
     width: 100%;
     border: 1px solid var(--line);
@@ -1289,6 +1354,7 @@ label span {
     .dashboard-grid,
     .project-overview-grid,
     .section-totals-grid,
+    .branding-preview-grid,
     .workflow-map-grid,
     .form-grid.two-columns,
     .field-card-grid-four,

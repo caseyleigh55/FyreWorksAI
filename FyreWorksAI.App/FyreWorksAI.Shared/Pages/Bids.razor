@@ -288,7 +288,7 @@ else
                                 <textarea rows="3" @bind="SelectedBid.ProposalClosing"></textarea>
                             </label>
                         </div>
-                        <p class="muted">The export uses this proposal copy plus the client, project, scope, exclusions, and pricing already captured on the bid.</p>
+                        <p class="muted">The export creates a styled proposal document using this proposal copy plus the client, project, scope, exclusions, and pricing already captured on the bid. The Windows desktop app exports directly to PDF and unsupported hosts fall back to HTML.</p>
                     }
                 </section>
 
@@ -664,6 +664,33 @@ else
                 </section>
             }
         </div>
+    </section>
+}
+
+@if (IsProposalExportDialogOpen)
+{
+    <button class="dialog-scrim" type="button" @onclick="CancelProposalExport" aria-label="Close export proposal dialog"></button>
+    <section class="dialog-shell" aria-modal="true" role="dialog" aria-labelledby="proposal-export-dialog-title">
+        <article class="dialog-panel">
+            <div class="panel-header">
+                <div>
+                    <p class="eyebrow">Proposal Export</p>
+                    <h3 id="proposal-export-dialog-title">Name Proposal File</h3>
+                </div>
+            </div>
+
+            <p class="muted">The default file name is based on the project name and company name, and you can adjust it before the PDF is created.</p>
+
+            <label class="full-width">
+                <span>File Name</span>
+                <input autofocus @bind="ProposalExportFileName" />
+            </label>
+
+            <div class="button-row">
+                <button class="button" type="button" @onclick="ConfirmProposalExportAsync">Export Proposal</button>
+                <button class="button button-secondary" type="button" @onclick="CancelProposalExport">Cancel</button>
+            </div>
+        </article>
     </section>
 }
 
