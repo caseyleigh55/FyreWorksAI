@@ -106,8 +106,7 @@ public static class JobFinancialMath
     public static decimal GetInvoiceLinkedActualCost(JobRecord job, Guid invoiceId) =>
         EstimateMath.RoundCurrency(
             job.Baseline.LineItems
-                .Where(item => item.InvoiceId == invoiceId)
-                .Sum(item => item.ActualCost) +
+                .Sum(item => GetBaselineLineItemInvoiceLinkedActualCost(item, invoiceId)) +
             job.JobDevices
                 .Where(item => item.InvoiceId == invoiceId)
                 .Sum(item => item.ActualCost) +
@@ -118,6 +117,23 @@ public static class JobFinancialMath
 
     public static decimal GetInvoiceAutoRemainder(JobRecord job, JobInvoiceRecord invoice) =>
         EstimateMath.RoundCurrency(invoice.InvoiceTotal - GetInvoiceLinkedActualCost(job, invoice.Id));
+
+    public static decimal GetInvoiceAutoRemainderTotal(JobRecord job) =>
+        EstimateMath.RoundCurrency(job.Invoices.Sum(invoice => GetInvoiceAutoRemainder(job, invoice)));
+
+    private static decimal GetBaselineLineItemInvoiceLinkedActualCost(JobBaselineLineItem item, Guid invoiceId)
+    {
+        if (item.ActualPurchaseLines.Count > 0)
+        {
+            return EstimateMath.RoundCurrency(item.ActualPurchaseLines
+                .Where(line => line.InvoiceId == invoiceId)
+                .Sum(line => line.ActualCost));
+        }
+
+        return item.InvoiceId == invoiceId
+            ? EstimateMath.RoundCurrency(item.ActualCost)
+            : 0m;
+    }
 
     public static decimal GetBaselineHours(BaselineEstimate baseline, string costCode) =>
         JobCostCodes.Normalize(costCode) switch

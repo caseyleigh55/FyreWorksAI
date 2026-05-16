@@ -11,6 +11,7 @@
         <p>Restoring baselines, live costs, commitments, and export settings.</p>
     </div>
 }
+
 else
 {
     var activeJobs = Store.Workspace.Jobs.Where(item => item.IsActive).OrderBy(item => item.ProjectName).ToList();
@@ -41,10 +42,7 @@ else
         .DistinctBy(item => item.Id)
         .ToList();
     var bidDeviceTotalItems = groupedBidDeviceItems.Count > 0 ? groupedBidDeviceItems : bidDeviceItems;
-    var jobDeviceItems = SelectedJob?.JobDevices
-        .OrderBy(item => GetDeviceSortOrder(item.CategoryCode))
-        .ThenBy(item => item.Description)
-        .ToList() ?? [];
+    var jobDeviceItems = GetJobDeviceItems();
     var dailyLogItems = (SelectedJob?.DailyLogs ?? [])
         .OrderBy(item => item.WorkDate)
         .ThenBy(item => item.Description)
@@ -161,7 +159,7 @@ else
                         <div class="button-row">
                             <button class="button button-danger" type="button" @onclick="DeleteJobAsync">Delete Job</button>
                             <button class="button button-secondary" type="button" @onclick="SaveAsync">Save Job</button>
-                            <button class="button" type="button" @onclick="ExportAsync">Export Job Cost</button>
+                            <button class="button" type="button" @onclick="ExportAsync">Export Job Report</button>
                         </div>
                     </div>
 
@@ -243,7 +241,7 @@ else
                                 <div><span>Actual Material</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobActualMaterialCost(SelectedJob))</strong></div>
                                 <div><span>Billed Commitments</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobBilledCommitments(SelectedJob))</strong></div>
                                 <div><span>Actual Cost</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobActualCost(SelectedJob))</strong></div>
-                                <div><span>Variance To Estimate</span><strong style="@GetEstimateVarianceStyle(projectEstimateVariance)">@EstimateMath.GetCurrency(projectEstimateVariance)</strong></div>
+                                <div><span>Cost Variance To Estimate</span><strong style="@GetEstimateVarianceStyle(projectEstimateVariance)">@EstimateMath.GetCurrency(projectEstimateVariance)</strong></div>
                                 <div><span>Profit</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobProfit(SelectedJob))</strong></div>
                                 <div><span>Margin</span><strong>@EstimateMath.GetPercent(EstimateMath.GetJobMarginPercent(SelectedJob))</strong></div>
                             </div>
@@ -263,15 +261,14 @@ else
                         </article>
 
                         <article class="summary-card project-overview-card">
-                            <p class="eyebrow">Commitments</p>
+                            <p class="eyebrow">Vendor commitments</p>
                             <div class="metric-list">
                                 <div><span>Commitment Records</span><strong>@SelectedJob.Commitments.Count</strong></div>
                                 <div><span>Committed</span><strong>@EstimateMath.GetCurrency(GetCommittedAmountTotal())</strong></div>
                                 <div><span>Billed</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobBilledCommitments(SelectedJob))</strong></div>
                                 <div><span>Paid</span><strong>@EstimateMath.GetCurrency(GetPaidCommitmentsTotal())</strong></div>
                                 <div><span>Unpaid Bills</span><strong>@EstimateMath.GetCurrency(GetOutstandingBilledCommitmentsTotal())</strong></div>
-                                <div><span>Remaining Exposure</span><strong>@EstimateMath.GetCurrency(GetRemainingCommittedExposureTotal())</strong></div>
-                                <div><span>Total Cost Exposure</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetJobCommittedExposure(SelectedJob))</strong></div>
+                                <div><span>Remaining To Pay</span><strong>@EstimateMath.GetCurrency(GetRemainingCommitmentBalanceTotal())</strong></div>
                             </div>
                         </article>
 
@@ -983,7 +980,7 @@ else
                                                             <th>Scope</th>
                                                             <th>Hours</th>
                                                             <th>Hours Remaining</th>
-                                                            <th>Rate</th>
+                                                            <th>Cost Rate</th>
                                                             <th>Overnight</th>
                                                             <th>Notes</th>
                                                             <th></th>
@@ -1064,6 +1061,8 @@ else
                     else
                     {
                         <div class="stats-inline">
+                            <span>Spec Qty @GetBidDeviceQuantityTotal(bidDeviceTotalItems)</span>
+                            <span>Actual Qty @GetBidDeviceActualQuantityTotal(bidDeviceTotalItems)</span>
                             <span>Est. Cost @EstimateMath.GetCurrency(GetBidDeviceEstimatedCostTotal(bidDeviceTotalItems))</span>
                             <span>Est. Sale @EstimateMath.GetCurrency(GetBidDeviceEstimatedSaleTotal(bidDeviceTotalItems))</span>
                             <span>Actual Cost @EstimateMath.GetCurrency(GetBidDeviceActualCostTotal(bidDeviceTotalItems))</span>
@@ -1079,6 +1078,7 @@ else
                                         <th>Type</th>
                                         <th>Description</th>
                                         <th>Qty</th>
+                                        <th>Actual Qty</th>
                                         <th>Unit</th>
                                         <th>Hours</th>
                                         <th>Est. Unit Cost</th>
@@ -1086,6 +1086,7 @@ else
                                         <th>Actual Unit Cost</th>
                                         <th>Invoice Ref</th>
                                         <th>Notes</th>
+                                        <th>Actual Detail</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1095,33 +1096,101 @@ else
                                             <td>@GetBidDeviceTypeLabel(item)</td>
                                             <td>@item.Description</td>
                                             <td>@item.Quantity</td>
+                                            <td>
+                                                @if (HasBidDeviceActualPurchaseLines(item))
+                                                {
+                                                    <input type="number" step="0.01" value="@GetBidDeviceActualQuantityInputValue(item)" disabled />
+                                                }
+                                                else
+                                                {
+                                                    <input type="number" step="0.01" value="@GetBidDeviceActualQuantityInputValue(item)" @oninput="args => OnBidDeviceActualQuantityChanged(item, args)" />
+                                                }
+                                            </td>
                                             <td>@item.UnitLabel</td>
                                             <td>@EstimateMath.GetHours(item.EstimatedHours)</td>
                                             <td>@EstimateMath.GetCurrency(item.EstimatedUnitCost)</td>
                                             <td>@EstimateMath.GetCurrency(item.EstimatedUnitSale)</td>
-                                            <td><input type="number" step="0.01" value="@item.ActualUnitCost" @oninput="args => OnBidDeviceActualCostChanged(item, args)" /></td>
                                             <td>
-                                                <select value="@(item.InvoiceId?.ToString() ?? string.Empty)" @onchange="args => OnBidDeviceInvoiceChanged(item, args)">
-                                                    <option value="">Not linked</option>
-                                                    @foreach (var invoice in invoiceItems)
-                                                    {
-                                                        <option value="@invoice.Id">@GetInvoiceLabel(invoice)</option>
-                                                    }
-                                                </select>
+                                                @if (HasBidDeviceActualPurchaseLines(item))
+                                                {
+                                                    <input type="number" step="0.01" value="@GetBidDeviceActualUnitCostInputValue(item)" disabled />
+                                                }
+                                                else
+                                                {
+                                                    <input type="number" step="0.01" value="@item.ActualUnitCost" @oninput="args => OnBidDeviceActualCostChanged(item, args)" />
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (HasBidDeviceActualPurchaseLines(item))
+                                                {
+                                                    <span class="muted">Tracked on purchase rows</span>
+                                                }
+                                                else
+                                                {
+                                                    <select value="@(item.InvoiceId?.ToString() ?? string.Empty)" @onchange="args => OnBidDeviceInvoiceChanged(item, args)">
+                                                        <option value="">Not linked</option>
+                                                        @foreach (var invoice in invoiceItems)
+                                                        {
+                                                            <option value="@invoice.Id">@GetInvoiceLabel(invoice)</option>
+                                                        }
+                                                    </select>
+                                                }
                                             </td>
                                             <td><textarea class="notes-field notes-field-compact" rows="1" @bind="item.Notes"></textarea></td>
+                                            <td><button class="button button-secondary" type="button" @onclick="() => AddBidDeviceActualPurchaseLine(item)">Add Purchase</button></td>
                                         </tr>
+
+                                        @if (item.ActualPurchaseLines.Count > 0)
+                                        {
+                                            @foreach (var purchaseLine in item.ActualPurchaseLines)
+                                            {
+                                                <tr class="bid-device-actual-purchase-row" @key="purchaseLine.Id">
+                                                    <td>Purchase</td>
+                                                    <td><input @bind="purchaseLine.Description" @bind:after="@(() => NormalizeBidDeviceActualPurchaseLine(item, purchaseLine))" /></td>
+                                                    <td></td>
+                                                    <td><input type="number" step="0.01" value="@purchaseLine.Quantity" @oninput="args => OnBidDeviceActualPurchaseQuantityChanged(purchaseLine, args)" /></td>
+                                                    <td><input @bind="purchaseLine.UnitLabel" @bind:after="@(() => NormalizeBidDeviceActualPurchaseLine(item, purchaseLine))" /></td>
+                                                    <td></td>
+                                                    <td></td>
+                                                    <td></td>
+                                                    <td><input type="number" step="0.01" value="@purchaseLine.ActualUnitCost" @oninput="args => OnBidDeviceActualPurchaseCostChanged(purchaseLine, args)" /></td>
+                                                    <td>
+                                                        <select value="@(purchaseLine.InvoiceId?.ToString() ?? string.Empty)" @onchange="args => OnBidDeviceActualPurchaseInvoiceChanged(purchaseLine, args)">
+                                                            <option value="">Not linked</option>
+                                                            @foreach (var invoice in invoiceItems)
+                                                            {
+                                                                <option value="@invoice.Id">@GetInvoiceLabel(invoice)</option>
+                                                            }
+                                                        </select>
+                                                    </td>
+                                                    <td><textarea class="notes-field notes-field-compact" rows="1" @bind="purchaseLine.Notes"></textarea></td>
+                                                    <td><button class="text-button danger" type="button" @onclick="() => RemoveBidDeviceActualPurchaseLine(item, purchaseLine.Id)">Remove</button></td>
+                                                </tr>
+                                            }
+
+                                            <tr class="change-order-line-totals">
+                                                <td colspan="12">
+                                                    <div class="stats-inline">
+                                                        <span>Rolled Qty @GetBidDeviceActualQuantityInputValue(item)</span>
+                                                        <span>Weighted Unit Cost @EstimateMath.GetCurrency(item.EffectiveActualUnitCost)</span>
+                                                        <span>Actual Cost Total @EstimateMath.GetCurrency(item.ActualCost)</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
 
                                         @if (officeBidDeviceItems.LastOrDefault()?.Id == item.Id)
                                         {
                                             <tr class="sov-total-row">
                                                 <td colspan="2"><p class="eyebrow">Admin / Eng Total</p></td>
                                                 <td><span class="compact-total-value">@GetBidDeviceQuantityTotal(officeBidDeviceItems)</span></td>
+                                                <td><span class="compact-total-value">@GetBidDeviceActualQuantityTotal(officeBidDeviceItems)</span></td>
                                                 <td></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetHours(GetBidDeviceHoursTotal(officeBidDeviceItems))</span></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedCostTotal(officeBidDeviceItems))</span></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedSaleTotal(officeBidDeviceItems))</span></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceActualCostTotal(officeBidDeviceItems))</span></td>
+                                                <td></td>
                                                 <td></td>
                                                 <td></td>
                                             </tr>
@@ -1132,11 +1201,13 @@ else
                                             <tr class="sov-total-row">
                                                 <td colspan="2"><p class="eyebrow">Component Total</p></td>
                                                 <td><span class="compact-total-value">@GetBidDeviceQuantityTotal(componentBidDeviceItems)</span></td>
+                                                <td><span class="compact-total-value">@GetBidDeviceActualQuantityTotal(componentBidDeviceItems)</span></td>
                                                 <td></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetHours(GetBidDeviceHoursTotal(componentBidDeviceItems))</span></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedCostTotal(componentBidDeviceItems))</span></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedSaleTotal(componentBidDeviceItems))</span></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceActualCostTotal(componentBidDeviceItems))</span></td>
+                                                <td></td>
                                                 <td></td>
                                                 <td></td>
                                             </tr>
@@ -1147,11 +1218,13 @@ else
                                             <tr class="sov-total-row">
                                                 <td colspan="2"><p class="eyebrow">Wire Total</p></td>
                                                 <td><span class="compact-total-value">@GetBidDeviceQuantityTotal(wireBidDeviceItems)</span></td>
+                                                <td><span class="compact-total-value">@GetBidDeviceActualQuantityTotal(wireBidDeviceItems)</span></td>
                                                 <td></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetHours(GetBidDeviceHoursTotal(wireBidDeviceItems))</span></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedCostTotal(wireBidDeviceItems))</span></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedSaleTotal(wireBidDeviceItems))</span></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceActualCostTotal(wireBidDeviceItems))</span></td>
+                                                <td></td>
                                                 <td></td>
                                                 <td></td>
                                             </tr>
@@ -1162,11 +1235,13 @@ else
                                             <tr class="sov-total-row">
                                                 <td colspan="2"><p class="eyebrow">Material Total</p></td>
                                                 <td><span class="compact-total-value">@GetBidDeviceQuantityTotal(materialBidDeviceItems)</span></td>
+                                                <td><span class="compact-total-value">@GetBidDeviceActualQuantityTotal(materialBidDeviceItems)</span></td>
                                                 <td></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetHours(GetBidDeviceHoursTotal(materialBidDeviceItems))</span></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedCostTotal(materialBidDeviceItems))</span></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceEstimatedSaleTotal(materialBidDeviceItems))</span></td>
                                                 <td><span class="compact-total-value">@EstimateMath.GetCurrency(GetBidDeviceActualCostTotal(materialBidDeviceItems))</span></td>
+                                                <td></td>
                                                 <td></td>
                                                 <td></td>
                                             </tr>
@@ -1178,11 +1253,13 @@ else
                                         <tr class="sov-total-row">
                                             <td colspan="2"><strong>All Bid Device Totals</strong></td>
                                             <td>@GetBidDeviceQuantityTotal(bidDeviceTotalItems)</td>
+                                            <td>@GetBidDeviceActualQuantityTotal(bidDeviceTotalItems)</td>
                                             <td></td>
                                             <td>@EstimateMath.GetHours(GetBidDeviceHoursTotal(bidDeviceTotalItems))</td>
                                             <td>@EstimateMath.GetCurrency(GetBidDeviceEstimatedCostTotal(bidDeviceTotalItems))</td>
                                             <td>@EstimateMath.GetCurrency(GetBidDeviceEstimatedSaleTotal(bidDeviceTotalItems))</td>
                                             <td>@EstimateMath.GetCurrency(GetBidDeviceActualCostTotal(bidDeviceTotalItems))</td>
+                                            <td></td>
                                             <td></td>
                                             <td></td>
                                         </tr>
@@ -1219,6 +1296,21 @@ else
 
                         @if (IsSectionExpanded(JobDevicesSectionId))
                         {
+                            <div class="inline-select-row jobs-scope-sort-row">
+                                <span class="eyebrow">Sort Job Scope</span>
+                                <select @bind="SelectedJobDeviceSortMode">
+                                    <option value="@JobDeviceListSortMode.Manual">Manual Entry Order</option>
+                                    <option value="@JobDeviceListSortMode.Type">Type</option>
+                                    <option value="@JobDeviceListSortMode.Description">Description</option>
+                                    <option value="@JobDeviceListSortMode.Reference">Invoice Ref</option>
+                                    <option value="@JobDeviceListSortMode.ActualCostLowToHigh">Actual Cost Low to High</option>
+                                </select>
+                            </div>
+                            @if (SelectedJobDeviceSortMode == JobDeviceListSortMode.Manual)
+                            {
+                                <p class="muted small">New items stay at the bottom until you sort the list.</p>
+                            }
+
                             <table class="data-table wide">
                                 <thead>
                                     <tr>
@@ -1304,7 +1396,7 @@ else
                         <div class="stats-inline">
                             <span>Invoice Total @EstimateMath.GetCurrency(invoiceItems.Sum(item => item.InvoiceTotal))</span>
                             <span>Linked Items @EstimateMath.GetCurrency(invoiceItems.Sum(item => JobFinancialMath.GetInvoiceLinkedActualCost(SelectedJob, item.Id)))</span>
-                            <span>Tax / Remainder @EstimateMath.GetCurrency(invoiceItems.Sum(item => JobFinancialMath.GetInvoiceAutoRemainder(SelectedJob, item)))</span>
+                            <span>Tax / Remainder @EstimateMath.GetCurrency(JobFinancialMath.GetInvoiceAutoRemainderTotal(SelectedJob))</span>
                         </div>
 
                         @if (IsSectionExpanded(InvoicesSectionId))
@@ -1320,7 +1412,7 @@ else
                                                 <strong>@GetInvoiceLabel(invoice)</strong>
                                                 <span>Total @EstimateMath.GetCurrency(invoice.InvoiceTotal)</span>
                                                 <span>Linked @EstimateMath.GetCurrency(JobFinancialMath.GetInvoiceLinkedActualCost(SelectedJob, invoice.Id))</span>
-                                                <span>Remainder @EstimateMath.GetCurrency(JobFinancialMath.GetInvoiceAutoRemainder(SelectedJob, invoice))</span>
+                                                <span>Tax / Remainder @EstimateMath.GetCurrency(JobFinancialMath.GetInvoiceAutoRemainder(SelectedJob, invoice))</span>
                                             </button>
                                             <div class="field-card-summary-actions">
                                                 <span class="pill">@((isExpanded ? "Expanded" : "Collapsed"))</span>
@@ -1750,6 +1842,33 @@ else
                 </section>
             }
         </div>
+    </section>
+}
+
+@if (IsJobReportExportDialogOpen)
+{
+    <button class="dialog-scrim" type="button" @onclick="CancelJobReportExport" aria-label="Close export job report dialog"></button>
+    <section class="dialog-shell" aria-modal="true" role="dialog" aria-labelledby="job-report-export-dialog-title">
+        <article class="dialog-panel">
+            <div class="panel-header">
+                <div>
+                    <p class="eyebrow">Job Report Export</p>
+                    <h3 id="job-report-export-dialog-title">Name Job Report File</h3>
+                </div>
+            </div>
+
+            <p class="muted">The default file name starts with the job number and project name, and you can edit it before the PDF is created.</p>
+
+            <label class="full-width">
+                <span>File Name</span>
+                <input autofocus @bind="JobReportExportFileName" />
+            </label>
+
+            <div class="button-row">
+                <button class="button" type="button" @onclick="ConfirmJobReportExportAsync">Export Job Report</button>
+                <button class="button button-secondary" type="button" @onclick="CancelJobReportExport">Cancel</button>
+            </div>
+        </article>
     </section>
 }
 

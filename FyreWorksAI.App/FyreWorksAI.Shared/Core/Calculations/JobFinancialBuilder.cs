@@ -92,8 +92,12 @@ internal static class JobFinancialBuilder
             if (existingItemsByReference.TryGetValue(item.ReferenceNumber, out var existingItem))
             {
                 item.Id = existingItem.Id;
+                item.ActualQuantity = existingItem.ActualQuantity;
                 item.ActualUnitCost = existingItem.ActualUnitCost;
                 item.InvoiceId = existingItem.InvoiceId;
+                item.ActualPurchaseLines = existingItem.ActualPurchaseLines
+                    .Select(CloneActualPurchaseLine)
+                    .ToList();
                 if (!string.IsNullOrWhiteSpace(existingItem.Notes))
                 {
                     item.Notes = existingItem.Notes.Trim();
@@ -130,67 +134,13 @@ internal static class JobFinancialBuilder
         EnsureInvoices(job);
         EnsureChangeOrders(job, laborTemplate);
         EnsureDailyLogs(job);
-        EnsureTimeEntries(job);
+        EnsureTimeEntries(job, laborTemplate);
         MigrateLegacyMaterialPurchases(job);
         EnsureMaterialPurchases(job);
         EnsureScheduleOfValues(job);
         EnsureCommitments(job);
         SyncLinkedCommitmentScheduleValueSubLines(job);
         RollUpScheduleValues(job);
-    }
-
-    public static string BuildJobCostReport(JobRecord job, ClientRecord? client)
-    {
-        var builder = new StringBuilder();
-        builder.AppendLine($"Job Cost Export - {job.JobNumber}");
-        builder.AppendLine($"Project: {job.ProjectName}");
-        if (client is not null)
-        {
-            builder.AppendLine($"Client: {client.Name}");
-        }
-
-        builder.AppendLine($"Generated: {DateTime.Now:G}");
-        builder.AppendLine();
-        builder.AppendLine("Baseline");
-        builder.AppendLine($"  Original revenue: {EstimateMath.GetCurrency(job.Baseline.OriginalRevenue)}");
-        builder.AppendLine($"  Estimated total cost: {EstimateMath.GetCurrency(job.Baseline.EstimatedTotalCost)}");
-        builder.AppendLine($"  Admin + engineering sale: {EstimateMath.GetCurrency(job.Baseline.EstimatedAdminSale + job.Baseline.EstimatedEngineeringSale)}");
-        builder.AppendLine($"  Materials sale: {EstimateMath.GetCurrency(job.Baseline.EstimatedComponentSale + job.Baseline.EstimatedWireSale + job.Baseline.EstimatedMaterialOnlySale)}");
-        builder.AppendLine($"  Install / Demo / Trim / Test hours: {EstimateMath.GetHours(job.Baseline.EstimatedInstallHours)} / {EstimateMath.GetHours(job.Baseline.EstimatedDemoHours)} / {EstimateMath.GetHours(job.Baseline.EstimatedTrimHours)} / {EstimateMath.GetHours(job.Baseline.EstimatedTestHours)}");
-        builder.AppendLine();
-        builder.AppendLine("Actuals");
-        builder.AppendLine($"  Labor cost to date: {EstimateMath.GetCurrency(EstimateMath.GetJobActualLaborCost(job))}");
-        builder.AppendLine($"  Purchases cost to date: {EstimateMath.GetCurrency(EstimateMath.GetJobActualMaterialCost(job))}");
-        builder.AppendLine($"  Commitment billings: {EstimateMath.GetCurrency(EstimateMath.GetJobBilledCommitments(job))}");
-        builder.AppendLine($"  Contract revenue incl. approved COs: {EstimateMath.GetCurrency(EstimateMath.GetJobRevenue(job))}");
-        builder.AppendLine($"  Actual cost to date: {EstimateMath.GetCurrency(EstimateMath.GetJobActualCost(job))}");
-        builder.AppendLine($"  Exposure including commitments: {EstimateMath.GetCurrency(EstimateMath.GetJobCommittedExposure(job))}");
-        builder.AppendLine($"  Profit to date: {EstimateMath.GetCurrency(EstimateMath.GetJobProfit(job))}");
-        builder.AppendLine($"  Margin to date: {EstimateMath.GetPercent(EstimateMath.GetJobMarginPercent(job))}");
-        builder.AppendLine();
-        builder.AppendLine("Hours");
-        foreach (var costCode in JobCostCodes.TimeEntryCodes.Where(code => code != JobCostCodes.Other))
-        {
-            var planned = JobFinancialMath.GetBaselineHours(job.Baseline, costCode);
-            var used = JobFinancialMath.GetJobActualHours(job, costCode);
-            builder.AppendLine($"  {JobCostCodes.GetLabel(costCode)}: planned {EstimateMath.GetHours(planned)}, used {EstimateMath.GetHours(used)}, remaining {EstimateMath.GetHours(Math.Max(0m, planned - used))}");
-        }
-
-        builder.AppendLine();
-        builder.AppendLine("Schedule of Values");
-        foreach (var item in job.ScheduleOfValues.OrderBy(item => item.IsChangeOrderLine).ThenBy(item => item.Description))
-        {
-            builder.AppendLine($"  {item.Description}: scheduled {EstimateMath.GetCurrency(item.ScheduledValue)}, billed {EstimateMath.GetCurrency(item.BilledToDate)}, paid {EstimateMath.GetCurrency(item.PaidToDate)}");
-        }
-
-        builder.AppendLine();
-        builder.AppendLine("Invoices");
-        foreach (var invoice in job.Invoices.OrderBy(item => item.InvoiceDate).ThenBy(item => item.ReferenceNumber))
-        {
-            builder.AppendLine($"  {invoice.InvoiceDate:d} | {invoice.ReferenceNumber} | {invoice.Vendor} | total {EstimateMath.GetCurrency(invoice.InvoiceTotal)} | linked {EstimateMath.GetCurrency(JobFinancialMath.GetInvoiceLinkedActualCost(job, invoice.Id))} | tax/remainder {EstimateMath.GetCurrency(JobFinancialMath.GetInvoiceAutoRemainder(job, invoice))}");
-        }
-
-        return builder.ToString();
     }
 
     private static void EnsureBaselineBreakdown(JobRecord job)
@@ -303,10 +253,39 @@ internal static class JobFinancialBuilder
                 item.UnitLabel = string.IsNullOrWhiteSpace(item.UnitLabel) ? "ea" : item.UnitLabel.Trim();
                 item.EstimatedUnitCost = EstimateMath.RoundCurrency(Math.Max(0m, item.EstimatedUnitCost));
                 item.EstimatedUnitSale = EstimateMath.RoundCurrency(Math.Max(0m, item.EstimatedUnitSale));
+                item.ActualQuantity = Math.Max(0m, item.ActualQuantity);
                 item.ActualUnitCost = EstimateMath.RoundCurrency(Math.Max(0m, item.ActualUnitCost));
+                item.ActualPurchaseLines ??= [];
                 item.ReferenceNumber = string.IsNullOrWhiteSpace(item.ReferenceNumber)
                     ? BuildReferenceNumber(job.JobNumber, normalizedCategory, nextSequence)
                     : item.ReferenceNumber.Trim();
+                item.InvoiceId = item.InvoiceId is not null && job.Invoices.All(invoice => invoice.Id != item.InvoiceId.Value)
+                    ? null
+                    : item.InvoiceId;
+                item.Notes = item.Notes?.Trim() ?? string.Empty;
+
+                if (item.ActualPurchaseLines.Count == 0 &&
+                    item.ActualQuantity <= 0m &&
+                    (item.ActualUnitCost > 0m || item.InvoiceId is not null))
+                {
+                    item.ActualQuantity = item.Quantity;
+                }
+
+                foreach (var purchaseLine in item.ActualPurchaseLines)
+                {
+                    purchaseLine.Description = string.IsNullOrWhiteSpace(purchaseLine.Description)
+                        ? item.Description
+                        : purchaseLine.Description.Trim();
+                    purchaseLine.Quantity = purchaseLine.Quantity <= 0m ? 1m : purchaseLine.Quantity;
+                    purchaseLine.UnitLabel = string.IsNullOrWhiteSpace(purchaseLine.UnitLabel)
+                        ? item.UnitLabel
+                        : purchaseLine.UnitLabel.Trim();
+                    purchaseLine.ActualUnitCost = EstimateMath.RoundCurrency(Math.Max(0m, purchaseLine.ActualUnitCost));
+                    purchaseLine.InvoiceId = purchaseLine.InvoiceId is not null && job.Invoices.All(invoice => invoice.Id != purchaseLine.InvoiceId.Value)
+                        ? null
+                        : purchaseLine.InvoiceId;
+                    purchaseLine.Notes = purchaseLine.Notes?.Trim() ?? string.Empty;
+                }
             }
 
             return;
@@ -517,7 +496,7 @@ internal static class JobFinancialBuilder
         }
     }
 
-    private static void EnsureTimeEntries(JobRecord job)
+    private static void EnsureTimeEntries(JobRecord job, LaborTemplate? laborTemplate)
     {
         var defaultChangeOrderId = job.ChangeOrders.FirstOrDefault()?.Id;
         var validChangeOrderIds = job.ChangeOrders.Select(changeOrder => changeOrder.Id).ToHashSet();
@@ -538,7 +517,7 @@ internal static class JobFinancialBuilder
             }
 
             entry.Hours = EstimateMath.RoundHours(Math.Max(0m, entry.Hours));
-            entry.HourlyRate = EstimateMath.RoundCurrency(Math.Max(0m, entry.HourlyRate));
+            entry.HourlyRate = NormalizeTimeEntryHourlyRate(entry, laborTemplate);
             entry.Notes = entry.Notes?.Trim() ?? string.Empty;
 
             if (entry.DailyLogId is null || !validDailyLogIds.Contains(entry.DailyLogId.Value))
@@ -565,6 +544,60 @@ internal static class JobFinancialBuilder
                 entry.ChangeOrderId = null;
             }
         }
+    }
+
+    private static decimal NormalizeTimeEntryHourlyRate(JobTimeEntry entry, LaborTemplate? laborTemplate)
+    {
+        var normalizedCurrentRate = EstimateMath.RoundCurrency(Math.Max(0m, entry.HourlyRate));
+        var defaultDirectRate = GetTemplateTimeEntryRate(laborTemplate, entry.LaborClass, entry.CostCode, entry.IsOvernight, useDirectRate: true);
+        var legacyBilledRate = GetTemplateTimeEntryRate(laborTemplate, entry.LaborClass, entry.CostCode, entry.IsOvernight, useDirectRate: false);
+
+        if (normalizedCurrentRate <= 0m)
+        {
+            return defaultDirectRate > 0m ? defaultDirectRate : normalizedCurrentRate;
+        }
+
+        return ShouldReplaceLegacyBilledTimeEntryRate(normalizedCurrentRate, legacyBilledRate, defaultDirectRate)
+            ? defaultDirectRate
+            : normalizedCurrentRate;
+    }
+
+    private static bool ShouldReplaceLegacyBilledTimeEntryRate(decimal currentRate, decimal legacyBilledRate, decimal defaultDirectRate) =>
+        currentRate > 0m &&
+        legacyBilledRate > 0m &&
+        defaultDirectRate > 0m &&
+        Math.Abs(currentRate - legacyBilledRate) < 0.01m &&
+        Math.Abs(defaultDirectRate - legacyBilledRate) >= 0.01m;
+
+    private static decimal GetTemplateTimeEntryRate(
+        LaborTemplate? laborTemplate,
+        string? laborClass,
+        string? costCode,
+        bool isOvernight,
+        bool useDirectRate)
+    {
+        if (laborTemplate is null)
+        {
+            return 0m;
+        }
+
+        return NormalizeTimeEntryLaborClass(laborClass, crewMember: null, costCode) switch
+        {
+            nameof(PersonnelType.Journeyman) when isOvernight =>
+                EstimateMath.RoundCurrency(useDirectRate ? laborTemplate.JourneymanOvernightDirectRate : laborTemplate.JourneymanOvernightBilledRate),
+            nameof(PersonnelType.Journeyman) =>
+                EstimateMath.RoundCurrency(useDirectRate ? laborTemplate.JourneymanRegularDirectRate : laborTemplate.JourneymanRegularBilledRate),
+            nameof(PersonnelType.Apprentice) when isOvernight =>
+                EstimateMath.RoundCurrency(useDirectRate ? laborTemplate.ApprenticeOvernightDirectRate : laborTemplate.ApprenticeOvernightBilledRate),
+            nameof(PersonnelType.Apprentice) =>
+                EstimateMath.RoundCurrency(useDirectRate ? laborTemplate.ApprenticeRegularDirectRate : laborTemplate.ApprenticeRegularBilledRate),
+            JobCostCodes.Admin =>
+                EstimateMath.RoundCurrency(useDirectRate ? laborTemplate.AdminDirectRate : laborTemplate.AdminBilledRate),
+            JobCostCodes.Engineering =>
+                EstimateMath.RoundCurrency(useDirectRate ? laborTemplate.EngineeringDirectRate : laborTemplate.EngineeringBilledRate),
+            _ =>
+                EstimateMath.RoundCurrency(useDirectRate ? laborTemplate.JourneymanRegularDirectRate : laborTemplate.JourneymanRegularBilledRate)
+        };
     }
 
     private static string NormalizeTimeEntryLaborClass(string? laborClass, string? crewMember, string? costCode)
@@ -647,7 +680,11 @@ internal static class JobFinancialBuilder
         var alreadyUsingNewTracking =
             job.Invoices.Count > 0 ||
             job.JobDevices.Count > 0 ||
-            job.Baseline.LineItems.Any(item => item.ActualUnitCost > 0m || item.InvoiceId is not null);
+            job.Baseline.LineItems.Any(item =>
+                item.ActualQuantity > 0m ||
+                item.ActualUnitCost > 0m ||
+                item.InvoiceId is not null ||
+                item.ActualPurchaseLines.Count > 0);
         if (alreadyUsingNewTracking)
         {
             return;
@@ -678,6 +715,7 @@ internal static class JobFinancialBuilder
                 : job.Baseline.LineItems.FirstOrDefault(item => item.Id == purchase.BaselineLineItemId.Value);
             if (lineItem is not null)
             {
+                lineItem.ActualQuantity = quantity;
                 lineItem.ActualUnitCost = unitCost;
                 lineItem.InvoiceId = invoice.Id;
                 if (string.IsNullOrWhiteSpace(lineItem.Notes) && !string.IsNullOrWhiteSpace(purchase.Notes))
@@ -1440,6 +1478,18 @@ internal static class JobFinancialBuilder
             UnitCost = material.UnitCost,
             UnitSale = material.UnitSale,
             Notes = material.Notes
+        };
+
+    private static JobBaselineActualPurchaseLine CloneActualPurchaseLine(JobBaselineActualPurchaseLine line) =>
+        new()
+        {
+            Id = line.Id,
+            Description = line.Description,
+            Quantity = line.Quantity,
+            UnitLabel = line.UnitLabel,
+            ActualUnitCost = line.ActualUnitCost,
+            InvoiceId = line.InvoiceId,
+            Notes = line.Notes
         };
 }
 

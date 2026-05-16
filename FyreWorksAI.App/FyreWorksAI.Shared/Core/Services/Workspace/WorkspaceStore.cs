@@ -9,7 +9,7 @@ namespace FyreWorksAI.Shared.Core.Services.Workspace;
 //******** Workspace ***********//
 //******************************//
 public sealed class WorkspaceStore(
-    IProposalDocumentExporter proposalDocumentExporter,
+    IHtmlDocumentExporter htmlDocumentExporter,
     IWorkspaceStorage storage,
     IStoragePathResolver pathResolver,
     IAttachmentService attachmentService,
@@ -494,13 +494,17 @@ public sealed class WorkspaceStore(
         return $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
     }
 
-    public async Task<string> ExportJobCostReportAsync(JobRecord job)
+    public async Task<string> ExportJobReportAsync(JobRecord job, string? requestedDocumentName = null)
     {
         Directory.CreateDirectory(ExportRootPath);
-        var fileName = $"{MakeSafeFileName(job.JobNumber)}-{DateTime.Now:yyyyMMddHHmmss}.txt";
-        var fullPath = Path.Combine(ExportRootPath, fileName);
-        await File.WriteAllTextAsync(fullPath, JobFinancialBuilder.BuildJobCostReport(job, GetClient(job.ClientId)));
-        return fullPath;
+        var defaultDocumentBaseFileName = BuildDefaultJobReportExportBaseFileName(job);
+        var requestedBaseFileName = string.IsNullOrWhiteSpace(requestedDocumentName)
+            ? defaultDocumentBaseFileName
+            : MakeSafeFileName(requestedDocumentName.Trim());
+        var documentBaseFileName = GetUniqueExportBaseFileName(requestedBaseFileName, "job-report");
+        var brandingProfile = BuildDocumentBrandingProfile();
+        var htmlDocument = JobReportHtmlDocumentBuilder.BuildDocument(job, GetClient(job.ClientId), brandingProfile);
+        return await htmlDocumentExporter.ExportAsync(ExportRootPath, documentBaseFileName, htmlDocument);
     }
 
     public async Task<string> ExportBidProposalAsync(BidRecord bid, string? requestedDocumentName = null)
@@ -510,10 +514,10 @@ public sealed class WorkspaceStore(
         var requestedBaseFileName = string.IsNullOrWhiteSpace(requestedDocumentName)
             ? defaultDocumentBaseFileName
             : MakeSafeFileName(requestedDocumentName.Trim());
-        var documentBaseFileName = GetUniqueProposalExportBaseFileName(requestedBaseFileName);
-        var brandingProfile = BuildProposalBrandingProfile();
+        var documentBaseFileName = GetUniqueExportBaseFileName(requestedBaseFileName, "proposal");
+        var brandingProfile = BuildDocumentBrandingProfile();
         var htmlDocument = BidProposalHtmlDocumentBuilder.BuildDocument(bid, GetClient(bid.ClientId), brandingProfile);
-        return await proposalDocumentExporter.ExportAsync(ExportRootPath, documentBaseFileName, htmlDocument);
+        return await htmlDocumentExporter.ExportAsync(ExportRootPath, documentBaseFileName, htmlDocument);
     }
 
     public void SyncJobFinancials(JobRecord job) =>
@@ -619,7 +623,7 @@ public sealed class WorkspaceStore(
         }
     }
 
-    private ProposalBrandingProfile BuildProposalBrandingProfile() =>
+    private DocumentBrandingProfile BuildDocumentBrandingProfile() =>
         new()
         {
             CompanyName = Workspace.Settings.ProposalCompanyName.Trim(),
@@ -627,7 +631,7 @@ public sealed class WorkspaceStore(
             CompanyAddress = Workspace.Settings.ProposalCompanyAddress.Trim(),
             CompanyPhoneNumber = Workspace.Settings.ProposalCompanyPhoneNumber.Trim(),
             CompanyEmail = Workspace.Settings.ProposalCompanyEmail.Trim(),
-            ProposalLogoDataUri = GetProposalLogoDataUri() ?? string.Empty
+            LogoDataUri = GetProposalLogoDataUri() ?? string.Empty
         };
 
     private static bool IsSupportedProposalLogoFile(PickedFile pickedFile)
@@ -739,37 +743,6 @@ public sealed class WorkspaceStore(
         return FormatJobNumber(year, sequence);
     }
 
-    private static string BuildJobCostReport(JobRecord job)
-    {
-        var builder = new StringBuilder();
-        builder.AppendLine($"Job Cost Export - {job.JobNumber}");
-        builder.AppendLine($"Project: {job.ProjectName}");
-        builder.AppendLine($"Generated: {DateTime.Now:G}");
-        builder.AppendLine();
-        builder.AppendLine("Baseline");
-        builder.AppendLine($"  Original revenue: {EstimateMath.GetCurrency(job.Baseline.OriginalRevenue)}");
-        builder.AppendLine($"  Estimated total cost: {EstimateMath.GetCurrency(job.Baseline.EstimatedTotalCost)}");
-        builder.AppendLine($"  Estimated field hours: {job.Baseline.EstimatedFieldHours:N2}");
-        builder.AppendLine();
-        builder.AppendLine("Actuals");
-        builder.AppendLine($"  Labor cost to date: {EstimateMath.GetCurrency(EstimateMath.GetJobActualLaborCost(job))}");
-        builder.AppendLine($"  Material cost to date: {EstimateMath.GetCurrency(EstimateMath.GetJobActualMaterialCost(job))}");
-        builder.AppendLine($"  Commitment billings: {EstimateMath.GetCurrency(EstimateMath.GetJobBilledCommitments(job))}");
-        builder.AppendLine($"  Contract revenue incl. approved COs: {EstimateMath.GetCurrency(EstimateMath.GetJobRevenue(job))}");
-        builder.AppendLine($"  Actual cost to date: {EstimateMath.GetCurrency(EstimateMath.GetJobActualCost(job))}");
-        builder.AppendLine($"  Exposure including commitments: {EstimateMath.GetCurrency(EstimateMath.GetJobCommittedExposure(job))}");
-        builder.AppendLine($"  Profit to date: {EstimateMath.GetCurrency(EstimateMath.GetJobProfit(job))}");
-        builder.AppendLine($"  Margin to date: {EstimateMath.GetPercent(EstimateMath.GetJobMarginPercent(job))}");
-        builder.AppendLine();
-        builder.AppendLine("Schedule of Values");
-        foreach (var item in job.ScheduleOfValues)
-        {
-            builder.AppendLine($"  {item.Description}: scheduled {EstimateMath.GetCurrency(item.ScheduledValue)}, billed {EstimateMath.GetCurrency(item.BilledToDate)}, paid {EstimateMath.GetCurrency(item.PaidToDate)}");
-        }
-
-        return builder.ToString();
-    }
-
     private static string GenerateNumber(string prefix, int sequence) =>
         $"{prefix}-{DateTime.Today:yyyyMMdd}-{sequence:000}";
 
@@ -785,10 +758,24 @@ public sealed class WorkspaceStore(
         return builder.ToString();
     }
 
-    private string GetUniqueProposalExportBaseFileName(string requestedBaseFileName)
+    private static string BuildDefaultJobReportExportBaseFileName(JobRecord job)
+    {
+        var jobNumber = string.IsNullOrWhiteSpace(job.JobNumber)
+            ? "Job"
+            : job.JobNumber.Trim();
+        var projectName = string.IsNullOrWhiteSpace(job.ProjectName)
+            ? string.Empty
+            : job.ProjectName.Trim();
+        var baseFileName = string.IsNullOrWhiteSpace(projectName)
+            ? $"{jobNumber}_Job Report"
+            : $"{jobNumber}_{projectName}_Job Report";
+        return MakeSafeFileName(baseFileName);
+    }
+
+    private string GetUniqueExportBaseFileName(string requestedBaseFileName, string defaultPrefix)
     {
         var normalizedBaseFileName = string.IsNullOrWhiteSpace(requestedBaseFileName)
-            ? $"proposal-{DateTime.Now:yyyyMMddHHmmss}"
+            ? $"{defaultPrefix}-{DateTime.Now:yyyyMMddHHmmss}"
             : requestedBaseFileName.Trim().TrimEnd('.');
 
         var candidateBaseFileName = normalizedBaseFileName;

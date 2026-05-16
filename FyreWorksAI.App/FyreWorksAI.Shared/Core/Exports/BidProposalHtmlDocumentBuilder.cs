@@ -11,7 +11,7 @@ internal static class BidProposalHtmlDocumentBuilder
     //******************************//
     //******** HTML Export *********//
     //******************************//
-    public static string BuildDocument(BidRecord bid, ClientRecord? client, ProposalBrandingProfile brandingProfile)
+    public static string BuildDocument(BidRecord bid, ClientRecord? client, DocumentBrandingProfile brandingProfile)
     {
         var projectHeading = string.IsNullOrWhiteSpace(bid.ProjectName)
             ? "Fire Alarm Proposal"
@@ -558,9 +558,9 @@ internal static class BidProposalHtmlDocumentBuilder
             : $"{Encode(siteName)} | {Encode(projectAddress)}";
     }
 
-    private static string BuildCoverBrandingMarkup(ProposalBrandingProfile brandingProfile)
+    private static string BuildCoverBrandingMarkup(DocumentBrandingProfile brandingProfile)
     {
-        var hasLogo = !string.IsNullOrWhiteSpace(brandingProfile.ProposalLogoDataUri);
+        var hasLogo = !string.IsNullOrWhiteSpace(brandingProfile.LogoDataUri);
         var detailsMarkup = BuildBrandingDetailsMarkup(brandingProfile);
 
         if (hasLogo)
@@ -569,14 +569,14 @@ internal static class BidProposalHtmlDocumentBuilder
             {
                 return $$"""
 <section class="proposal-branding-panel">
-    <img class="proposal-logo-image" src="{{brandingProfile.ProposalLogoDataUri}}" alt="Company logo" />
+    <img class="proposal-logo-image" src="{{brandingProfile.LogoDataUri}}" alt="Company logo" />
 </section>
 """;
             }
 
             return $$"""
 <section class="proposal-branding-panel">
-    <img class="proposal-logo-image" src="{{brandingProfile.ProposalLogoDataUri}}" alt="Company logo" />
+    <img class="proposal-logo-image" src="{{brandingProfile.LogoDataUri}}" alt="Company logo" />
     {{detailsMarkup}}
 </section>
 """;
@@ -599,7 +599,7 @@ internal static class BidProposalHtmlDocumentBuilder
 """;
     }
 
-    private static string BuildClosingCompanyInfoMarkup(ProposalBrandingProfile brandingProfile)
+    private static string BuildClosingCompanyInfoMarkup(DocumentBrandingProfile brandingProfile)
     {
         var companyName = string.IsNullOrWhiteSpace(brandingProfile.CompanyName)
             ? string.Empty
@@ -630,7 +630,7 @@ internal static class BidProposalHtmlDocumentBuilder
         return $$"""<strong class="proposal-branding-company-name">{{Encode(companyName.Trim())}}</strong>""";
     }
 
-    private static string BuildBrandingDetailsMarkup(ProposalBrandingProfile brandingProfile)
+    private static string BuildBrandingDetailsMarkup(DocumentBrandingProfile brandingProfile)
     {
         var details = new List<string>();
 

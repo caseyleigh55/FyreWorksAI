@@ -60,16 +60,47 @@ public sealed class JobBaselineLineItem
     public string UnitLabel { get; set; } = "ea";
     public decimal EstimatedUnitCost { get; set; }
     public decimal EstimatedUnitSale { get; set; }
+    public decimal ActualQuantity { get; set; }
     public decimal ActualUnitCost { get; set; }
     public Guid? InvoiceId { get; set; }
     public decimal EstimatedHours { get; set; }
     public string Notes { get; set; } = string.Empty;
+    public List<JobBaselineActualPurchaseLine> ActualPurchaseLines { get; set; } = [];
 
     [JsonIgnore]
     public decimal EstimatedCost => Quantity * EstimatedUnitCost;
 
     [JsonIgnore]
     public decimal EstimatedSale => Quantity * EstimatedUnitSale;
+
+    [JsonIgnore]
+    public bool HasActualPurchaseLines => ActualPurchaseLines.Count > 0;
+
+    [JsonIgnore]
+    public decimal EffectiveActualQuantity => HasActualPurchaseLines
+        ? ActualPurchaseLines.Sum(item => item.Quantity)
+        : ActualQuantity;
+
+    [JsonIgnore]
+    public decimal EffectiveActualUnitCost => EffectiveActualQuantity <= 0m
+        ? 0m
+        : ActualCost / EffectiveActualQuantity;
+
+    [JsonIgnore]
+    public decimal ActualCost => HasActualPurchaseLines
+        ? ActualPurchaseLines.Sum(item => item.ActualCost)
+        : ActualQuantity * ActualUnitCost;
+}
+
+public sealed class JobBaselineActualPurchaseLine
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Description { get; set; } = string.Empty;
+    public decimal Quantity { get; set; } = 1m;
+    public string UnitLabel { get; set; } = "ea";
+    public decimal ActualUnitCost { get; set; }
+    public Guid? InvoiceId { get; set; }
+    public string Notes { get; set; } = string.Empty;
 
     [JsonIgnore]
     public decimal ActualCost => Quantity * ActualUnitCost;

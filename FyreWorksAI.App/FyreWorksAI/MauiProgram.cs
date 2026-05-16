@@ -23,7 +23,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IAttachmentService, MauiAttachmentService>();
         builder.Services.AddSingleton<IWorkspaceLocationService, MauiWorkspaceLocationService>();
         builder.Services.AddFyreWorksCore();
-        builder.Services.AddSingleton<IProposalDocumentExporter, MauiProposalDocumentExporter>();
+        builder.Services.AddSingleton<IHtmlDocumentExporter, MauiHtmlDocumentExporter>();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

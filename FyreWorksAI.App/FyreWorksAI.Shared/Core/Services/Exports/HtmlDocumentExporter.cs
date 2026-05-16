@@ -6,7 +6,7 @@ namespace FyreWorksAI.Shared.Core.Services.Exports;
 //***** HTML Export Writer *****//
 //******************************//
 
-public sealed class HtmlProposalDocumentExporter : IProposalDocumentExporter
+public sealed class HtmlDocumentExporter : IHtmlDocumentExporter
 {
     //******************************//
     //******** Export Flow *********//

@@ -1,10 +1,10 @@
 namespace FyreWorksAI.Shared.Core.Services.Exports;
 
 //******************************//
-//**** Proposal Exporter *******//
+//***** HTML Exporter **********//
 //******************************//
 
-public interface IProposalDocumentExporter
+public interface IHtmlDocumentExporter
 {
     Task<string> ExportAsync(
         string exportDirectoryPath,

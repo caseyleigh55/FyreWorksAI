@@ -37,6 +37,15 @@ public partial class Jobs : IDisposable
     private const string CommitmentsElementId = "jobs-commitments-section";
     private const string ProjectNotesElementId = "jobs-project-notes-section";
 
+    private enum JobDeviceListSortMode
+    {
+        Manual,
+        Type,
+        Description,
+        Reference,
+        ActualCostLowToHigh
+    }
+
     [SupplyParameterFromQuery(Name = "selected")]
     public Guid? RequestedJobId { get; set; }
 
@@ -63,6 +72,8 @@ public partial class Jobs : IDisposable
 
     private Guid? SelectedJobId { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
+    private bool IsJobReportExportDialogOpen { get; set; }
+    private string JobReportExportFileName { get; set; } = string.Empty;
     private string? ActiveMainSectionId { get; set; }
     private string? PendingSectionElementId { get; set; }
     private static readonly IReadOnlyList<string> TimeEntryLaborClasses =
@@ -100,6 +111,7 @@ public partial class Jobs : IDisposable
     private HashSet<Guid> ExpandedScheduleValueIds { get; } = [];
     private bool IsDirectoryPanelExpanded { get; set; }
     private bool IsDailyLogsNewestFirst { get; set; } = true;
+    private JobDeviceListSortMode SelectedJobDeviceSortMode { get; set; } = JobDeviceListSortMode.Manual;
 
     private JobRecord? SelectedJob =>
         SelectedJobId is null
@@ -272,9 +284,32 @@ public partial class Jobs : IDisposable
         }
 
         Store.SyncJobFinancials(SelectedJob);
-        var path = await Store.ExportJobCostReportAsync(SelectedJob);
+        JobReportExportFileName = BuildDefaultJobReportExportFileName(SelectedJob);
+        IsJobReportExportDialogOpen = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void CancelJobReportExport()
+    {
+        IsJobReportExportDialogOpen = false;
+        JobReportExportFileName = string.Empty;
+    }
+
+    private async Task ConfirmJobReportExportAsync()
+    {
+        if (SelectedJob is null)
+        {
+            CancelJobReportExport();
+            return;
+        }
+
         await Store.SaveAsync();
-        StatusMessage = StatusMessageFormatter.WithTimestamp($"Job cost export created at {path}.");
+        var path = await Store.ExportJobReportAsync(SelectedJob, JobReportExportFileName);
+        CancelJobReportExport();
+        StatusMessage = StatusMessageFormatter.WithTimestamp(
+            path.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)
+                ? $"Job report PDF created at {path}."
+                : $"Job report document created at {path}. PDF export was unavailable, so an HTML file was created instead.");
     }
 
     private async Task OnClientChanged(ChangeEventArgs args)
@@ -299,6 +334,20 @@ public partial class Jobs : IDisposable
                     .OrderByDescending(job => job.CreatedOn)
                     .Select(job => (Guid?)job.Id))
             .FirstOrDefault();
+
+    private static string BuildDefaultJobReportExportFileName(JobRecord job)
+    {
+        var jobNumber = string.IsNullOrWhiteSpace(job.JobNumber)
+            ? "Job"
+            : job.JobNumber.Trim();
+        var projectName = string.IsNullOrWhiteSpace(job.ProjectName)
+            ? string.Empty
+            : job.ProjectName.Trim();
+
+        return string.IsNullOrWhiteSpace(projectName)
+            ? $"{jobNumber}_Job Report"
+            : $"{jobNumber}_{projectName}_Job Report";
+    }
 
     private decimal GetBaselineCostForCode(string costCode) =>
         JobCostCodes.Normalize(costCode) switch
@@ -357,7 +406,7 @@ public partial class Jobs : IDisposable
     private decimal GetProjectEstimateVariance() =>
         SelectedJob is null
             ? 0m
-            : EstimateMath.RoundCurrency(EstimateMath.GetJobActualCost(SelectedJob) - EstimateMath.GetJobEstimatedCost(SelectedJob));
+            : EstimateMath.GetJobCostVariance(SelectedJob);
 
     private static string? GetEstimateVarianceStyle(decimal variance) =>
         variance < 0m
@@ -386,10 +435,11 @@ public partial class Jobs : IDisposable
             ? 0m
             : EstimateMath.RoundCurrency(Math.Max(0m, EstimateMath.GetJobBilledCommitments(SelectedJob) - GetPaidCommitmentsTotal()));
 
-    private decimal GetRemainingCommittedExposureTotal() =>
+    private decimal GetRemainingCommitmentBalanceTotal() =>
         SelectedJob is null
             ? 0m
-            : EstimateMath.RoundCurrency(Math.Max(0m, GetCommittedAmountTotal() - GetPaidCommitmentsTotal()));
+            : EstimateMath.RoundCurrency(SelectedJob.Commitments.Sum(commitment =>
+                Math.Max(0m, Math.Max(commitment.CommittedAmount, commitment.BilledAmount) - commitment.PaidAmount)));
 
     private decimal GetApprovedChangeOrderEstimatedLaborHoursTotal() =>
         SelectedJob is null
@@ -545,6 +595,9 @@ public partial class Jobs : IDisposable
     private decimal GetBidDeviceQuantityTotal(IEnumerable<JobBaselineLineItem> items) =>
         Math.Round(items.Sum(item => item.Quantity), 2, MidpointRounding.AwayFromZero);
 
+    private decimal GetBidDeviceActualQuantityTotal(IEnumerable<JobBaselineLineItem> items) =>
+        Math.Round(items.Sum(item => item.EffectiveActualQuantity), 2, MidpointRounding.AwayFromZero);
+
     private decimal GetBidDeviceHoursTotal(IEnumerable<JobBaselineLineItem> items) =>
         EstimateMath.RoundHours(items.Sum(item => item.EstimatedHours));
 
@@ -563,10 +616,65 @@ public partial class Jobs : IDisposable
     private decimal GetBidDeviceSaleVarianceTotal(IEnumerable<JobBaselineLineItem> items) =>
         EstimateMath.RoundCurrency(GetBidDeviceEstimatedSaleTotal(items) - GetBidDeviceActualCostTotal(items));
 
+    private static bool HasBidDeviceActualPurchaseLines(JobBaselineLineItem item) =>
+        item.ActualPurchaseLines.Count > 0;
+
+    private static string GetBidDeviceActualQuantityInputValue(JobBaselineLineItem item) =>
+        (HasBidDeviceActualPurchaseLines(item) ? item.EffectiveActualQuantity : item.ActualQuantity).ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static string GetBidDeviceActualUnitCostInputValue(JobBaselineLineItem item) =>
+        (HasBidDeviceActualPurchaseLines(item) ? item.EffectiveActualUnitCost : item.ActualUnitCost).ToString("0.##", CultureInfo.InvariantCulture);
+
     private string GetBidDeviceTypeLabel(JobBaselineLineItem item) =>
         string.IsNullOrWhiteSpace(item.SourceSection)
             ? JobCostCodes.GetLabel(item.CategoryCode)
             : item.SourceSection;
+
+    private IReadOnlyList<JobDeviceItem> GetJobDeviceItems()
+    {
+        if (SelectedJob is null)
+        {
+            return [];
+        }
+
+        var items = SelectedJob.JobDevices.AsEnumerable();
+        return SelectedJobDeviceSortMode switch
+        {
+            JobDeviceListSortMode.Type => items
+                .OrderBy(item => GetDeviceSortOrder(item.CategoryCode))
+                .ThenBy(item => item.Description, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => GetJobDeviceReferenceSortValue(item), StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            JobDeviceListSortMode.Description => items
+                .OrderBy(item => item.Description, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => GetDeviceSortOrder(item.CategoryCode))
+                .ThenBy(item => GetJobDeviceReferenceSortValue(item), StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            JobDeviceListSortMode.Reference => items
+                .OrderBy(item => string.IsNullOrWhiteSpace(GetJobDeviceReferenceSortValue(item)) ? 1 : 0)
+                .ThenBy(item => GetJobDeviceReferenceSortValue(item), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => GetDeviceSortOrder(item.CategoryCode))
+                .ThenBy(item => item.Description, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            JobDeviceListSortMode.ActualCostLowToHigh => items
+                .OrderBy(item => item.ActualCost)
+                .ThenBy(item => item.Description, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => GetDeviceSortOrder(item.CategoryCode))
+                .ToList(),
+            _ => items.ToList()
+        };
+    }
+
+    private string GetJobDeviceReferenceSortValue(JobDeviceItem item)
+    {
+        if (SelectedJob is null || item.InvoiceId is null)
+        {
+            return string.Empty;
+        }
+
+        var invoice = SelectedJob.Invoices.FirstOrDefault(candidate => candidate.Id == item.InvoiceId.Value);
+        return invoice is null ? string.Empty : GetInvoiceLabel(invoice).Trim();
+    }
 
     private int GetDeviceSortOrder(string? categoryCode) =>
         JobCostCodes.Normalize(categoryCode) switch
@@ -806,7 +914,7 @@ public partial class Jobs : IDisposable
     private bool IsChangeOrderTimeEntry(JobTimeEntry entry) =>
         IsChangeOrderTimeEntryCostCode(entry.CostCode);
 
-    private decimal GetDefaultTimeEntryRate(JobTimeEntry entry)
+    private decimal GetDefaultTimeEntryCostRate(JobTimeEntry entry)
     {
         var template = CurrentJobTemplate;
         var laborClass = NormalizeTimeEntryLaborClass(entry.LaborClass, entry.CostCode);
@@ -814,14 +922,14 @@ public partial class Jobs : IDisposable
         return laborClass switch
         {
             nameof(PersonnelType.Journeyman) => entry.IsOvernight
-                ? template?.JourneymanOvernightBilledRate ?? EstimateMath.RoundCurrency(Store.Workspace.Settings.FieldLaborRate * 1.5m)
-                : template?.JourneymanRegularBilledRate ?? Store.Workspace.Settings.FieldLaborRate,
+                ? template?.JourneymanOvernightDirectRate ?? EstimateMath.RoundCurrency(Store.Workspace.Settings.FieldLaborRate * 1.5m)
+                : template?.JourneymanRegularDirectRate ?? Store.Workspace.Settings.FieldLaborRate,
             nameof(PersonnelType.Apprentice) => entry.IsOvernight
-                ? template?.ApprenticeOvernightBilledRate ?? EstimateMath.RoundCurrency(Store.Workspace.Settings.FieldLaborRate * 1.5m)
-                : template?.ApprenticeRegularBilledRate ?? Store.Workspace.Settings.FieldLaborRate,
-            JobCostCodes.Admin => template?.AdminBilledRate ?? Store.Workspace.Settings.AdminLaborRate,
-            JobCostCodes.Engineering => template?.EngineeringBilledRate ?? Store.Workspace.Settings.EngineeringLaborRate,
-            _ => template?.JourneymanRegularBilledRate ?? Store.Workspace.Settings.FieldLaborRate
+                ? template?.ApprenticeOvernightDirectRate ?? EstimateMath.RoundCurrency(Store.Workspace.Settings.FieldLaborRate * 1.5m)
+                : template?.ApprenticeRegularDirectRate ?? Store.Workspace.Settings.FieldLaborRate,
+            JobCostCodes.Admin => template?.AdminDirectRate ?? Store.Workspace.Settings.AdminLaborRate,
+            JobCostCodes.Engineering => template?.EngineeringDirectRate ?? Store.Workspace.Settings.EngineeringLaborRate,
+            _ => template?.JourneymanRegularDirectRate ?? Store.Workspace.Settings.FieldLaborRate
         };
     }
 
@@ -833,7 +941,7 @@ public partial class Jobs : IDisposable
             entry.IsOvernight = false;
         }
 
-        entry.HourlyRate = EstimateMath.RoundCurrency(Math.Max(0m, GetDefaultTimeEntryRate(entry)));
+        entry.HourlyRate = EstimateMath.RoundCurrency(Math.Max(0m, GetDefaultTimeEntryCostRate(entry)));
     }
 
     private void OnTimeEntryLaborTypeChanged(JobTimeEntry entry) =>
@@ -1132,11 +1240,69 @@ public partial class Jobs : IDisposable
         NormalizeTimeEntry(entry);
     }
 
-    private void OnBidDeviceActualCostChanged(JobBaselineLineItem item, ChangeEventArgs args) =>
+    private void OnBidDeviceActualCostChanged(JobBaselineLineItem item, ChangeEventArgs args)
+    {
         item.ActualUnitCost = ParseCurrencyValue(args.Value?.ToString());
+        if (!HasBidDeviceActualPurchaseLines(item) &&
+            item.ActualUnitCost > 0m &&
+            item.ActualQuantity <= 0m)
+        {
+            item.ActualQuantity = item.Quantity;
+        }
+    }
+
+    private void OnBidDeviceActualQuantityChanged(JobBaselineLineItem item, ChangeEventArgs args) =>
+        item.ActualQuantity = ParseQuantityValue(args.Value?.ToString());
 
     private void OnBidDeviceInvoiceChanged(JobBaselineLineItem item, ChangeEventArgs args) =>
         item.InvoiceId = ParseNullableGuid(args.Value?.ToString());
+
+    private void AddBidDeviceActualPurchaseLine(JobBaselineLineItem item)
+    {
+        var purchaseLine = new JobBaselineActualPurchaseLine
+        {
+            Description = item.Description,
+            Quantity = item.ActualPurchaseLines.Count == 0
+                ? (item.ActualQuantity > 0m ? item.ActualQuantity : item.Quantity)
+                : 1m,
+            UnitLabel = item.UnitLabel,
+            ActualUnitCost = item.ActualPurchaseLines.Count == 0 ? item.ActualUnitCost : 0m,
+            InvoiceId = item.ActualPurchaseLines.Count == 0 ? item.InvoiceId : null
+        };
+
+        NormalizeBidDeviceActualPurchaseLine(item, purchaseLine);
+        item.ActualPurchaseLines.Add(purchaseLine);
+    }
+
+    private void RemoveBidDeviceActualPurchaseLine(JobBaselineLineItem item, Guid purchaseLineId) =>
+        item.ActualPurchaseLines.RemoveAll(purchaseLine => purchaseLine.Id == purchaseLineId);
+
+    private void NormalizeBidDeviceActualPurchaseLine(JobBaselineLineItem item, JobBaselineActualPurchaseLine purchaseLine)
+    {
+        purchaseLine.Description = string.IsNullOrWhiteSpace(purchaseLine.Description)
+            ? item.Description
+            : purchaseLine.Description.Trim();
+        purchaseLine.Quantity = purchaseLine.Quantity <= 0m ? 1m : purchaseLine.Quantity;
+        purchaseLine.UnitLabel = string.IsNullOrWhiteSpace(purchaseLine.UnitLabel)
+            ? item.UnitLabel
+            : purchaseLine.UnitLabel.Trim();
+        purchaseLine.ActualUnitCost = EstimateMath.RoundCurrency(Math.Max(0m, purchaseLine.ActualUnitCost));
+        purchaseLine.InvoiceId = SelectedJob is not null &&
+                                 purchaseLine.InvoiceId is not null &&
+                                 SelectedJob.Invoices.All(invoice => invoice.Id != purchaseLine.InvoiceId.Value)
+            ? null
+            : purchaseLine.InvoiceId;
+        purchaseLine.Notes = purchaseLine.Notes?.Trim() ?? string.Empty;
+    }
+
+    private void OnBidDeviceActualPurchaseQuantityChanged(JobBaselineActualPurchaseLine purchaseLine, ChangeEventArgs args) =>
+        purchaseLine.Quantity = ParseQuantityValue(args.Value?.ToString());
+
+    private void OnBidDeviceActualPurchaseCostChanged(JobBaselineActualPurchaseLine purchaseLine, ChangeEventArgs args) =>
+        purchaseLine.ActualUnitCost = ParseCurrencyValue(args.Value?.ToString());
+
+    private void OnBidDeviceActualPurchaseInvoiceChanged(JobBaselineActualPurchaseLine purchaseLine, ChangeEventArgs args) =>
+        purchaseLine.InvoiceId = ParseNullableGuid(args.Value?.ToString());
 
     private void AddJobDevice()
     {
@@ -1297,6 +1463,13 @@ public partial class Jobs : IDisposable
         foreach (var item in SelectedJob.Baseline.LineItems.Where(item => item.InvoiceId == invoiceId))
         {
             item.InvoiceId = null;
+        }
+
+        foreach (var purchaseLine in SelectedJob.Baseline.LineItems
+                     .SelectMany(item => item.ActualPurchaseLines)
+                     .Where(purchaseLine => purchaseLine.InvoiceId == invoiceId))
+        {
+            purchaseLine.InvoiceId = null;
         }
 
         foreach (var item in SelectedJob.JobDevices.Where(item => item.InvoiceId == invoiceId))
@@ -1784,6 +1957,20 @@ public partial class Jobs : IDisposable
                 ? parsed
                 : 0m;
         return EstimateMath.RoundHours(Math.Max(0m, parsedValue));
+    }
+
+    private static decimal ParseQuantityValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return 0m;
+        }
+
+        var parsedValue = decimal.TryParse(value, NumberStyles.Number, CultureInfo.CurrentCulture, out var parsed)
+            || decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed)
+                ? parsed
+                : 0m;
+        return Math.Round(Math.Max(0m, parsedValue), 2, MidpointRounding.AwayFromZero);
     }
 
     private static Guid? ParseNullableGuid(string? value) =>

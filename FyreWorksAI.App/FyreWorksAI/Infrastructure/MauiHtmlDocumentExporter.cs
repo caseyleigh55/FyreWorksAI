@@ -5,10 +5,10 @@ using FyreWorksAI.Shared.Core.Services.Exports;
 namespace FyreWorksAI.Infrastructure;
 
 //******************************//
-//*** MAUI Proposal Exporter ***//
+//**** MAUI HTML Exporter ******//
 //******************************//
 
-public sealed class MauiProposalDocumentExporter : IProposalDocumentExporter
+public sealed class MauiHtmlDocumentExporter : IHtmlDocumentExporter
 {
     private static readonly string[] EdgeExecutablePaths =
     [

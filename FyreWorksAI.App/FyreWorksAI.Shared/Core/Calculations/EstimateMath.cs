@@ -158,7 +158,8 @@ public static class EstimateMath
             JobFinancialMath.GetTrackedBidDeviceActualCost(job) +
             JobFinancialMath.GetTrackedJobDeviceActualCost(job) +
             JobFinancialMath.GetTrackedChangeOrderDeviceActualCost(job) +
-            job.MaterialPurchases.Sum(JobFinancialMath.GetMaterialPurchaseTotal));
+            job.MaterialPurchases.Sum(JobFinancialMath.GetMaterialPurchaseTotal) +
+            JobFinancialMath.GetInvoiceAutoRemainderTotal(job));
 
     public static decimal GetJobEstimatedCost(JobRecord job) =>
         RoundCurrency(job.Baseline.EstimatedTotalCost + GetJobApprovedChangeOrderCost(job));
@@ -175,18 +176,14 @@ public static class EstimateMath
     public static decimal GetJobBilledCommitments(JobRecord job) =>
         RoundCurrency(job.Commitments.Sum(commitment => commitment.BilledAmount));
 
-    public static decimal GetJobCommittedExposure(JobRecord job) =>
-        RoundCurrency(
-            GetJobActualLaborCost(job) +
-            GetJobActualMaterialCost(job) +
-            GetJobApprovedChangeOrderRemainingCost(job) +
-            job.Commitments.Sum(commitment => Math.Max(commitment.CommittedAmount, commitment.BilledAmount)));
-
     public static decimal GetJobActualCost(JobRecord job) =>
         RoundCurrency(
             GetJobActualLaborCost(job) +
             GetJobActualMaterialCost(job) +
             GetJobBilledCommitments(job));
+
+    public static decimal GetJobCostVariance(JobRecord job) =>
+        RoundCurrency(GetJobActualCost(job) - GetJobEstimatedCost(job));
 
     public static decimal GetJobProfit(JobRecord job) =>
         RoundCurrency(GetJobRevenue(job) - GetJobActualCost(job));
@@ -196,13 +193,6 @@ public static class EstimateMath
         var revenue = GetJobRevenue(job);
         return revenue <= 0m ? 0m : GetJobProfit(job) / revenue;
     }
-
-    public static decimal GetJobApprovedChangeOrderRemainingCost(JobRecord job) =>
-        RoundCurrency(job.ChangeOrders
-            .Where(changeOrder => changeOrder.Approved)
-            .Sum(changeOrder => Math.Max(
-                0m,
-                changeOrder.EstimatedCostImpact - JobFinancialMath.GetTrackedChangeOrderActualCost(job, changeOrder.Id))));
 
     public static decimal GetJobBilledRevenue(JobRecord job) =>
         RoundCurrency(job.ScheduleOfValues.Sum(item => item.BilledToDate));
