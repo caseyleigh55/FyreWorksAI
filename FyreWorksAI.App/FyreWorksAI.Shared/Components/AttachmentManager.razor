@@ -3,8 +3,8 @@
 <section class="panel @(IsExpanded ? "panel-expanded" : null)">
     <div class="panel-header">
         <div>
-            <p class="eyebrow">Documents</p>
-            <h3>Attachments</h3>
+            <p class="eyebrow">@Eyebrow</p>
+            <h3>@Title</h3>
         </div>
         <div class="panel-header-actions">
             <button class="button button-secondary" type="button" @onclick="UploadAsync" disabled="@(!Store.CanPickAttachments)">Upload Files</button>

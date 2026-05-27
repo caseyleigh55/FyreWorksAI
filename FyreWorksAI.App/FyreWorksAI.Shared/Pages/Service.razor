@@ -79,12 +79,16 @@ else
             {
                 <section class="empty-state panel">
                     <h2>No service agreement selected</h2>
-                    <p>Create an agreement to track contract billing, inspections, service calls, and simplified service quotes.</p>
+                    <p>Create an agreement to track contract billing, inspections, service calls, and service quotes.</p>
                     <button class="button" type="button" @onclick="CreateAgreementAsync">Create Agreement</button>
                 </section>
             }
             else
             {
+                var orderedMonitoringPayments = GetOrderedMonitoringPayments();
+                var orderedServiceCalls = GetOrderedServiceCalls();
+                var linkedCurrentQuoteCall = SelectedQuote is null ? null : GetLinkedServiceCall(SelectedQuote);
+
                 <section id="@AgreementInfoElementId" class="panel page-section-anchor">
                     <div class="panel-header">
                         <div>
@@ -152,22 +156,22 @@ else
                     <article class="summary-card">
                         <p class="eyebrow">Contract Value</p>
                         <h3>@EstimateMath.GetCurrency(EstimateMath.GetServiceContractValue(SelectedAgreement))</h3>
-                        <p>@SelectedAgreement.ContractMonths months of monitoring.</p>
+                        <p>@SelectedAgreement.ContractMonths months of monitoring scheduled.</p>
                     </article>
                     <article class="summary-card">
-                        <p class="eyebrow">Paid</p>
+                        <p class="eyebrow">Received</p>
                         <h3>@EstimateMath.GetCurrency(EstimateMath.GetServicePaid(SelectedAgreement))</h3>
-                        <p>Payments received against the monitoring schedule.</p>
+                        <p>Monitoring cash collected against the agreement.</p>
                     </article>
                     <article class="summary-card">
-                        <p class="eyebrow">Outstanding</p>
+                        <p class="eyebrow">Remaining</p>
                         <h3>@EstimateMath.GetCurrency(EstimateMath.GetServiceOutstanding(SelectedAgreement))</h3>
-                        <p>Remaining contract amount not yet received.</p>
+                        <p>Contract balance still outstanding.</p>
                     </article>
                     <article class="summary-card">
-                        <p class="eyebrow">Next Bill</p>
-                        <h3>@EstimateMath.GetNextBillingDate(SelectedAgreement).ToString("d")</h3>
-                        <p>Next unpaid monitoring installment.</p>
+                        <p class="eyebrow">Current Installment</p>
+                        <h3>@(EstimateMath.GetCurrentServiceInstallment(SelectedAgreement) is null ? "Complete" : $"#{EstimateMath.GetCurrentServiceInstallmentNumber(SelectedAgreement)}")</h3>
+                        <p>@GetCurrentMonitoringInstallmentSummary()</p>
                     </article>
                 </section>
 
@@ -265,33 +269,53 @@ else
                         </div>
                     </div>
 
-                    @if (IsSectionExpanded(MonitoringPaymentsSectionId))
+                    @if (IsSectionExpanded(MonitoringPaymentsSectionId) && orderedMonitoringPayments.Count == 0)
                     {
-                        <table class="data-table">
+                        <p class="muted">No monitoring installments have been scheduled yet.</p>
+                    }
+                    else if (IsSectionExpanded(MonitoringPaymentsSectionId))
+                    {
+                        <table class="data-table wide">
                             <thead>
                                 <tr>
-                                    <th>Due</th>
+                                    <th>Installment</th>
+                                    <th>Due Date</th>
                                     <th>Amount</th>
-                                    <th>Paid</th>
-                                    <th>Received</th>
-                                    <th>Notes</th>
+                                    <th>Amount Billed</th>
+                                    <th>Billed Date</th>
+                                    <th>Received Amount</th>
+                                    <th>Received Date</th>
+                                    <th>Status</th>
                                     <th></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var payment in SelectedAgreement.MonitoringPayments.OrderBy(payment => payment.DueDate))
+                                @foreach (var payment in orderedMonitoringPayments)
                                 {
                                     <tr id="@GetMonitoringPaymentElementId(payment.Id)" class="page-section-anchor" @key="payment.Id">
+                                        <td><span class="compact-readonly-value">#@GetMonitoringPaymentInstallmentNumber(payment)</span></td>
                                         <td><input type="date" @bind="payment.DueDate" @bind:format="yyyy-MM-dd" /></td>
-                                        <td><input type="number" step="0.01" @bind="payment.Amount" /></td>
-                                        <td><input type="checkbox" @bind="payment.IsPaid" /></td>
-                                        <td><input type="date" @bind="payment.ReceivedOn" @bind:format="yyyy-MM-dd" /></td>
-                                        <td><input @bind="payment.Notes" /></td>
+                                        <td><input type="number" step="0.01" @bind="payment.Amount" @bind:after="@(() => NormalizeMonitoringPayment(payment))" /></td>
+                                        <td><input type="number" step="0.01" @bind="payment.AmountBilled" @bind:after="@(() => NormalizeMonitoringPayment(payment))" /></td>
+                                        <td><input type="date" value="@GetDateInputValue(payment.BilledOn)" @onchange="args => OnMonitoringPaymentBilledDateChanged(payment, args)" /></td>
+                                        <td><input type="number" step="0.01" @bind="payment.ReceivedAmount" @bind:after="@(() => NormalizeMonitoringPayment(payment))" /></td>
+                                        <td><input type="date" value="@GetDateInputValue(payment.ReceivedOn)" @onchange="args => OnMonitoringPaymentReceivedDateChanged(payment, args)" /></td>
+                                        <td><span class="pill service-status-pill">@GetMonitoringPaymentStatus(payment)</span></td>
                                         <td><button class="text-button danger" type="button" @onclick="() => RemoveMonitoringPayment(payment.Id)">Remove</button></td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
+
+                        <div class="stats-inline">
+                            <span>Contract @EstimateMath.GetCurrency(EstimateMath.GetServiceContractValue(SelectedAgreement))</span>
+                            <span>Billed @EstimateMath.GetCurrency(EstimateMath.GetServiceBilled(SelectedAgreement))</span>
+                            <span>Received @EstimateMath.GetCurrency(EstimateMath.GetServicePaid(SelectedAgreement))</span>
+                            <span>Remaining @EstimateMath.GetCurrency(EstimateMath.GetServiceOutstanding(SelectedAgreement))</span>
+                            <span>Paid Installments @EstimateMath.GetServicePaidInstallmentCount(SelectedAgreement) / @orderedMonitoringPayments.Count</span>
+                            <span>Contract Received @($"{EstimateMath.GetServiceReceivedPercent(SelectedAgreement):N1}%")</span>
+                            <span>@GetCurrentMonitoringInstallmentSummary()</span>
+                        </div>
                     }
 
                     @if (IsSectionExpanded(MonitoringPaymentsSectionId))
@@ -313,48 +337,180 @@ else
                         </div>
                     </div>
 
-                    @if (IsSectionExpanded(ServiceCallsSectionId) && SelectedAgreement.ServiceCalls.Count == 0)
+                    @if (IsSectionExpanded(ServiceCallsSectionId) && orderedServiceCalls.Count == 0)
                     {
-                        <p class="muted">Track call status, scheduling, technicians, and notes for demand service work.</p>
+                        <p class="muted">Track each service ticket, return visit, billing record, and call-specific files here.</p>
                     }
                     else if (IsSectionExpanded(ServiceCallsSectionId))
                     {
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Title</th>
-                                    <th>Status</th>
-                                    <th>Opened</th>
-                                    <th>Scheduled</th>
-                                    <th>Completed</th>
-                                    <th>Technician</th>
-                                    <th>Notes</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var serviceCall in SelectedAgreement.ServiceCalls)
-                                {
-                                    <tr id="@GetServiceCallElementId(serviceCall.Id)" class="page-section-anchor" @key="serviceCall.Id">
-                                        <td><input @bind="serviceCall.Title" /></td>
-                                        <td>
-                                            <select @bind="serviceCall.Status">
-                                                <option>Open</option>
-                                                <option>Scheduled</option>
-                                                <option>Completed</option>
-                                                <option>Cancelled</option>
-                                            </select>
-                                        </td>
-                                        <td><input type="date" @bind="serviceCall.OpenedOn" @bind:format="yyyy-MM-dd" /></td>
-                                        <td><input type="date" @bind="serviceCall.ScheduledFor" @bind:format="yyyy-MM-dd" /></td>
-                                        <td><input type="date" @bind="serviceCall.CompletedOn" @bind:format="yyyy-MM-dd" /></td>
-                                        <td><input @bind="serviceCall.Technician" /></td>
-                                        <td><input @bind="serviceCall.Description" /></td>
-                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveServiceCall(serviceCall.Id)">Remove</button></td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+                        <div class="list-stack service-record-stack">
+                            @foreach (var serviceCall in orderedServiceCalls)
+                            {
+                                var linkedQuote = serviceCall.SourceQuoteId is null
+                                    ? null
+                                    : SelectedAgreement.Quotes.FirstOrDefault(quote => quote.Id == serviceCall.SourceQuoteId.Value);
+                                var isExpanded = IsServiceCallExpanded(serviceCall.Id);
+
+                                <article id="@GetServiceCallElementId(serviceCall.Id)" class="service-record-shell page-section-anchor @(isExpanded ? "service-record-shell-expanded" : null)" @key="serviceCall.Id">
+                                    <button class="list-row list-row-button service-record-toggle" type="button" @onclick="() => ToggleServiceCall(serviceCall.Id)">
+                                        <div class="service-record-copy">
+                                            <strong>@serviceCall.ServiceJobNumber</strong>
+                                            <p>@(string.IsNullOrWhiteSpace(serviceCall.Title) ? "Service Call" : serviceCall.Title)</p>
+                                        </div>
+                                        <div class="service-record-pills">
+                                            <span class="pill service-status-pill">@serviceCall.Status</span>
+                                            @if (!string.Equals(serviceCall.ServiceJobNumber, serviceCall.ServiceTicketNumber, StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <span class="pill">Return Visit</span>
+                                            }
+                                            @if (linkedQuote is not null)
+                                            {
+                                                <span class="pill">Quote Linked</span>
+                                            }
+                                            <span class="pill">@EstimateMath.GetCurrency(EstimateMath.GetServiceCallInvoiceAmount(serviceCall))</span>
+                                        </div>
+                                    </button>
+
+                                    @if (isExpanded)
+                                    {
+                                        <div class="service-record-body">
+                                            <div class="form-grid two-columns">
+                                                <label>
+                                                    <span>Service Job Number</span>
+                                                    <input value="@serviceCall.ServiceJobNumber" readonly />
+                                                </label>
+                                                <label>
+                                                    <span>Service Ticket</span>
+                                                    <input value="@serviceCall.ServiceTicketNumber" readonly />
+                                                </label>
+                                                <label>
+                                                    <span>Call Title</span>
+                                                    <input @bind="serviceCall.Title" />
+                                                </label>
+                                                <label>
+                                                    <span>Status</span>
+                                                    <select @bind="serviceCall.Status">
+                                                        <option>Open</option>
+                                                        <option>Scheduled</option>
+                                                        <option>Completed</option>
+                                                        <option>Cancelled</option>
+                                                    </select>
+                                                </label>
+                                                <label>
+                                                    <span>Opened</span>
+                                                    <input type="date" @bind="serviceCall.OpenedOn" @bind:format="yyyy-MM-dd" />
+                                                </label>
+                                                <label>
+                                                    <span>Scheduled</span>
+                                                    <input type="date" @bind="serviceCall.ScheduledFor" @bind:format="yyyy-MM-dd" />
+                                                </label>
+                                                <label>
+                                                    <span>Completed</span>
+                                                    <input type="date" @bind="serviceCall.CompletedOn" @bind:format="yyyy-MM-dd" />
+                                                </label>
+                                                <label>
+                                                    <span>Technician</span>
+                                                    <input @bind="serviceCall.Technician" />
+                                                </label>
+                                                <label class="full-width">
+                                                    <span>Call Notes</span>
+                                                    <textarea class="notes-field" rows="1" @bind="serviceCall.Description"></textarea>
+                                                </label>
+                                            </div>
+
+                                            @if (linkedQuote is not null)
+                                            {
+                                                <div class="stats-inline">
+                                                    <span>Quote @linkedQuote.Title</span>
+                                                    <span>Quoted @EstimateMath.GetCurrency(serviceCall.SourceQuoteAmount)</span>
+                                                    <span>Quote Status @linkedQuote.Status</span>
+                                                </div>
+
+                                                <div class="section-add-action">
+                                                    <button class="button button-secondary" type="button" @onclick="() => NavigateToQuote(linkedQuote.Id)">Open Linked Quote</button>
+                                                </div>
+                                            }
+
+                                            <div class="panel-header minor">
+                                                <h4>Call Billing</h4>
+                                            </div>
+
+                                            <div class="form-grid two-columns">
+                                                <label>
+                                                    <span>Invoice Number</span>
+                                                    <input @bind="serviceCall.Billing.InvoiceNumber" />
+                                                </label>
+                                                <label>
+                                                    <span>Labor Hours</span>
+                                                    <input type="number" step="0.25" @bind="serviceCall.Billing.LaborHours" @bind:after="@(() => NormalizeServiceCallBilling(serviceCall))" />
+                                                </label>
+                                                <label>
+                                                    <span>Labor Amount</span>
+                                                    <input type="number" step="0.01" @bind="serviceCall.Billing.LaborAmount" @bind:after="@(() => NormalizeServiceCallBilling(serviceCall))" />
+                                                </label>
+                                                <label>
+                                                    <span>Material Amount</span>
+                                                    <input type="number" step="0.01" @bind="serviceCall.Billing.MaterialAmount" @bind:after="@(() => NormalizeServiceCallBilling(serviceCall))" />
+                                                </label>
+                                                <label>
+                                                    <span>Invoice Amount</span>
+                                                    <input type="number" step="0.01" @bind="serviceCall.Billing.InvoiceAmount" @bind:after="@(() => NormalizeServiceCallBilling(serviceCall))" />
+                                                </label>
+                                                <label>
+                                                    <span>Billed Amount</span>
+                                                    <input type="number" step="0.01" @bind="serviceCall.Billing.BilledAmount" @bind:after="@(() => NormalizeServiceCallBilling(serviceCall))" />
+                                                </label>
+                                                <label>
+                                                    <span>Billed Date</span>
+                                                    <input type="date" value="@GetDateInputValue(serviceCall.Billing.BilledOn)" @onchange="args => OnServiceCallBilledDateChanged(serviceCall, args)" />
+                                                </label>
+                                                <label>
+                                                    <span>Paid Amount</span>
+                                                    <input type="number" step="0.01" @bind="serviceCall.Billing.PaidAmount" @bind:after="@(() => NormalizeServiceCallBilling(serviceCall))" />
+                                                </label>
+                                                <label>
+                                                    <span>Paid Date</span>
+                                                    <input type="date" value="@GetDateInputValue(serviceCall.Billing.PaidOn)" @onchange="args => OnServiceCallPaidDateChanged(serviceCall, args)" />
+                                                </label>
+                                                <label class="full-width">
+                                                    <span>Billing Notes</span>
+                                                    <textarea class="notes-field" rows="1" @bind="serviceCall.Billing.Notes"></textarea>
+                                                </label>
+                                            </div>
+
+                                            <div class="stats-inline">
+                                                @if (serviceCall.SourceQuoteAmount > 0m)
+                                                {
+                                                    <span>Quoted @EstimateMath.GetCurrency(serviceCall.SourceQuoteAmount)</span>
+                                                }
+                                                <span>Invoice @EstimateMath.GetCurrency(EstimateMath.GetServiceCallInvoiceAmount(serviceCall))</span>
+                                                <span>Billed @EstimateMath.GetCurrency(EstimateMath.GetServiceCallBilledAmount(serviceCall))</span>
+                                                <span>Paid @EstimateMath.GetCurrency(EstimateMath.GetServiceCallPaidAmount(serviceCall))</span>
+                                                <span>Outstanding @EstimateMath.GetCurrency(EstimateMath.GetServiceCallOutstandingAmount(serviceCall))</span>
+                                            </div>
+
+                                            <AttachmentManager Attachments="serviceCall.Attachments" Area="service-calls" OwnerId="serviceCall.Id" Eyebrow="Call Files" Title="Attachments" InitiallyExpanded="false" />
+
+                                            <div class="button-row service-record-actions">
+                                                <button class="button button-secondary" type="button" @onclick="() => AddReturnVisit(serviceCall)">Add Return Visit</button>
+                                                <button class="button button-danger" type="button" @onclick="() => RemoveServiceCall(serviceCall.Id)">Remove Service Call</button>
+                                            </div>
+                                        </div>
+                                    }
+                                </article>
+                            }
+                        </div>
+
+                        <div class="stats-inline">
+                            <span>Calls @orderedServiceCalls.Count</span>
+                            <span>Open @GetOpenServiceCallCount()</span>
+                            <span>Hours @EstimateMath.GetHours(GetTotalServiceCallHours())</span>
+                            <span>Quoted @EstimateMath.GetCurrency(GetTotalServiceCallQuotedAmount())</span>
+                            <span>Invoice @EstimateMath.GetCurrency(GetTotalServiceCallInvoiceAmount())</span>
+                            <span>Billed @EstimateMath.GetCurrency(GetTotalServiceCallBilledAmount())</span>
+                            <span>Paid @EstimateMath.GetCurrency(GetTotalServiceCallPaidAmount())</span>
+                            <span>Outstanding @EstimateMath.GetCurrency(GetTotalServiceCallOutstandingAmount())</span>
+                        </div>
                     }
 
                     @if (IsSectionExpanded(ServiceCallsSectionId))
@@ -368,7 +524,7 @@ else
                 <section id="@ServiceQuotesElementId" class="panel page-section-anchor @(IsSectionExpanded(ServiceQuotesSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
                         <div>
-                            <p class="eyebrow">Simplified quoting</p>
+                            <p class="eyebrow">Client quoting</p>
                             <h3>Service Quotes</h3>
                         </div>
                         <div class="panel-header-actions">
@@ -388,10 +544,12 @@ else
                                 {
                                     @foreach (var quote in SelectedAgreement.Quotes)
                                     {
+                                        var linkedServiceCall = GetLinkedServiceCall(quote);
+
                                         <button id="@GetServiceQuoteElementId(quote.Id)" class="directory-item @(SelectedQuote?.Id == quote.Id ? "selected" : null) page-section-anchor" type="button" @onclick="() => SelectQuote(quote.Id)">
                                             <strong>@quote.Title</strong>
                                             <span>@quote.Status</span>
-                                            <small>@EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteRevenue(quote))</small>
+                                            <small>@EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteRevenue(quote))@(linkedServiceCall is null ? string.Empty : $" | {linkedServiceCall.ServiceJobNumber}")</small>
                                         </button>
                                     }
                                 }
@@ -404,10 +562,21 @@ else
                             <div>
                                 @if (SelectedQuote is null)
                                 {
-                                    <p class="muted">Select a quote to edit its line items.</p>
+                                    <p class="muted">Select a quote to edit its scope, export it for the client, or convert it into a service call.</p>
                                 }
                                 else
                                 {
+                                    <div class="panel-header minor">
+                                        <div>
+                                            <p class="eyebrow">Quote detail</p>
+                                            <h4>@SelectedQuote.Title</h4>
+                                        </div>
+                                        <div class="button-row">
+                                            <button class="button button-secondary" type="button" @onclick="ExportSelectedQuoteAsync">Export Quote</button>
+                                            <button class="button" type="button" @onclick="ConvertSelectedQuoteToServiceCallAsync">@GetQuoteConversionButtonLabel(SelectedQuote)</button>
+                                        </div>
+                                    </div>
+
                                     <div class="form-grid two-columns">
                                         <label>
                                             <span>Quote Title</span>
@@ -418,13 +587,17 @@ else
                                             <select @bind="SelectedQuote.Status">
                                                 <option>Draft</option>
                                                 <option>Sent</option>
-                                                <option>Approved</option>
+                                                <option>Accepted</option>
                                                 <option>Rejected</option>
                                             </select>
                                         </label>
                                         <label>
                                             <span>Created</span>
                                             <input type="date" @bind="SelectedQuote.CreatedOn" @bind:format="yyyy-MM-dd" />
+                                        </label>
+                                        <label>
+                                            <span>Accepted On</span>
+                                            <input type="date" value="@GetDateInputValue(SelectedQuote.AcceptedOn)" @onchange="args => SelectedQuote.AcceptedOn = ParseNullableDate(args.Value?.ToString())" />
                                         </label>
                                     </div>
 
@@ -434,16 +607,120 @@ else
                                     </label>
 
                                     <div class="panel-header minor">
+                                        <h4>Service Labor Rates</h4>
+                                    </div>
+
+                                    @if (SelectedQuote.LaborLines.Count == 0)
+                                    {
+                                        <p class="muted">Add separate labor rows for first hour, additional hours, overtime, or any other rate structure.</p>
+                                    }
+                                    else
+                                    {
+                                        <table class="data-table wide">
+                                            <thead>
+                                                <tr>
+                                                    <th>Description</th>
+                                                    <th>Hours</th>
+                                                    <th>Cost Rate</th>
+                                                    <th>Sale Rate</th>
+                                                    <th>Cost</th>
+                                                    <th>Sale</th>
+                                                    <th></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var laborLine in SelectedQuote.LaborLines)
+                                                {
+                                                    <tr id="@GetServiceQuoteLaborLineElementId(laborLine.Id)" class="page-section-anchor" @key="laborLine.Id">
+                                                        <td><input @bind="laborLine.Description" @bind:after="@(() => NormalizeServiceQuoteLaborLine(laborLine))" /></td>
+                                                        <td>
+                                                            <div class="input-shell">
+                                                                <input class="shell-input" type="number" step="0.25" @bind="laborLine.Hours" @bind:event="oninput" @bind:after="@(() => NormalizeServiceQuoteLaborLine(laborLine))" />
+                                                                <span class="input-suffix">hrs</span>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div class="input-shell money-input-shell">
+                                                                <span class="input-prefix">$</span>
+                                                                <input class="shell-input" type="number" step="0.01" @bind="laborLine.CostRate" @bind:event="oninput" @bind:after="@(() => NormalizeServiceQuoteLaborLine(laborLine))" />
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div class="input-shell money-input-shell">
+                                                                <span class="input-prefix">$</span>
+                                                                <input class="shell-input" type="number" step="0.01" @bind="laborLine.SaleRate" @bind:event="oninput" @bind:after="@(() => NormalizeServiceQuoteLaborLine(laborLine))" />
+                                                            </div>
+                                                        </td>
+                                                        <td><span class="compact-readonly-value">@EstimateMath.GetCurrency(laborLine.TotalCost)</span></td>
+                                                        <td><span class="compact-readonly-value">@EstimateMath.GetCurrency(laborLine.TotalSale)</span></td>
+                                                        <td><button class="text-button danger" type="button" @onclick="() => RemoveQuoteLaborLine(laborLine.Id)">Remove</button></td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    }
+
+                                    <div class="section-add-action">
+                                        <button class="button button-secondary" type="button" @onclick="AddQuoteLaborLine">Add Labor Rate</button>
+                                    </div>
+
+                                    <div class="totals-grid">
+                                        <article class="summary-card">
+                                            <p class="eyebrow">Calculated Totals</p>
+                                            <div class="metric-list">
+                                                <div><span>Service Hours</span><strong>@EstimateMath.GetHours(EstimateMath.GetServiceQuoteLaborHours(SelectedQuote))</strong></div>
+                                                <div><span>Labor Cost</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteLaborCost(SelectedQuote))</strong></div>
+                                                <div><span>Material Cost</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteMaterialCost(SelectedQuote))</strong></div>
+                                                <div><span>Total Cost</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteCost(SelectedQuote))</strong></div>
+                                                <div><span>Calculated Sale</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteCalculatedRevenue(SelectedQuote))</strong></div>
+                                                <div><span>Profit</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteCalculatedProfit(SelectedQuote))</strong></div>
+                                                <div><span>Margin</span><strong>@EstimateMath.GetPercent(EstimateMath.GetServiceQuoteCalculatedMarginPercent(SelectedQuote))</strong></div>
+                                            </div>
+                                        </article>
+                                        <article class="summary-card">
+                                            <p class="eyebrow">Adjusted Totals</p>
+                                            <div class="metric-list">
+                                                <label class="metric-input">
+                                                    <span>Adjusted Sale</span>
+                                                    <div class="input-shell money-input-shell">
+                                                        <span class="input-prefix">$</span>
+                                                        <input class="shell-input" type="number" step="0.01" @bind="SelectedQuote.AdjustedSalePrice" @bind:event="oninput" @bind:after="RoundServiceQuoteAdjustedSale" />
+                                                    </div>
+                                                </label>
+                                                <div><span>Actual Sale</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteAdjustedRevenue(SelectedQuote))</strong></div>
+                                                <div><span>Profit</span><strong>@EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteAdjustedProfit(SelectedQuote))</strong></div>
+                                                <div><span>Margin</span><strong>@EstimateMath.GetPercent(EstimateMath.GetServiceQuoteAdjustedMarginPercent(SelectedQuote))</strong></div>
+                                            </div>
+                                        </article>
+                                    </div>
+
+                                    <div class="stats-inline">
+                                        <span>Material Sale @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteMaterialRevenue(SelectedQuote))</span>
+                                        <span>Labor Sale @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteLaborRevenue(SelectedQuote))</span>
+                                        @if (linkedCurrentQuoteCall is not null)
+                                        {
+                                            <span>Linked Call @linkedCurrentQuoteCall.ServiceJobNumber</span>
+                                        }
+                                    </div>
+
+                                    @if (linkedCurrentQuoteCall is not null)
+                                    {
+                                        <div class="section-add-action">
+                                            <button class="button button-secondary" type="button" @onclick="() => NavigateToServiceCall(linkedCurrentQuoteCall.Id)">Open Linked Service Call</button>
+                                        </div>
+                                    }
+
+                                    <div class="panel-header minor">
                                         <h4>Quoted Items</h4>
                                     </div>
 
                                     @if (SelectedQuote.Items.Count == 0)
                                     {
-                                        <p class="muted">Add line items for parts, labor, or service corrections.</p>
+                                        <p class="muted">Add line items for labor, materials, corrective work, or call-specific scope.</p>
                                     }
                                     else
                                     {
-                                        <table class="data-table">
+                                        <table class="data-table wide">
                                             <thead>
                                                 <tr>
                                                     <th>Description</th>
@@ -468,24 +745,20 @@ else
                                                 }
                                             </tbody>
                                         </table>
-
-                                        <div class="stats-inline">
-                                            <span>Cost @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteCost(SelectedQuote))</span>
-                                            <span>Quote @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteRevenue(SelectedQuote))</span>
-                                            <span>Margin @EstimateMath.GetCurrency(EstimateMath.GetServiceQuoteRevenue(SelectedQuote) - EstimateMath.GetServiceQuoteCost(SelectedQuote))</span>
-                                        </div>
                                     }
 
                                     <div class="section-add-action">
                                         <button class="button button-secondary" type="button" @onclick="AddQuoteItem">Add Line Item</button>
                                     </div>
+
+                                    <AttachmentManager Attachments="SelectedQuote.Attachments" Area="service-quotes" OwnerId="SelectedQuote.Id" Eyebrow="Quote Files" Title="Attachments" InitiallyExpanded="false" />
                                 }
                             </div>
                         </div>
                     }
                 </section>
 
-                <AttachmentManager Attachments="SelectedAgreement.Attachments" Area="service" OwnerId="SelectedAgreement.Id" />
+                <AttachmentManager Attachments="SelectedAgreement.Attachments" Area="service" OwnerId="SelectedAgreement.Id" Eyebrow="Agreement Files" Title="Attachments" InitiallyExpanded="false" />
 
                 <section id="@ServiceNotesElementId" class="panel page-section-anchor @(IsSectionExpanded(ServiceNotesSectionId) ? "panel-expanded" : null)">
                     <div class="panel-header">
@@ -509,3 +782,29 @@ else
     </section>
 }
 
+@if (IsServiceQuoteExportDialogOpen)
+{
+    <button class="dialog-scrim" type="button" @onclick="CancelServiceQuoteExport" aria-label="Close service quote export dialog"></button>
+    <section class="dialog-shell" aria-modal="true" role="dialog" aria-labelledby="service-quote-export-dialog-title">
+        <article class="dialog-panel">
+            <div class="panel-header">
+                <div>
+                    <p class="eyebrow">Service Quote Export</p>
+                    <h3 id="service-quote-export-dialog-title">Name Quote File</h3>
+                </div>
+            </div>
+
+            <p class="muted">The default file name is based on the service site and quote title, and you can adjust it before the PDF is created.</p>
+
+            <label class="full-width">
+                <span>File Name</span>
+                <input autofocus @bind="ServiceQuoteExportFileName" />
+            </label>
+
+            <div class="button-row">
+                <button class="button" type="button" @onclick="ConfirmServiceQuoteExportAsync">Export Quote</button>
+                <button class="button button-secondary" type="button" @onclick="CancelServiceQuoteExport">Cancel</button>
+            </div>
+        </article>
+    </section>
+}

@@ -1282,6 +1282,60 @@ label span {
     gap: 0.5rem;
 }
 
+.service-record-stack {
+    margin-top: 0.2rem;
+}
+
+.service-record-shell {
+    border-radius: var(--radius-md);
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.03);
+    overflow: hidden;
+}
+
+.service-record-shell-expanded {
+    border-color: var(--line-strong);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.service-record-toggle {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+
+.service-record-copy {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.service-record-copy p {
+    color: var(--muted);
+}
+
+.service-record-pills {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.service-status-pill {
+    color: var(--text);
+}
+
+.service-record-body {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+    border-top: 1px solid var(--line);
+}
+
+.service-record-actions {
+    justify-content: flex-start;
+}
+
 .attachment-row strong {
     display: block;
 }
@@ -1393,6 +1447,15 @@ label span {
     .inline-select-row {
         flex-direction: column;
         align-items: stretch;
+    }
+
+    .service-record-toggle {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .service-record-pills {
+        justify-content: flex-start;
     }
 
     .workspace-flag {

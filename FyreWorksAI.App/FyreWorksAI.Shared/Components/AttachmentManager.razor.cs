@@ -11,7 +11,6 @@ namespace FyreWorksAI.Shared.Components;
 //******************************//
 public partial class AttachmentManager
 {
-
     [Parameter, EditorRequired]
     public required List<AttachmentRecord> Attachments { get; set; }
 
@@ -21,8 +20,22 @@ public partial class AttachmentManager
     [Parameter, EditorRequired]
     public required Guid OwnerId { get; set; }
 
+    [Parameter]
+    public string Eyebrow { get; set; } = "Documents";
+
+    [Parameter]
+    public string Title { get; set; } = "Attachments";
+
+    [Parameter]
+    public bool InitiallyExpanded { get; set; } = true;
+
     private string StatusMessage { get; set; } = string.Empty;
-    private bool IsExpanded { get; set; } = true;
+    private bool IsExpanded { get; set; }
+
+    protected override void OnInitialized()
+    {
+        IsExpanded = InitiallyExpanded;
+    }
 
     private void ToggleExpanded() =>
         IsExpanded = !IsExpanded;

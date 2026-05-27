@@ -25,6 +25,9 @@ public sealed class WorkspaceStore(
     private static readonly Regex LegacyJobNumberPattern = new(
         @"^JOB-(?<date>\d{8})-(?<sequence>\d{3,4})$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex ServiceTicketNumberPattern = new(
+        @"^(?<prefix>.+)-SVC-(?<sequence>\d+)(?:-(?<visit>\d+))?$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly HashSet<string> SupportedProposalLogoExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".png",
@@ -347,17 +350,90 @@ public sealed class WorkspaceStore(
                 : new MonitoringPayment
                 {
                     DueDate = dueDate,
-                    Amount = agreement.MonthlyMonitoringAmount,
-                    ReceivedOn = dueDate
+                    Amount = agreement.MonthlyMonitoringAmount
                 };
 
             payment.DueDate = dueDate;
-            payment.Amount = agreement.MonthlyMonitoringAmount;
+            payment.Amount = EstimateMath.RoundCurrency(agreement.MonthlyMonitoringAmount);
+            payment.AmountBilled = EstimateMath.RoundCurrency(Math.Max(0m, payment.AmountBilled));
+            payment.ReceivedAmount = EstimateMath.RoundCurrency(Math.Max(0m, payment.ReceivedAmount));
+            payment.IsPaid = EstimateMath.IsMonitoringPaymentSettled(payment);
             rebuilt.Add(payment);
         }
 
         agreement.MonitoringPayments = rebuilt;
         agreement.NextInspectionDate = agreement.ContractStart.AddMonths(agreement.InspectionIntervalMonths);
+    }
+
+    public ServiceCallRecord CreateServiceCall(ServiceAgreement agreement)
+    {
+        var serviceCall = BuildServiceCall(agreement, sourceQuote: null, rootServiceCall: null);
+        agreement.ServiceCalls.Add(serviceCall);
+        return serviceCall;
+    }
+
+    public ServiceCallRecord CreateReturnVisitServiceCall(ServiceAgreement agreement, ServiceCallRecord existingServiceCall)
+    {
+        var rootServiceCall = ResolveServiceCallRoot(agreement, existingServiceCall);
+        var serviceCall = BuildServiceCall(agreement, sourceQuote: null, rootServiceCall: rootServiceCall);
+        serviceCall.Title = string.IsNullOrWhiteSpace(existingServiceCall.Title)
+            ? "Return Visit"
+            : $"{existingServiceCall.Title.Trim()} Return Visit";
+        serviceCall.Description = existingServiceCall.Description;
+        serviceCall.Technician = existingServiceCall.Technician;
+        agreement.ServiceCalls.Add(serviceCall);
+        return serviceCall;
+    }
+
+    public ServiceCallRecord ConvertServiceQuoteToServiceCall(ServiceAgreement agreement, ServiceQuoteRecord quote)
+    {
+        if (quote.ConvertedServiceCallId is not null)
+        {
+            var linkedServiceCall = agreement.ServiceCalls.FirstOrDefault(serviceCall => serviceCall.Id == quote.ConvertedServiceCallId.Value);
+            if (linkedServiceCall is not null)
+            {
+                quote.Status = "Accepted";
+                quote.AcceptedOn ??= DateTime.Today;
+                return linkedServiceCall;
+            }
+        }
+
+        var serviceCall = BuildServiceCall(agreement, quote, rootServiceCall: null);
+        serviceCall.Title = string.IsNullOrWhiteSpace(quote.Title)
+            ? "Service Call"
+            : quote.Title.Trim();
+        serviceCall.Description = string.IsNullOrWhiteSpace(quote.Notes)
+            ? "Created from an accepted service quote."
+            : quote.Notes.Trim();
+        serviceCall.SourceQuoteId = quote.Id;
+        serviceCall.SourceQuoteTitle = quote.Title.Trim();
+        serviceCall.SourceQuoteAmount = EstimateMath.GetServiceQuoteAdjustedRevenue(quote);
+        serviceCall.Billing.InvoiceAmount = EstimateMath.GetServiceQuoteAdjustedRevenue(quote);
+
+        agreement.ServiceCalls.Add(serviceCall);
+        quote.Status = "Accepted";
+        quote.AcceptedOn ??= DateTime.Today;
+        quote.ConvertedServiceCallId = serviceCall.Id;
+        return serviceCall;
+    }
+
+    public bool RemoveServiceCall(ServiceAgreement agreement, Guid serviceCallId)
+    {
+        var serviceCall = agreement.ServiceCalls.FirstOrDefault(item => item.Id == serviceCallId);
+        if (serviceCall is null)
+        {
+            return false;
+        }
+
+        agreement.ServiceCalls.Remove(serviceCall);
+        DeleteAttachmentDirectory("service-calls", serviceCall.Id);
+
+        foreach (var quote in agreement.Quotes.Where(quote => quote.ConvertedServiceCallId == serviceCallId))
+        {
+            quote.ConvertedServiceCallId = null;
+        }
+
+        return true;
     }
 
     public async Task<int> AddAttachmentsAsync(List<AttachmentRecord> attachments, string area, Guid ownerId)
@@ -517,6 +593,19 @@ public sealed class WorkspaceStore(
         var documentBaseFileName = GetUniqueExportBaseFileName(requestedBaseFileName, "proposal");
         var brandingProfile = BuildDocumentBrandingProfile();
         var htmlDocument = BidProposalHtmlDocumentBuilder.BuildDocument(bid, GetClient(bid.ClientId), brandingProfile);
+        return await htmlDocumentExporter.ExportAsync(ExportRootPath, documentBaseFileName, htmlDocument);
+    }
+
+    public async Task<string> ExportServiceQuoteAsync(ServiceAgreement agreement, ServiceQuoteRecord quote, string? requestedDocumentName = null)
+    {
+        Directory.CreateDirectory(ExportRootPath);
+        var defaultDocumentBaseFileName = BuildDefaultServiceQuoteExportBaseFileName(agreement, quote);
+        var requestedBaseFileName = string.IsNullOrWhiteSpace(requestedDocumentName)
+            ? defaultDocumentBaseFileName
+            : MakeSafeFileName(requestedDocumentName.Trim());
+        var documentBaseFileName = GetUniqueExportBaseFileName(requestedBaseFileName, "service-quote");
+        var brandingProfile = BuildDocumentBrandingProfile();
+        var htmlDocument = ServiceQuoteHtmlDocumentBuilder.BuildDocument(agreement, quote, GetClient(agreement.ClientId), brandingProfile);
         return await htmlDocumentExporter.ExportAsync(ExportRootPath, documentBaseFileName, htmlDocument);
     }
 
@@ -772,6 +861,20 @@ public sealed class WorkspaceStore(
         return MakeSafeFileName(baseFileName);
     }
 
+    private static string BuildDefaultServiceQuoteExportBaseFileName(ServiceAgreement agreement, ServiceQuoteRecord quote)
+    {
+        var siteName = string.IsNullOrWhiteSpace(agreement.Site.SiteName)
+            ? "Service Site"
+            : agreement.Site.SiteName.Trim();
+        var quoteTitle = string.IsNullOrWhiteSpace(quote.Title)
+            ? "Service Quote"
+            : quote.Title.Trim();
+        var agreementNumber = string.IsNullOrWhiteSpace(agreement.AgreementNumber)
+            ? "Service"
+            : agreement.AgreementNumber.Trim();
+        return MakeSafeFileName($"{agreementNumber}_{siteName}_{quoteTitle}_Service Quote");
+    }
+
     private string GetUniqueExportBaseFileName(string requestedBaseFileName, string defaultPrefix)
     {
         var normalizedBaseFileName = string.IsNullOrWhiteSpace(requestedBaseFileName)
@@ -795,6 +898,138 @@ public sealed class WorkspaceStore(
     {
         var json = JsonSerializer.Serialize(value, CloneOptions);
         return JsonSerializer.Deserialize<T>(json, CloneOptions)!;
+    }
+
+    private ServiceCallRecord BuildServiceCall(ServiceAgreement agreement, ServiceQuoteRecord? sourceQuote, ServiceCallRecord? rootServiceCall)
+    {
+        var serviceTicketNumber = rootServiceCall is null
+            ? GenerateServiceTicketNumber(agreement.Site.SiteName)
+            : GetNormalizedServiceTicketNumber(rootServiceCall);
+        var returnVisitSequence = rootServiceCall is null
+            ? 0
+            : GetNextServiceReturnVisitSequence(serviceTicketNumber);
+        var serviceCall = new ServiceCallRecord
+        {
+            Title = string.IsNullOrWhiteSpace(sourceQuote?.Title)
+                ? "Service Call"
+                : sourceQuote!.Title.Trim(),
+            Status = "Open",
+            OpenedOn = DateTime.Today,
+            ScheduledFor = DateTime.Today,
+            CompletedOn = DateTime.Today,
+            ServiceTicketNumber = serviceTicketNumber,
+            ReturnVisitSequence = returnVisitSequence,
+            ServiceJobNumber = BuildServiceJobNumber(serviceTicketNumber, returnVisitSequence),
+            SourceQuoteId = sourceQuote?.Id,
+            SourceQuoteTitle = sourceQuote?.Title?.Trim() ?? string.Empty,
+            SourceQuoteAmount = sourceQuote is null ? 0m : EstimateMath.GetServiceQuoteAdjustedRevenue(sourceQuote)
+        };
+
+        serviceCall.RootServiceCallId = rootServiceCall?.RootServiceCallId is { } rootServiceCallId && rootServiceCallId != Guid.Empty
+            ? rootServiceCallId
+            : serviceCall.Id;
+
+        return serviceCall;
+    }
+
+    private ServiceCallRecord ResolveServiceCallRoot(ServiceAgreement agreement, ServiceCallRecord serviceCall) =>
+        agreement.ServiceCalls.FirstOrDefault(candidate => candidate.Id == serviceCall.RootServiceCallId)
+        ?? agreement.ServiceCalls.FirstOrDefault(candidate =>
+            string.Equals(GetNormalizedServiceTicketNumber(candidate), GetNormalizedServiceTicketNumber(serviceCall), StringComparison.OrdinalIgnoreCase))
+        ?? serviceCall;
+
+    private string GenerateServiceTicketNumber(string? siteName)
+    {
+        var sitePrefix = BuildServiceSiteNumberPrefix(siteName);
+        var nextSequence = Workspace.ServiceAgreements
+            .SelectMany(agreement => agreement.ServiceCalls)
+            .Select(serviceCall => TryParseServiceTicketInfo(GetNormalizedServiceTicketNumber(serviceCall)))
+            .Where(ticketInfo => ticketInfo is not null &&
+                                 string.Equals(ticketInfo.Value.SitePrefix, sitePrefix, StringComparison.OrdinalIgnoreCase))
+            .Select(ticketInfo => ticketInfo!.Value.Sequence)
+            .DefaultIfEmpty(0)
+            .Max() + 1;
+
+        return $"{sitePrefix}-SVC-{nextSequence:000}";
+    }
+
+    private int GetNextServiceReturnVisitSequence(string serviceTicketNumber) =>
+        Workspace.ServiceAgreements
+            .SelectMany(agreement => agreement.ServiceCalls)
+            .Where(serviceCall => string.Equals(GetNormalizedServiceTicketNumber(serviceCall), serviceTicketNumber, StringComparison.OrdinalIgnoreCase))
+            .Select(serviceCall => Math.Max(0, serviceCall.ReturnVisitSequence))
+            .DefaultIfEmpty(0)
+            .Max() + 1;
+
+    private static string BuildServiceSiteNumberPrefix(string? siteName)
+    {
+        if (string.IsNullOrWhiteSpace(siteName))
+        {
+            return "SITE";
+        }
+
+        var builder = new StringBuilder(siteName.Length);
+        var previousCharacterWasSeparator = false;
+        foreach (var character in siteName.Trim().ToUpperInvariant())
+        {
+            if (char.IsLetterOrDigit(character))
+            {
+                builder.Append(character);
+                previousCharacterWasSeparator = false;
+                continue;
+            }
+
+            if (builder.Length > 0 && !previousCharacterWasSeparator)
+            {
+                builder.Append('-');
+                previousCharacterWasSeparator = true;
+            }
+        }
+
+        var prefix = builder.ToString().Trim('-');
+        return string.IsNullOrWhiteSpace(prefix) ? "SITE" : prefix;
+    }
+
+    private static string BuildServiceJobNumber(string serviceTicketNumber, int returnVisitSequence) =>
+        returnVisitSequence <= 0
+            ? serviceTicketNumber
+            : $"{serviceTicketNumber}-{returnVisitSequence}";
+
+    private static string GetNormalizedServiceTicketNumber(ServiceCallRecord serviceCall)
+    {
+        if (!string.IsNullOrWhiteSpace(serviceCall.ServiceTicketNumber))
+        {
+            return serviceCall.ServiceTicketNumber.Trim();
+        }
+
+        var ticketInfo = TryParseServiceTicketInfo(serviceCall.ServiceJobNumber);
+        return ticketInfo?.ServiceTicketNumber ?? string.Empty;
+    }
+
+    private static ServiceTicketInfo? TryParseServiceTicketInfo(string? serviceJobNumber)
+    {
+        if (string.IsNullOrWhiteSpace(serviceJobNumber))
+        {
+            return null;
+        }
+
+        var match = ServiceTicketNumberPattern.Match(serviceJobNumber.Trim());
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var sitePrefix = match.Groups["prefix"].Value.Trim('-');
+        if (!int.TryParse(match.Groups["sequence"].Value, CultureInfo.InvariantCulture, out var sequence))
+        {
+            return null;
+        }
+
+        var returnVisitSequence = int.TryParse(match.Groups["visit"].Value, CultureInfo.InvariantCulture, out var parsedReturnVisitSequence)
+            ? parsedReturnVisitSequence
+            : 0;
+        var serviceTicketNumber = $"{sitePrefix}-SVC-{sequence:000}";
+        return new ServiceTicketInfo(sitePrefix, sequence, returnVisitSequence, serviceTicketNumber);
     }
 
     private void CopyBidAttachments(BidRecord sourceBid, BidRecord duplicatedBid)
@@ -1258,8 +1493,224 @@ public sealed class WorkspaceStore(
                 var store = new WorkspaceStoreBootstrapper();
                 store.RegenerateMonitoringSchedule(agreement);
             }
+
+            agreement.MonitoringPayments = agreement.MonitoringPayments
+                .OrderBy(payment => payment.DueDate)
+                .ToList();
+
+            foreach (var payment in agreement.MonitoringPayments)
+            {
+                NormalizeMonitoringPayment(payment);
+            }
+
+            foreach (var serviceCall in agreement.ServiceCalls)
+            {
+                NormalizeServiceCall(serviceCall);
+            }
+
+            foreach (var quote in agreement.Quotes)
+            {
+                NormalizeServiceQuote(quote, agreement, workspace);
+            }
+        }
+
+        NormalizeServiceCallNumbers(workspace);
+    }
+
+    private static void NormalizeMonitoringPayment(MonitoringPayment payment)
+    {
+        payment.Amount = EstimateMath.RoundCurrency(Math.Max(0m, payment.Amount));
+        payment.AmountBilled = EstimateMath.RoundCurrency(Math.Max(0m, payment.AmountBilled));
+        payment.ReceivedAmount = EstimateMath.RoundCurrency(Math.Max(0m, payment.ReceivedAmount));
+        payment.IsPaid = EstimateMath.IsMonitoringPaymentSettled(payment);
+        payment.Notes ??= string.Empty;
+    }
+
+    private static void NormalizeServiceCall(ServiceCallRecord serviceCall)
+    {
+        serviceCall.Title = serviceCall.Title?.Trim() ?? string.Empty;
+        serviceCall.Status = string.IsNullOrWhiteSpace(serviceCall.Status) ? "Open" : serviceCall.Status.Trim();
+        serviceCall.Technician = serviceCall.Technician?.Trim() ?? string.Empty;
+        serviceCall.Description ??= string.Empty;
+        serviceCall.SourceQuoteTitle ??= string.Empty;
+        serviceCall.SourceQuoteAmount = EstimateMath.RoundCurrency(Math.Max(0m, serviceCall.SourceQuoteAmount));
+        serviceCall.Billing ??= new ServiceCallBillingRecord();
+        serviceCall.Attachments ??= [];
+        serviceCall.Billing.InvoiceNumber = serviceCall.Billing.InvoiceNumber?.Trim() ?? string.Empty;
+        serviceCall.Billing.LaborHours = EstimateMath.RoundHours(Math.Max(0m, serviceCall.Billing.LaborHours));
+        serviceCall.Billing.LaborAmount = EstimateMath.RoundCurrency(Math.Max(0m, serviceCall.Billing.LaborAmount));
+        serviceCall.Billing.MaterialAmount = EstimateMath.RoundCurrency(Math.Max(0m, serviceCall.Billing.MaterialAmount));
+        serviceCall.Billing.InvoiceAmount = EstimateMath.RoundCurrency(Math.Max(0m, serviceCall.Billing.InvoiceAmount));
+        serviceCall.Billing.BilledAmount = EstimateMath.RoundCurrency(Math.Max(0m, serviceCall.Billing.BilledAmount));
+        serviceCall.Billing.PaidAmount = EstimateMath.RoundCurrency(Math.Max(0m, serviceCall.Billing.PaidAmount));
+        serviceCall.Billing.Notes ??= string.Empty;
+    }
+
+    private static void NormalizeServiceQuote(ServiceQuoteRecord quote, ServiceAgreement agreement, FyreWorksWorkspace workspace)
+    {
+        quote.Title = quote.Title?.Trim() ?? string.Empty;
+        quote.Status = string.Equals(quote.Status?.Trim(), "Approved", StringComparison.OrdinalIgnoreCase)
+            ? "Accepted"
+            : string.IsNullOrWhiteSpace(quote.Status)
+                ? "Draft"
+                : quote.Status.Trim();
+        quote.LaborLines ??= [];
+        quote.ServiceLaborHours = EstimateMath.RoundHours(Math.Max(0m, quote.ServiceLaborHours));
+        quote.ServiceLaborCostRate = EstimateMath.RoundCurrency(quote.ServiceLaborCostRate > 0m
+            ? quote.ServiceLaborCostRate
+            : workspace.Settings.FieldLaborRate);
+        quote.ServiceLaborSaleRate = EstimateMath.RoundCurrency(quote.ServiceLaborSaleRate > 0m
+            ? quote.ServiceLaborSaleRate
+            : EstimateMath.GetDefaultSaleFromMarkup(quote.ServiceLaborCostRate, workspace.Settings.DefaultMarkupPercent));
+        quote.AdjustedSalePrice = EstimateMath.RoundCurrency(Math.Max(0m, quote.AdjustedSalePrice));
+        quote.Notes ??= string.Empty;
+        quote.Items ??= [];
+        quote.Attachments ??= [];
+
+        if (quote.LaborLines.Count == 0 &&
+            (quote.ServiceLaborHours > 0m || quote.ServiceLaborCostRate > 0m || quote.ServiceLaborSaleRate > 0m))
+        {
+            quote.LaborLines.Add(new ServiceQuoteLaborLine
+            {
+                Description = "Service Labor",
+                Hours = quote.ServiceLaborHours,
+                CostRate = quote.ServiceLaborCostRate,
+                SaleRate = quote.ServiceLaborSaleRate
+            });
+        }
+
+        foreach (var laborLine in quote.LaborLines)
+        {
+            NormalizeServiceQuoteLaborLine(laborLine, workspace);
+        }
+
+        quote.ServiceLaborHours = 0m;
+        quote.ServiceLaborCostRate = 0m;
+        quote.ServiceLaborSaleRate = 0m;
+
+        foreach (var item in quote.Items)
+        {
+            item.Description ??= string.Empty;
+            item.Notes ??= string.Empty;
+            item.Quantity = EstimateMath.RoundCurrency(Math.Max(0m, item.Quantity));
+            item.UnitCost = EstimateMath.RoundCurrency(Math.Max(0m, item.UnitCost));
+            item.UnitPrice = EstimateMath.RoundCurrency(Math.Max(0m, item.UnitPrice));
+        }
+
+        if (quote.ConvertedServiceCallId is not null &&
+            agreement.ServiceCalls.All(serviceCall => serviceCall.Id != quote.ConvertedServiceCallId.Value))
+        {
+            quote.ConvertedServiceCallId = null;
         }
     }
+
+    private static void NormalizeServiceQuoteLaborLine(ServiceQuoteLaborLine laborLine, FyreWorksWorkspace workspace)
+    {
+        laborLine.Description = string.IsNullOrWhiteSpace(laborLine.Description)
+            ? "Service Labor"
+            : laborLine.Description.Trim();
+        laborLine.Hours = EstimateMath.RoundHours(Math.Max(0m, laborLine.Hours));
+        laborLine.CostRate = EstimateMath.RoundCurrency(laborLine.CostRate > 0m
+            ? laborLine.CostRate
+            : workspace.Settings.FieldLaborRate);
+        laborLine.SaleRate = EstimateMath.RoundCurrency(laborLine.SaleRate > 0m
+            ? laborLine.SaleRate
+            : EstimateMath.GetDefaultSaleFromMarkup(laborLine.CostRate, workspace.Settings.DefaultMarkupPercent));
+    }
+
+    private static void NormalizeServiceCallNumbers(FyreWorksWorkspace workspace)
+    {
+        var usedRootSequencesBySitePrefix = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
+        var usedReturnVisitsByTicketNumber = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var agreement in workspace.ServiceAgreements
+                     .OrderBy(agreement => agreement.Site.SiteName, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(agreement => agreement.AgreementName, StringComparer.OrdinalIgnoreCase))
+        {
+            var sitePrefix = BuildServiceSiteNumberPrefix(agreement.Site.SiteName);
+            if (!usedRootSequencesBySitePrefix.TryGetValue(sitePrefix, out var usedRootSequences))
+            {
+                usedRootSequences = [];
+                usedRootSequencesBySitePrefix[sitePrefix] = usedRootSequences;
+            }
+
+            foreach (var serviceCall in agreement.ServiceCalls
+                         .OrderBy(serviceCall => serviceCall.OpenedOn)
+                         .ThenBy(serviceCall => serviceCall.ServiceJobNumber, StringComparer.OrdinalIgnoreCase))
+            {
+                var candidateTicketInfo = TryParseServiceTicketInfo(serviceCall.ServiceTicketNumber);
+                var candidateJobInfo = TryParseServiceTicketInfo(serviceCall.ServiceJobNumber);
+                var candidateSequence = GetCandidateServiceTicketSequence(candidateTicketInfo, candidateJobInfo, sitePrefix);
+                var hasExplicitReturnVisit = (candidateJobInfo?.ReturnVisitSequence ?? 0) > 0 || serviceCall.ReturnVisitSequence > 0;
+
+                var assignedSequence = candidateSequence > 0 && (!usedRootSequences.Contains(candidateSequence) || hasExplicitReturnVisit)
+                    ? candidateSequence
+                    : GetNextAvailableSequence(usedRootSequences, startingSequence: 1);
+                var serviceTicketNumber = $"{sitePrefix}-SVC-{assignedSequence:000}";
+                usedRootSequences.Add(assignedSequence);
+
+                if (!usedReturnVisitsByTicketNumber.TryGetValue(serviceTicketNumber, out var usedReturnVisits))
+                {
+                    usedReturnVisits = [];
+                    usedReturnVisitsByTicketNumber[serviceTicketNumber] = usedReturnVisits;
+                }
+
+                var desiredReturnVisitSequence = hasExplicitReturnVisit
+                    ? Math.Max(candidateJobInfo?.ReturnVisitSequence ?? 0, Math.Max(0, serviceCall.ReturnVisitSequence))
+                    : 0;
+                if (desiredReturnVisitSequence > 0)
+                {
+                    if (usedReturnVisits.Contains(desiredReturnVisitSequence))
+                    {
+                        desiredReturnVisitSequence = GetNextAvailableSequence(usedReturnVisits, startingSequence: 1);
+                    }
+
+                    usedReturnVisits.Add(desiredReturnVisitSequence);
+                }
+
+                serviceCall.ServiceTicketNumber = serviceTicketNumber;
+                serviceCall.ReturnVisitSequence = desiredReturnVisitSequence;
+                serviceCall.ServiceJobNumber = BuildServiceJobNumber(serviceTicketNumber, desiredReturnVisitSequence);
+            }
+
+            foreach (var serviceCallGroup in agreement.ServiceCalls.GroupBy(serviceCall => serviceCall.ServiceTicketNumber, StringComparer.OrdinalIgnoreCase))
+            {
+                var rootServiceCall = serviceCallGroup
+                    .OrderBy(serviceCall => serviceCall.ReturnVisitSequence)
+                    .ThenBy(serviceCall => serviceCall.OpenedOn)
+                    .First();
+                foreach (var serviceCall in serviceCallGroup)
+                {
+                    serviceCall.RootServiceCallId = rootServiceCall.Id;
+                }
+            }
+        }
+    }
+
+    private static int GetCandidateServiceTicketSequence(ServiceTicketInfo? candidateTicketInfo, ServiceTicketInfo? candidateJobInfo, string sitePrefix)
+    {
+        if (candidateTicketInfo is not null &&
+            string.Equals(candidateTicketInfo.Value.SitePrefix, sitePrefix, StringComparison.OrdinalIgnoreCase) &&
+            candidateTicketInfo.Value.Sequence > 0)
+        {
+            return candidateTicketInfo.Value.Sequence;
+        }
+
+        if (candidateJobInfo is not null &&
+            string.Equals(candidateJobInfo.Value.SitePrefix, sitePrefix, StringComparison.OrdinalIgnoreCase) &&
+            candidateJobInfo.Value.Sequence > 0)
+        {
+            return candidateJobInfo.Value.Sequence;
+        }
+
+        return 0;
+    }
+
+    private readonly record struct ServiceTicketInfo(
+        string SitePrefix,
+        int Sequence,
+        int ReturnVisitSequence,
+        string ServiceTicketNumber);
 
     private static void NormalizeJobNumbers(FyreWorksWorkspace workspace)
     {
@@ -1565,8 +2016,7 @@ public sealed class WorkspaceStore(
                     new MonitoringPayment
                     {
                         DueDate = new DateTime(agreement.ContractStart.Year, agreement.ContractStart.Month, 1).AddMonths(monthIndex),
-                        Amount = agreement.MonthlyMonitoringAmount,
-                        ReceivedOn = new DateTime(agreement.ContractStart.Year, agreement.ContractStart.Month, 1).AddMonths(monthIndex)
+                        Amount = EstimateMath.RoundCurrency(agreement.MonthlyMonitoringAmount)
                     })
             ];
             agreement.NextInspectionDate = agreement.ContractStart.AddMonths(agreement.InspectionIntervalMonths);

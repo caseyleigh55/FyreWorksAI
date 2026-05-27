@@ -201,29 +201,157 @@ public static class EstimateMath
         RoundCurrency(job.ScheduleOfValues.Sum(item => item.PaidToDate));
 
     public static decimal GetServiceContractValue(ServiceAgreement agreement) =>
-        agreement.MonthlyMonitoringAmount * agreement.ContractMonths;
+        RoundCurrency(agreement.MonitoringPayments.Sum(payment => payment.Amount));
+
+    public static decimal GetMonitoringPaymentBilledAmount(MonitoringPayment payment)
+    {
+        var billedAmount = payment.AmountBilled > 0m
+            ? payment.AmountBilled
+            : payment.IsPaid
+                ? payment.Amount
+                : 0m;
+
+        return RoundCurrency(Math.Max(0m, billedAmount));
+    }
+
+    public static decimal GetMonitoringPaymentReceivedAmount(MonitoringPayment payment)
+    {
+        var receivedAmount = payment.ReceivedAmount > 0m
+            ? payment.ReceivedAmount
+            : payment.IsPaid
+                ? payment.Amount
+                : 0m;
+
+        return RoundCurrency(Math.Max(0m, receivedAmount));
+    }
+
+    public static bool IsMonitoringPaymentSettled(MonitoringPayment payment)
+    {
+        if (payment.IsPaid)
+        {
+            return true;
+        }
+
+        var receivedAmount = GetMonitoringPaymentReceivedAmount(payment);
+        return payment.Amount <= 0m
+            ? receivedAmount > 0m
+            : receivedAmount >= RoundCurrency(payment.Amount);
+    }
+
+    public static decimal GetServiceBilled(ServiceAgreement agreement) =>
+        RoundCurrency(agreement.MonitoringPayments.Sum(GetMonitoringPaymentBilledAmount));
 
     public static decimal GetServicePaid(ServiceAgreement agreement) =>
-        agreement.MonitoringPayments.Where(payment => payment.IsPaid).Sum(payment => payment.Amount);
+        RoundCurrency(agreement.MonitoringPayments.Sum(GetMonitoringPaymentReceivedAmount));
 
     public static decimal GetServiceOutstanding(ServiceAgreement agreement) =>
-        GetServiceContractValue(agreement) - GetServicePaid(agreement);
+        RoundCurrency(Math.Max(0m, GetServiceContractValue(agreement) - GetServicePaid(agreement)));
+
+    public static int GetServicePaidInstallmentCount(ServiceAgreement agreement) =>
+        agreement.MonitoringPayments.Count(IsMonitoringPaymentSettled);
+
+    public static MonitoringPayment? GetCurrentServiceInstallment(ServiceAgreement agreement) =>
+        agreement.MonitoringPayments
+            .OrderBy(payment => payment.DueDate)
+            .FirstOrDefault(payment => !IsMonitoringPaymentSettled(payment));
+
+    public static int GetCurrentServiceInstallmentNumber(ServiceAgreement agreement)
+    {
+        var orderedPayments = agreement.MonitoringPayments
+            .OrderBy(payment => payment.DueDate)
+            .ToList();
+        var currentInstallment = orderedPayments.FindIndex(payment => !IsMonitoringPaymentSettled(payment));
+        return currentInstallment < 0 ? orderedPayments.Count : currentInstallment + 1;
+    }
+
+    public static decimal GetServiceReceivedPercent(ServiceAgreement agreement)
+    {
+        var contractValue = GetServiceContractValue(agreement);
+        return contractValue <= 0m
+            ? 0m
+            : RoundCurrency((GetServicePaid(agreement) / contractValue) * 100m);
+    }
 
     public static DateTime GetNextBillingDate(ServiceAgreement agreement)
     {
-        var nextPayment = agreement.MonitoringPayments
-            .Where(payment => !payment.IsPaid)
-            .OrderBy(payment => payment.DueDate)
-            .FirstOrDefault();
+        var nextPayment = GetCurrentServiceInstallment(agreement);
 
         return nextPayment?.DueDate ?? agreement.ContractStart.AddMonths(agreement.ContractMonths);
     }
 
-    public static decimal GetServiceQuoteRevenue(ServiceQuoteRecord quote) =>
+    public static decimal GetServiceCallLaborHours(ServiceCallRecord serviceCall) =>
+        RoundHours(serviceCall.Billing.LaborHours);
+
+    public static decimal GetServiceCallLaborAmount(ServiceCallRecord serviceCall) =>
+        RoundCurrency(serviceCall.Billing.LaborAmount);
+
+    public static decimal GetServiceCallMaterialAmount(ServiceCallRecord serviceCall) =>
+        RoundCurrency(serviceCall.Billing.MaterialAmount);
+
+    public static decimal GetServiceCallInvoiceAmount(ServiceCallRecord serviceCall) =>
+        RoundCurrency(serviceCall.Billing.InvoiceAmount > 0m
+            ? serviceCall.Billing.InvoiceAmount
+            : serviceCall.Billing.LaborAmount + serviceCall.Billing.MaterialAmount);
+
+    public static decimal GetServiceCallBilledAmount(ServiceCallRecord serviceCall) =>
+        RoundCurrency(serviceCall.Billing.BilledAmount);
+
+    public static decimal GetServiceCallPaidAmount(ServiceCallRecord serviceCall) =>
+        RoundCurrency(serviceCall.Billing.PaidAmount);
+
+    public static decimal GetServiceCallOutstandingAmount(ServiceCallRecord serviceCall) =>
+        RoundCurrency(Math.Max(0m, GetServiceCallBilledAmount(serviceCall) - GetServiceCallPaidAmount(serviceCall)));
+
+    public static decimal GetServiceQuoteLaborHours(ServiceQuoteRecord quote) =>
+        quote.LaborLines.Count > 0
+            ? RoundHours(quote.LaborLines.Sum(line => line.Hours))
+            : RoundHours(quote.ServiceLaborHours);
+
+    public static decimal GetServiceQuoteLaborCost(ServiceQuoteRecord quote) =>
+        quote.LaborLines.Count > 0
+            ? RoundCurrency(quote.LaborLines.Sum(line => line.TotalCost))
+            : RoundCurrency(GetServiceQuoteLaborHours(quote) * quote.ServiceLaborCostRate);
+
+    public static decimal GetServiceQuoteLaborRevenue(ServiceQuoteRecord quote) =>
+        quote.LaborLines.Count > 0
+            ? RoundCurrency(quote.LaborLines.Sum(line => line.TotalSale))
+            : RoundCurrency(GetServiceQuoteLaborHours(quote) * quote.ServiceLaborSaleRate);
+
+    public static decimal GetServiceQuoteMaterialRevenue(ServiceQuoteRecord quote) =>
         RoundCurrency(quote.Items.Sum(item => item.TotalPrice));
 
-    public static decimal GetServiceQuoteCost(ServiceQuoteRecord quote) =>
+    public static decimal GetServiceQuoteMaterialCost(ServiceQuoteRecord quote) =>
         RoundCurrency(quote.Items.Sum(item => item.TotalCost));
+
+    public static decimal GetServiceQuoteCalculatedRevenue(ServiceQuoteRecord quote) =>
+        RoundCurrency(GetServiceQuoteLaborRevenue(quote) + GetServiceQuoteMaterialRevenue(quote));
+
+    public static decimal GetServiceQuoteAdjustedRevenue(ServiceQuoteRecord quote) =>
+        RoundCurrency(quote.AdjustedSalePrice > 0m ? quote.AdjustedSalePrice : GetServiceQuoteCalculatedRevenue(quote));
+
+    public static decimal GetServiceQuoteCost(ServiceQuoteRecord quote) =>
+        RoundCurrency(GetServiceQuoteLaborCost(quote) + GetServiceQuoteMaterialCost(quote));
+
+    public static decimal GetServiceQuoteCalculatedProfit(ServiceQuoteRecord quote) =>
+        RoundCurrency(GetServiceQuoteCalculatedRevenue(quote) - GetServiceQuoteCost(quote));
+
+    public static decimal GetServiceQuoteAdjustedProfit(ServiceQuoteRecord quote) =>
+        RoundCurrency(GetServiceQuoteAdjustedRevenue(quote) - GetServiceQuoteCost(quote));
+
+    public static decimal GetServiceQuoteCalculatedMarginPercent(ServiceQuoteRecord quote)
+    {
+        var revenue = GetServiceQuoteCalculatedRevenue(quote);
+        return revenue <= 0m ? 0m : GetServiceQuoteCalculatedProfit(quote) / revenue;
+    }
+
+    public static decimal GetServiceQuoteAdjustedMarginPercent(ServiceQuoteRecord quote)
+    {
+        var revenue = GetServiceQuoteAdjustedRevenue(quote);
+        return revenue <= 0m ? 0m : GetServiceQuoteAdjustedProfit(quote) / revenue;
+    }
+
+    public static decimal GetServiceQuoteRevenue(ServiceQuoteRecord quote) =>
+        GetServiceQuoteAdjustedRevenue(quote);
 
     public static string GetCurrency(decimal value) =>
         RoundCurrency(value).ToString("C2", CultureInfo.CurrentCulture);
